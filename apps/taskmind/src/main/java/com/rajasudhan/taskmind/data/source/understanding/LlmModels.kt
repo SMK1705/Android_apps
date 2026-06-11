@@ -1,0 +1,20 @@
+package com.rajasudhan.taskmind.data.source.understanding
+
+import com.squareup.moshi.Json
+import com.squareup.moshi.JsonClass
+
+@JsonClass(generateAdapter = true)
+data class LlmResponse(
+    val items: List<LlmItem>
+)
+
+@JsonClass(generateAdapter = true)
+data class LlmItem(
+    // Defaults make parsing tolerant of small on-device models that omit fields.
+    val type: String = "note",
+    val title: String = "",
+    val notes: String = "",
+    @Json(name = "due_date") val dueDate: String? = null,
+    @Json(name = "due_time") val dueTime: String? = null,
+    val confidence: Double = 0.7
+)

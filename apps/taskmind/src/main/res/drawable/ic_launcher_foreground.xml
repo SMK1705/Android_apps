@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Circle (approval ring) -->
+    <path
+        android:pathData="M28,54 a26,26 0 1,0 52,0 a26,26 0 1,0 -52,0"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <!-- Checkmark -->
+    <path
+        android:pathData="M42,55 L50,63 L66,44"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+    <!-- Spark (AI) -->
+    <path
+        android:pathData="M72,31 L73.3,34.7 L77,36 L73.3,37.3 L72,41 L70.7,37.3 L67,36 L70.7,34.7 Z"
+        android:fillColor="#FFFFFF" />
+</vector>
