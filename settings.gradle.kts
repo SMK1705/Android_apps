@@ -22,7 +22,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SMK-Android"
+rootProject.name = "Android_apps"
 
 // One app per directory under apps/. Add new apps here, e.g. include(":apps:habits").
 include(":apps:taskmind")

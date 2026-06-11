@@ -1,4 +1,4 @@
-# SMK-Android
+# Android_apps
 
 A monorepo for my Android apps. Each app is a self-contained Gradle module under `apps/`;
 shared code (when more than one app needs it) lives under `core/`.
@@ -6,7 +6,7 @@ shared code (when more than one app needs it) lives under `core/`.
 ## Layout
 
 ```
-SMK-Android/
+Android_apps/
 ├─ settings.gradle.kts        # includes every app/module
 ├─ build.gradle.kts           # top-level plugins (apply false)
 ├─ gradle/libs.versions.toml  # ONE version catalog shared by all apps

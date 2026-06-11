@@ -47,7 +47,7 @@ Nothing is written to the Notes DB or scheduled until **you approve it** in the 
 
 ## Build & install
 
-Run from the monorepo root (`SMK-Android/`):
+Run from the monorepo root (`Android_apps/`):
 
 ```powershell
 # Build  (APK: apps\taskmind\build\outputs\apk\debug\taskmind-debug.apk)
