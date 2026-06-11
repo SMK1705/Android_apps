@@ -12,6 +12,12 @@ import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Turns raw source text (an SMS, a notification, an email) into pending [Suggestion]s via the LLM.
+ * The filtering/sanitization heuristics live in [ExtractionHeuristics] (pure, unit-tested); this
+ * class wires them to the model call and the DB. Nothing here is written to Notes — only pending
+ * suggestions, which the user approves in the Inbox.
+ */
 @Singleton
 class UnderstandingPipeline @Inject constructor(
     private val llmProvider: LlmProvider,
@@ -19,29 +25,10 @@ class UnderstandingPipeline @Inject constructor(
     private val dao: TaskMindDao,
     private val notifier: SuggestionNotifier
 ) {
-    companion object {
-        // Only keep suggestions the model is reasonably sure about.
-        private const val MIN_CONFIDENCE = 0.6
-
-        // Drop malformed dates/times (e.g. a datetime stuffed into due_time).
-        private val DATE_REGEX = Regex("""\d{4}-\d{2}-\d{2}""")
-        private val TIME_REGEX = Regex("""\d{1,2}:\d{2}""")
-
-        // One-time codes, marketing, and opt-out boilerplate are never action items.
-        private val NOISE_PATTERNS = listOf(
-            Regex("(verification|one[- ]?time|security|login|otp)\\b.{0,20}code", RegexOption.IGNORE_CASE),
-            Regex("\\bcode\\b.{0,20}\\b\\d{4,8}\\b", RegexOption.IGNORE_CASE),
-            Regex("\\b\\d{4,8}\\b.{0,20}\\bcode\\b", RegexOption.IGNORE_CASE),
-            Regex("do not share", RegexOption.IGNORE_CASE),
-            Regex("reply stop|opt[- ]?out|unsubscribe", RegexOption.IGNORE_CASE),
-            Regex("% off|\\bsale\\b|\\bdeal(s)?\\b|coupon|promo|cashback", RegexOption.IGNORE_CASE)
-        )
-    }
-
     suspend fun processText(source: String, text: String) {
         // Cheap pre-filter: skip obvious non-actionable noise (OTPs, promos, opt-outs)
         // before spending battery/LLM cycles on it.
-        if (text.isBlank() || isLikelyNoise(text)) return
+        if (text.isBlank() || ExtractionHeuristics.isLikelyNoise(text)) return
 
         val currentDateTime = LocalDateTime.now()
         val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
@@ -65,13 +52,13 @@ class UnderstandingPipeline @Inject constructor(
 
         var insertedAny = false
         for (item in items) {
-            if (item.title.isNotBlank() && item.confidence >= MIN_CONFIDENCE && !isDuplicate(item)) {
+            if (ExtractionHeuristics.isAcceptable(item) && !isDuplicate(item)) {
                 val suggestion = Suggestion(
                     source = source,
                     rawSnippet = text,
                     extractedTitle = item.title,
-                    dueDate = item.dueDate?.takeIf { it.matches(DATE_REGEX) },
-                    dueTime = item.dueTime?.takeIf { it.matches(TIME_REGEX) },
+                    dueDate = ExtractionHeuristics.sanitizeDate(item.dueDate),
+                    dueTime = ExtractionHeuristics.sanitizeTime(item.dueTime),
                     type = item.type,
                     confidence = item.confidence,
                     status = "pending"
@@ -87,11 +74,8 @@ class UnderstandingPipeline @Inject constructor(
         }
     }
 
-    private fun isLikelyNoise(text: String): Boolean = NOISE_PATTERNS.any { it.containsMatchIn(text) }
-
     private fun tryParse(json: String): LlmResponse? {
-        // Strip markdown code fences if LLM ignored instructions
-        val cleanedJson = json.removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+        val cleanedJson = ExtractionHeuristics.stripJsonFences(json)
         return try {
             moshi.adapter(LlmResponse::class.java).fromJson(cleanedJson)
         } catch (e: Exception) {
@@ -100,17 +84,9 @@ class UnderstandingPipeline @Inject constructor(
     }
 
     private suspend fun isDuplicate(item: LlmItem): Boolean {
-        // First check existing pending suggestions
-        val pending = dao.getPendingSuggestions().first()
-        val isPendingDup = pending.any { it.extractedTitle == item.title && it.dueDate == item.dueDate }
-        if (isPendingDup) return true
-
-        // Then check approved notes
-        val notes = dao.getAllNotes().first()
-        val isNoteDup = notes.any { it.title == item.title && it.dueDate == item.dueDate }
-        if (isNoteDup) return true
-
-        // Phase 2 requires Calendar checking as well, handled here later
-        return false
+        // Compare (title, dueDate) against existing pending suggestions and approved notes.
+        val pending = dao.getPendingSuggestions().first().map { it.extractedTitle to it.dueDate }
+        val notes = dao.getAllNotes().first().map { it.title to it.dueDate }
+        return ExtractionHeuristics.isDuplicate(item.title, item.dueDate, pending + notes)
     }
 }
