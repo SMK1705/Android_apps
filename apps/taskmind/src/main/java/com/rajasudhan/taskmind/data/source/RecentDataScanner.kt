@@ -22,12 +22,14 @@ class RecentDataScanner @Inject constructor(
     private val sourceManager: SourceManager,
     private val pipeline: UnderstandingPipeline,
     private val gmailAuth: GmailAuth,
-    private val gmailCollector: GmailCollector
+    private val gmailCollector: GmailCollector,
+    private val appUsageCollector: AppUsageCollector
 ) {
     suspend fun scanSince(sinceMillis: Long) {
         if (sourceManager.isSmsEnabled.first()) runCatching { scanSms(sinceMillis) }
         if (sourceManager.isCallLogEnabled.first()) runCatching { scanCalls(sinceMillis) }
         if (sourceManager.isEmailEnabled.first()) runCatching { scanEmail(sinceMillis) }
+        if (sourceManager.isAppUsageEnabled.first()) runCatching { appUsageCollector.generateDailyDigestIfDue() }
     }
 
     private suspend fun scanSms(since: Long) {
