@@ -3,6 +3,8 @@ package com.rajasudhan.taskmind.data.source
 import android.content.Context
 import android.provider.CallLog
 import android.provider.Telephony
+import com.rajasudhan.taskmind.data.source.email.GmailAuth
+import com.rajasudhan.taskmind.data.source.email.GmailCollector
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -18,11 +20,14 @@ import javax.inject.Singleton
 class RecentDataScanner @Inject constructor(
     @ApplicationContext private val context: Context,
     private val sourceManager: SourceManager,
-    private val pipeline: UnderstandingPipeline
+    private val pipeline: UnderstandingPipeline,
+    private val gmailAuth: GmailAuth,
+    private val gmailCollector: GmailCollector
 ) {
     suspend fun scanSince(sinceMillis: Long) {
         if (sourceManager.isSmsEnabled.first()) runCatching { scanSms(sinceMillis) }
         if (sourceManager.isCallLogEnabled.first()) runCatching { scanCalls(sinceMillis) }
+        if (sourceManager.isEmailEnabled.first()) runCatching { scanEmail(sinceMillis) }
     }
 
     private suspend fun scanSms(since: Long) {
@@ -60,6 +65,21 @@ class RecentDataScanner @Inject constructor(
                 val duration = cursor.getString(2)
                 pipeline.processText("Call Log", "$typeStr call with $number lasting $duration seconds.")
             }
+        }
+    }
+
+    /**
+     * Fetches recent unread Primary-category emails and runs them through the pipeline. Skips the
+     * scan silently if Gmail isn't currently authorized (the user reconnects in Sources). Already-
+     * processed message ids are skipped so a still-unread email isn't re-run on every scan.
+     */
+    private suspend fun scanEmail(since: Long) {
+        val token = gmailAuth.silentAccessToken() ?: return
+        val skip = sourceManager.processedEmailIds.first()
+        val emails = gmailCollector.fetchUnreadPrimary(token, since, skip)
+        for (email in emails) {
+            pipeline.processText("Email from ${email.sender}", "${email.subject}\n\n${email.body}")
+            sourceManager.addProcessedEmailId(email.id)
         }
     }
 }

@@ -73,6 +73,7 @@ dependencies {
     implementation(libs.moshi.kotlin)
     implementation(libs.okhttp)
     implementation(libs.play.services.location)
+    implementation(libs.play.services.auth)
     implementation(libs.retrofit)
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.security.crypto)

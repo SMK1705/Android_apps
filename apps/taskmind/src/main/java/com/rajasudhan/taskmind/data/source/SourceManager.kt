@@ -34,6 +34,10 @@ class SourceManager @Inject constructor(
         // Set of package names whose notifications we process. Empty = monitor all apps.
         val KEY_NOTIFICATION_ALLOWLIST = stringSetPreferencesKey("notification_allowlist")
 
+        // Gmail message ids already processed, so a still-unread email isn't re-run every scan.
+        val KEY_PROCESSED_EMAIL_IDS = stringSetPreferencesKey("processed_email_ids")
+        const val MAX_PROCESSED_EMAIL_IDS = 200
+
         const val DEFAULT_CALL_RECORDING_PATH = "/storage/emulated/0/Recordings/Call/"
         const val DEFAULT_VOICE_RECORDING_PATH = "/storage/emulated/0/Recordings/Voice Recorder/"
     }
@@ -71,6 +75,20 @@ class SourceManager @Inject constructor(
             val current = preferences[KEY_NOTIFICATION_ALLOWLIST]?.toMutableSet() ?: mutableSetOf()
             if (enabled) current.add(packageName) else current.remove(packageName)
             preferences[KEY_NOTIFICATION_ALLOWLIST] = current
+        }
+    }
+
+    /** Gmail message ids already turned into suggestions (capped, to avoid unbounded growth). */
+    val processedEmailIds: Flow<Set<String>> =
+        context.dataStore.data.map { it[KEY_PROCESSED_EMAIL_IDS] ?: emptySet() }
+
+    suspend fun addProcessedEmailId(id: String) {
+        context.dataStore.edit { preferences ->
+            val updated = (preferences[KEY_PROCESSED_EMAIL_IDS] ?: emptySet()) + id
+            preferences[KEY_PROCESSED_EMAIL_IDS] =
+                if (updated.size > MAX_PROCESSED_EMAIL_IDS)
+                    updated.toList().takeLast(MAX_PROCESSED_EMAIL_IDS).toSet()
+                else updated
         }
     }
 }

@@ -1,16 +1,23 @@
 package com.rajasudhan.taskmind.ui.sources
 
 import android.content.Context
+import android.content.Intent
+import android.content.IntentSender
 import android.content.pm.PackageManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rajasudhan.taskmind.data.source.SourceManager
+import com.rajasudhan.taskmind.data.source.email.GmailAuth
+import com.rajasudhan.taskmind.data.source.email.GmailAuthState
+import com.rajasudhan.taskmind.data.source.email.GmailCollector
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -21,6 +28,8 @@ data class MonitorableApp(val packageName: String, val label: String)
 @HiltViewModel
 class SourcesViewModel @Inject constructor(
     private val sourceManager: SourceManager,
+    private val gmailAuth: GmailAuth,
+    private val gmailCollector: GmailCollector,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -91,8 +100,59 @@ class SourcesViewModel @Inject constructor(
         viewModelScope.launch { sourceManager.setSourceEnabled(SourceManager.KEY_APP_USAGE_ENABLED, enabled) }
     }
 
-    fun toggleEmail(enabled: Boolean) {
-        viewModelScope.launch { sourceManager.setSourceEnabled(SourceManager.KEY_EMAIL_ENABLED, enabled) }
+    // ---- Gmail (OAuth) ----
+    private val _gmailAccount = MutableStateFlow(gmailAuth.connectedAccount)
+    val gmailAccount: StateFlow<String?> = _gmailAccount
+
+    private val _gmailStatus = MutableStateFlow<String?>(null)
+    val gmailStatus: StateFlow<String?> = _gmailStatus
+
+    /** One-shot events carrying the OAuth consent intent for the screen to launch. */
+    private val _gmailConsent = MutableSharedFlow<IntentSender>(extraBufferCapacity = 1)
+    val gmailConsent = _gmailConsent.asSharedFlow()
+
+    /** Handles the Email toggle: connect (OAuth) on enable, disconnect on disable. */
+    fun onEmailToggle(enabled: Boolean) {
+        if (!enabled) {
+            viewModelScope.launch {
+                gmailAuth.disconnect()
+                sourceManager.setSourceEnabled(SourceManager.KEY_EMAIL_ENABLED, false)
+                _gmailAccount.value = null
+                _gmailStatus.value = null
+            }
+            return
+        }
+        viewModelScope.launch {
+            _gmailStatus.value = "Connecting…"
+            when (val state = gmailAuth.authorize()) {
+                is GmailAuthState.Authorized -> finishConnect(state.accessToken)
+                is GmailAuthState.NeedsConsent -> {
+                    _gmailStatus.value = null
+                    _gmailConsent.emit(state.intentSender)
+                }
+                is GmailAuthState.Error -> _gmailStatus.value = "Couldn't connect: ${state.message}"
+            }
+        }
+    }
+
+    /** Called by the screen with the result of the consent activity. */
+    fun onConsentResult(data: Intent?) {
+        viewModelScope.launch {
+            val token = gmailAuth.tokenFromConsent(data)
+            if (token == null) {
+                _gmailStatus.value = "Gmail connection cancelled."
+                return@launch
+            }
+            finishConnect(token)
+        }
+    }
+
+    private suspend fun finishConnect(token: String) {
+        val email = gmailCollector.profileEmail(token) ?: gmailAuth.connectedAccount ?: "Gmail account"
+        gmailAuth.storeAccount(email)
+        _gmailAccount.value = email
+        sourceManager.setSourceEnabled(SourceManager.KEY_EMAIL_ENABLED, true)
+        _gmailStatus.value = null
     }
 
     fun updateCallRecordingPath(path: String) {

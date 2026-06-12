@@ -3,6 +3,9 @@ package com.rajasudhan.taskmind.ui.sources
 import android.Manifest
 import android.content.Intent
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -29,6 +32,9 @@ fun SourcesScreen(
     val audioEnabled by viewModel.isAudioEnabled.collectAsState()
     val calendarEnabled by viewModel.isCalendarEnabled.collectAsState()
     val appUsageEnabled by viewModel.isAppUsageEnabled.collectAsState()
+    val emailEnabled by viewModel.isEmailEnabled.collectAsState()
+    val gmailAccount by viewModel.gmailAccount.collectAsState()
+    val gmailStatus by viewModel.gmailStatus.collectAsState()
 
     val callPath by viewModel.callRecordingPath.collectAsState()
     val voicePath by viewModel.voiceRecordingPath.collectAsState()
@@ -54,6 +60,16 @@ fun SourcesScreen(
     val calendarPermissionState = rememberMultiplePermissionsState(
         listOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
     )
+
+    // Gmail OAuth consent: the ViewModel emits an IntentSender, we launch it and report the result.
+    val gmailLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result -> viewModel.onConsentResult(result.data) }
+    LaunchedEffect(Unit) {
+        viewModel.gmailConsent.collect { sender ->
+            gmailLauncher.launch(IntentSenderRequest.Builder(sender).build())
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -183,6 +199,27 @@ fun SourcesScreen(
                     viewModel.toggleAppUsage(it)
                 }
             )
+        }
+
+        item {
+            SourceToggle(
+                title = "Email (Gmail)",
+                subtitle = gmailAccount?.let { "Connected: $it" }
+                    ?: "Read unread Primary emails (read-only)",
+                isChecked = emailEnabled,
+                onCheckedChange = { viewModel.onEmailToggle(it) }
+            )
+            gmailStatus?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+                )
+            }
+            if (emailEnabled && gmailAccount != null) {
+                TextButton(onClick = { viewModel.onEmailToggle(false) }) { Text("Disconnect Gmail") }
+            }
         }
 
         item {

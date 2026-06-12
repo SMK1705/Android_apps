@@ -114,10 +114,24 @@ Toggle sources in the **Sources** tab; each requests its permission when enabled
 | Call Logs | `READ_CALL_LOG` | Scanned on refresh / periodically |
 | Calendar | `READ_CALENDAR` + `WRITE_CALENDAR` | Read to dedup; writes events on approval (no duplicates) |
 | App Usage | Usage access (system settings) | *Not yet implemented* |
+| Email (Gmail) | Google OAuth (`gmail.readonly`) | Reads **unread Primary** emails; connect/disconnect in Sources. Needs a one-time Google Cloud setup (below). Understanding stays on-device — email content never leaves the phone |
 | Voice/Call Recordings | `READ_MEDIA_AUDIO` | Folder paths configurable; *transcription not yet implemented* |
 
 Also needed: `POST_NOTIFICATIONS` (for the "N suggestions to review" alert),
 `SCHEDULE_EXACT_ALARM`/`USE_EXACT_ALARM` (reminders), `QUERY_ALL_PACKAGES` (to list apps in the picker).
+
+### Gmail setup (one-time, Google Cloud)
+
+Gmail uses **your own** Google Cloud OAuth client (read-only). The app embeds no client-id/secret —
+Google matches it by package name + signing SHA-1. In [console.cloud.google.com](https://console.cloud.google.com):
+
+1. Create/select a project → **enable the Gmail API**.
+2. **OAuth consent screen:** External; add scope `.../auth/gmail.readonly`; add your Google account as
+   a **Test user** (leave it in *Testing* — no verification needed for personal use).
+3. **Credentials → Create credentials → OAuth client ID → Android:** package `com.rajasudhan.taskmind`,
+   SHA-1 of your debug cert (`gradlew :apps:taskmind:signingReport`). No secret to paste back.
+4. In the app: **Sources → Email (Gmail) → on** → grant consent. The connected account shows under the
+   toggle; **Disconnect** revokes the token. Every Gmail fetch appears in **Settings → Data Egress**.
 
 ---
 
@@ -138,7 +152,7 @@ Passive behavior: a foreground service keeps the live watchers alive; a WorkMana
 ## Not yet implemented
 
 - Call/voice **transcription** (STT) and the audio folder watcher
-- **Gmail/email** (OAuth) and **app-usage** collectors
+- **App-usage** collector
 - Gemma **3n** is supported but not yet loaded by default
 - Data-retention controls, Notes DB export, a granted-permissions summary panel
 

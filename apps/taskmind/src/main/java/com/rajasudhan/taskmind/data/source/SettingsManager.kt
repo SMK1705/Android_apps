@@ -15,6 +15,7 @@ class SettingsManager @Inject constructor(
         private const val KEY_EVENT_DURATION_MINUTES = "event_duration_minutes"
         private const val KEY_CALENDAR_ID = "calendar_id"
         private const val KEY_ON_DEVICE_MODEL_PATH = "on_device_model_path"
+        private const val KEY_GMAIL_ACCOUNT = "gmail_account"
 
         const val CALENDAR_ID_AUTO = -1L
         const val DEFAULT_EVENT_DURATION_MINUTES = 60
@@ -48,6 +49,11 @@ class SettingsManager @Inject constructor(
         get() = encryptedPrefs.getString(KEY_ON_DEVICE_MODEL_PATH, "") ?: ""
         set(value) = encryptedPrefs.edit().putString(KEY_ON_DEVICE_MODEL_PATH, value).apply()
 
+    /** Connected Gmail account address; blank = not connected. (OAuth tokens are NOT stored here.) */
+    var gmailAccount: String
+        get() = encryptedPrefs.getString(KEY_GMAIL_ACCOUNT, "") ?: ""
+        set(value) = encryptedPrefs.edit().putString(KEY_GMAIL_ACCOUNT, value).apply()
+
     /**
      * Clears all user-facing settings (API keys, provider choice, calendar prefs).
      * Deliberately leaves the DB encryption key intact so the (now-emptied) database stays readable.
@@ -60,6 +66,7 @@ class SettingsManager @Inject constructor(
             .remove(KEY_EVENT_DURATION_MINUTES)
             .remove(KEY_CALENDAR_ID)
             .remove(KEY_ON_DEVICE_MODEL_PATH)
+            .remove(KEY_GMAIL_ACCOUNT)
             .apply()
     }
 }
