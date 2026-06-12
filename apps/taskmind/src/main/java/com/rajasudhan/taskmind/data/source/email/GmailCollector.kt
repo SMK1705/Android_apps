@@ -18,6 +18,8 @@ class GmailCollector @Inject constructor(
 ) {
     data class Email(val id: String, val sender: String, val subject: String, val body: String)
 
+    private companion object { const val TAG = "GmailCollector" }
+
     suspend fun fetchUnreadPrimary(
         accessToken: String,
         sinceMillis: Long,
@@ -29,13 +31,17 @@ class GmailCollector @Inject constructor(
         val query = "is:unread category:primary after:$afterSeconds"
 
         egressLogger.record("gmail.googleapis.com", "Gmail fetch (unread primary)")
-        val list = runCatching { api.listMessages(bearer, query, maxResults) }.getOrNull()
-            ?: return@withContext emptyList()
+        val list = runCatching { api.listMessages(bearer, query, maxResults) }
+            .onFailure { android.util.Log.e(TAG, "listMessages failed for query=$query", it) }
+            .getOrNull() ?: return@withContext emptyList()
+        android.util.Log.i(TAG, "list returned ${list.messages.size} message id(s) for query=$query")
 
         val emails = mutableListOf<Email>()
         for (ref in list.messages) {
             if (ref.id in skipIds) continue
-            val msg = runCatching { api.getMessage(bearer, ref.id, "full") }.getOrNull() ?: continue
+            val msg = runCatching { api.getMessage(bearer, ref.id, "full") }
+                .onFailure { android.util.Log.e(TAG, "getMessage ${ref.id} failed", it) }
+                .getOrNull() ?: continue
             val headers = msg.payload?.headers ?: emptyList()
             val sender = GmailTextExtractor.header(headers, "From") ?: "unknown sender"
             val subject = GmailTextExtractor.header(headers, "Subject") ?: "(no subject)"

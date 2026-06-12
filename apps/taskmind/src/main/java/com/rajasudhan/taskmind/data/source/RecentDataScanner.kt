@@ -74,9 +74,14 @@ class RecentDataScanner @Inject constructor(
      * processed message ids are skipped so a still-unread email isn't re-run on every scan.
      */
     private suspend fun scanEmail(since: Long) {
-        val token = gmailAuth.silentAccessToken() ?: return
+        val token = gmailAuth.silentAccessToken()
+        if (token == null) {
+            android.util.Log.w("RecentDataScanner", "Gmail enabled but not authorized; skipping email scan")
+            return
+        }
         val skip = sourceManager.processedEmailIds.first()
         val emails = gmailCollector.fetchUnreadPrimary(token, since, skip)
+        android.util.Log.i("RecentDataScanner", "Gmail fetched ${emails.size} new email(s) since $since")
         for (email in emails) {
             pipeline.processText("Email from ${email.sender}", "${email.subject}\n\n${email.body}")
             sourceManager.addProcessedEmailId(email.id)

@@ -99,7 +99,8 @@ fun SourcesScreen(
             )
         }
 
-        // Per-app picker: only show when notifications are enabled.
+        // Per-app picker: only show when notifications are enabled. Height-capped (its own scroll)
+        // so a long app list doesn't push the other sources (SMS, Email, …) off the screen.
         if (notificationsEnabled) {
             item {
                 Column {
@@ -116,30 +117,35 @@ fun SourcesScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                     )
-                }
-            }
-            items(filteredApps, key = { it.packageName }) { app ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                        Text(app.label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            app.packageName,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp).padding(top = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(filteredApps, key = { it.packageName }) { app ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                    Text(app.label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(
+                                        app.packageName,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Checkbox(
+                                    checked = app.packageName in allowlist,
+                                    onCheckedChange = { viewModel.setAppMonitored(app.packageName, it) }
+                                )
+                            }
+                        }
                     }
-                    Checkbox(
-                        checked = app.packageName in allowlist,
-                        onCheckedChange = { viewModel.setAppMonitored(app.packageName, it) }
-                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 }
             }
-            item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
         }
 
         item {

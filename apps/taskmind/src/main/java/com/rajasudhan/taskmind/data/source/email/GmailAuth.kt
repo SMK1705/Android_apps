@@ -59,6 +59,7 @@ class GmailAuth @Inject constructor(
      */
     suspend fun authorize(): GmailAuthState = try {
         val result = Identity.getAuthorizationClient(appContext).authorize(request()).await()
+        android.util.Log.i(TAG, "authorize: hasResolution=${result.hasResolution()} hasToken=${result.accessToken != null}")
         when {
             result.hasResolution() -> {
                 val sender = result.pendingIntent?.intentSender
@@ -69,6 +70,7 @@ class GmailAuth @Inject constructor(
             else -> GmailAuthState.Error("No access token returned")
         }
     } catch (e: Exception) {
+        android.util.Log.e(TAG, "authorize failed", e)
         GmailAuthState.Error(e.message ?: e::class.java.simpleName)
     }
 
@@ -82,7 +84,7 @@ class GmailAuth @Inject constructor(
             Identity.getAuthorizationClient(appContext)
                 .getAuthorizationResultFromIntent(data)
                 .accessToken
-        }.getOrNull()
+        }.onFailure { android.util.Log.e(TAG, "tokenFromConsent failed", it) }.getOrNull()
 
     fun storeAccount(email: String) {
         settingsManager.gmailAccount = email
@@ -108,6 +110,7 @@ class GmailAuth @Inject constructor(
 
     companion object {
         const val GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
+        private const val TAG = "GmailAuth"
     }
 }
 
