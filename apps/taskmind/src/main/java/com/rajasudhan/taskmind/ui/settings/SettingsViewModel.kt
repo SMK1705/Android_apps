@@ -17,6 +17,7 @@ import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.source.EgressLogger
 import com.rajasudhan.taskmind.data.source.SettingsManager
 import com.rajasudhan.taskmind.data.source.dataStore
+import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
 import com.rajasudhan.taskmind.data.source.understanding.OnDeviceLlmProvider
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
 import com.squareup.moshi.Moshi
@@ -42,9 +43,27 @@ class SettingsViewModel @Inject constructor(
     private val onDeviceLlm: OnDeviceLlmProvider,
     private val understandingPipeline: UnderstandingPipeline,
     private val egressLogger: EgressLogger,
+    private val voskTranscriber: VoskTranscriber,
     private val moshi: Moshi,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
+
+    // ---- Transcription (on-device Vosk) ----
+    private val _transcriptionStatus = MutableStateFlow<String?>(null)
+    val transcriptionStatus: StateFlow<String?> = _transcriptionStatus
+    val transcriptionModelPath: String get() = voskTranscriber.modelDirPath()
+
+    fun checkTranscriptionModel() {
+        viewModelScope.launch {
+            _transcriptionStatus.value = "Checking transcription model…"
+            val err = voskTranscriber.tryLoad()
+            _transcriptionStatus.value = if (err == null) {
+                "✓ Vosk model loaded — transcription runs offline."
+            } else {
+                "Model not ready: ${err.message ?: err::class.java.simpleName}"
+            }
+        }
+    }
 
     val egressEvents = egressLogger.events
 

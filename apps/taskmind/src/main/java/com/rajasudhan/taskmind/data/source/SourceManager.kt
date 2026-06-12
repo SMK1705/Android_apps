@@ -41,6 +41,9 @@ class SourceManager @Inject constructor(
         // ISO date (yyyy-MM-dd) the app-usage digest was last generated — gates it to once per day.
         val KEY_LAST_APP_USAGE_DIGEST_DATE = stringPreferencesKey("last_app_usage_digest_date")
 
+        // MediaStore audio ids already transcribed, so a recording isn't re-transcribed every scan.
+        val KEY_PROCESSED_AUDIO_IDS = stringSetPreferencesKey("processed_audio_ids")
+
         const val DEFAULT_CALL_RECORDING_PATH = "/storage/emulated/0/Recordings/Call/"
         const val DEFAULT_VOICE_RECORDING_PATH = "/storage/emulated/0/Recordings/Voice Recorder/"
     }
@@ -101,5 +104,19 @@ class SourceManager @Inject constructor(
 
     suspend fun setLastAppUsageDigestDate(date: String) {
         context.dataStore.edit { it[KEY_LAST_APP_USAGE_DIGEST_DATE] = date }
+    }
+
+    /** MediaStore audio ids already transcribed (capped, to avoid unbounded growth). */
+    val processedAudioIds: Flow<Set<String>> =
+        context.dataStore.data.map { it[KEY_PROCESSED_AUDIO_IDS] ?: emptySet() }
+
+    suspend fun addProcessedAudioId(id: String) {
+        context.dataStore.edit { preferences ->
+            val updated = (preferences[KEY_PROCESSED_AUDIO_IDS] ?: emptySet()) + id
+            preferences[KEY_PROCESSED_AUDIO_IDS] =
+                if (updated.size > MAX_PROCESSED_EMAIL_IDS)
+                    updated.toList().takeLast(MAX_PROCESSED_EMAIL_IDS).toSet()
+                else updated
+        }
     }
 }

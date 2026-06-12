@@ -28,6 +28,8 @@ fun SettingsScreen(
 ) {
     val llmApiKey by viewModel.llmApiKey.collectAsState()
     val sttApiKey by viewModel.sttApiKey.collectAsState()
+    val transcriptionStatus by viewModel.transcriptionStatus.collectAsState()
+    val transcriptionModelPath = viewModel.transcriptionModelPath
     val useOnDeviceLlm by viewModel.useOnDeviceLlm.collectAsState()
     val eventDurationMinutes by viewModel.eventDurationMinutes.collectAsState()
     val calendarId by viewModel.calendarId.collectAsState()
@@ -110,10 +112,23 @@ fun SettingsScreen(
         }
 
         SettingsSectionCard(accent = TranscriptionAccent, title = "Transcription (Audio)") {
+            Text(
+                "On-device speech-to-text (Vosk) for call/voice recordings — runs offline. Enable the " +
+                    "Voice/Call Recordings source (Sources tab), then push a Vosk model to:\n" +
+                    transcriptionModelPath,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(onClick = { viewModel.checkTranscriptionModel() }) {
+                Text("Check transcription model")
+            }
+            transcriptionStatus?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             OutlinedTextField(
                 value = sttApiKey,
                 onValueChange = { viewModel.updateSttApiKey(it) },
-                label = { Text("Cloud STT API Key (Optional)") },
+                label = { Text("Cloud STT API Key (optional, future)") },
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth()
             )

@@ -1,10 +1,13 @@
 package com.rajasudhan.taskmind.data.source
 
+import android.content.ContentUris
 import android.content.Context
 import android.provider.CallLog
+import android.provider.MediaStore
 import android.provider.Telephony
 import com.rajasudhan.taskmind.data.source.email.GmailAuth
 import com.rajasudhan.taskmind.data.source.email.GmailCollector
+import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -23,13 +26,15 @@ class RecentDataScanner @Inject constructor(
     private val pipeline: UnderstandingPipeline,
     private val gmailAuth: GmailAuth,
     private val gmailCollector: GmailCollector,
-    private val appUsageCollector: AppUsageCollector
+    private val appUsageCollector: AppUsageCollector,
+    private val voskTranscriber: VoskTranscriber
 ) {
     suspend fun scanSince(sinceMillis: Long) {
         if (sourceManager.isSmsEnabled.first()) runCatching { scanSms(sinceMillis) }
         if (sourceManager.isCallLogEnabled.first()) runCatching { scanCalls(sinceMillis) }
         if (sourceManager.isEmailEnabled.first()) runCatching { scanEmail(sinceMillis) }
         if (sourceManager.isAppUsageEnabled.first()) runCatching { appUsageCollector.generateDailyDigestIfDue() }
+        if (sourceManager.isAudioEnabled.first()) runCatching { scanAudio(sinceMillis) }
     }
 
     private suspend fun scanSms(since: Long) {
@@ -66,6 +71,45 @@ class RecentDataScanner @Inject constructor(
                 }
                 val duration = cursor.getString(2)
                 pipeline.processText("Call Log", "$typeStr call with $number lasting $duration seconds.")
+            }
+        }
+    }
+
+    /**
+     * Transcribes recent call/voice recordings (on-device via Vosk) and runs the transcript through
+     * the pipeline. Uses MediaStore to find non-music audio in the Recordings/Call folders modified
+     * since [since]; already-transcribed ids are skipped. Skips silently if no Vosk model is present.
+     */
+    private suspend fun scanAudio(since: Long) {
+        if (!voskTranscriber.isModelPresent()) {
+            android.util.Log.w("RecentDataScanner", "Audio enabled but no Vosk model present; skipping")
+            return
+        }
+        val processed = sourceManager.processedAudioIds.first()
+        val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        val projection = arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DISPLAY_NAME)
+        val selection = "${MediaStore.Audio.Media.DATE_MODIFIED} >= ? AND " +
+            "${MediaStore.Audio.Media.IS_MUSIC} = 0 AND " +
+            "(${MediaStore.Audio.Media.RELATIVE_PATH} LIKE '%Recordings%' OR " +
+            "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE '%Call%')"
+        val args = arrayOf((since / 1000).toString())
+        context.contentResolver.query(
+            collection, projection, selection, args,
+            "${MediaStore.Audio.Media.DATE_MODIFIED} DESC"
+        )?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+            val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+            while (cursor.moveToNext()) {
+                val id = cursor.getLong(idCol)
+                if (id.toString() in processed) continue
+                val name = cursor.getString(nameCol) ?: "recording"
+                val uri = ContentUris.withAppendedId(collection, id)
+                val transcript = runCatching { voskTranscriber.transcribe(uri) }.getOrNull()
+                sourceManager.addProcessedAudioId(id.toString())
+                android.util.Log.i("RecentDataScanner", "Transcribed $name -> ${transcript?.length ?: 0} chars")
+                if (!transcript.isNullOrBlank()) {
+                    pipeline.processText("Recording: $name", transcript)
+                }
             }
         }
     }

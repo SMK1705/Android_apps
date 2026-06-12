@@ -113,9 +113,9 @@ Toggle sources in the **Sources** tab; each requests its permission when enabled
 | SMS | `READ_SMS` | Live + periodic; takes effect immediately |
 | Call Logs | `READ_CALL_LOG` | Scanned on refresh / periodically |
 | Calendar | `READ_CALENDAR` + `WRITE_CALENDAR` | Read to dedup; writes events on approval (no duplicates) |
-| App Usage | Usage access (system settings) | *Not yet implemented* |
+| App Usage | Usage access (system settings) | **Daily screen-time digest** (total + top apps) → a note you can approve. Once per day, on-device |
 | Email (Gmail) | Google OAuth (`gmail.readonly`) | Reads **unread Primary** emails; connect/disconnect in Sources. Needs a one-time Google Cloud setup (below). Understanding stays on-device — email content never leaves the phone |
-| Voice/Call Recordings | `READ_MEDIA_AUDIO` | Folder paths configurable; *transcription not yet implemented* |
+| Voice/Call Recordings | `READ_MEDIA_AUDIO` | **On-device transcription (Vosk)** of recordings → suggestions. Needs a Vosk model pushed (below); audio never leaves the phone |
 
 Also needed: `POST_NOTIFICATIONS` (for the "N suggestions to review" alert),
 `SCHEDULE_EXACT_ALARM`/`USE_EXACT_ALARM` (reminders), `QUERY_ALL_PACKAGES` (to list apps in the picker).
@@ -132,6 +132,23 @@ Google matches it by package name + signing SHA-1. In [console.cloud.google.com]
    SHA-1 of your debug cert (`gradlew :apps:taskmind:signingReport`). No secret to paste back.
 4. In the app: **Sources → Email (Gmail) → on** → grant consent. The connected account shows under the
    toggle; **Disconnect** revokes the token. Every Gmail fetch appears in **Settings → Data Egress**.
+
+### Transcription model setup (on-device Vosk)
+
+Call/voice transcription runs **fully on-device** via [Vosk](https://alphacephei.com/vosk/models) — no
+audio leaves the phone. The model isn't bundled; push one once:
+
+1. Download a small Vosk model, e.g. **`vosk-model-small-en-in-0.4`** (Indian English, ~36 MB) — or
+   `vosk-model-small-en-us-0.15`.
+2. Zip it and push to internal storage as `vosk-model.zip` (the app unpacks it on first use):
+   ```powershell
+   adb push vosk-model-small-en-in-0.4.zip /sdcard/Android/data/com.rajasudhan.taskmind/files/vm.zip
+   adb shell run-as com.rajasudhan.taskmind cp /storage/emulated/0/Android/data/com.rajasudhan.taskmind/files/vm.zip /data/data/com.rajasudhan.taskmind/files/vosk-model.zip
+   ```
+   (Or push the unpacked folder to `…/files/vosk-model/`.)
+3. **Settings → Transcription → Check transcription model** → expect **"✓ Vosk model loaded"**.
+4. Enable **Sources → Voice/Call Recordings**. New recordings in your Recordings/Call folders are
+   transcribed on the periodic scan and become Inbox suggestions.
 
 ---
 
@@ -151,10 +168,9 @@ Passive behavior: a foreground service keeps the live watchers alive; a WorkMana
 
 ## Not yet implemented
 
-- Call/voice **transcription** (STT) and the audio folder watcher
-- **App-usage** collector
+- **Live** audio folder watcher (transcription currently runs on the periodic scan, not instantly)
 - Gemma **3n** is supported but not yet loaded by default
-- Data-retention controls, Notes DB export, a granted-permissions summary panel
+- Cloud STT fallback for transcription (the `TranscriptionProvider` seam exists)
 
 ## Compilation requirements
 
