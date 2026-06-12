@@ -16,6 +16,7 @@ class SettingsManager @Inject constructor(
         private const val KEY_CALENDAR_ID = "calendar_id"
         private const val KEY_ON_DEVICE_MODEL_PATH = "on_device_model_path"
         private const val KEY_GMAIL_ACCOUNT = "gmail_account"
+        private const val KEY_RETENTION_DAYS = "retention_days"
 
         const val CALENDAR_ID_AUTO = -1L
         const val DEFAULT_EVENT_DURATION_MINUTES = 60
@@ -54,6 +55,11 @@ class SettingsManager @Inject constructor(
         get() = encryptedPrefs.getString(KEY_GMAIL_ACCOUNT, "") ?: ""
         set(value) = encryptedPrefs.edit().putString(KEY_GMAIL_ACCOUNT, value).apply()
 
+    /** Auto-delete notes older than this many days; 0 = keep forever (default). */
+    var retentionDays: Int
+        get() = encryptedPrefs.getInt(KEY_RETENTION_DAYS, 0)
+        set(value) = encryptedPrefs.edit().putInt(KEY_RETENTION_DAYS, value).apply()
+
     /**
      * Clears all user-facing settings (API keys, provider choice, calendar prefs).
      * Deliberately leaves the DB encryption key intact so the (now-emptied) database stays readable.
@@ -67,6 +73,7 @@ class SettingsManager @Inject constructor(
             .remove(KEY_CALENDAR_ID)
             .remove(KEY_ON_DEVICE_MODEL_PATH)
             .remove(KEY_GMAIL_ACCOUNT)
+            .remove(KEY_RETENTION_DAYS)
             .apply()
     }
 }

@@ -1,5 +1,7 @@
 package com.rajasudhan.taskmind.ui.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -37,8 +39,17 @@ fun SettingsScreen(
     var testInput by remember { mutableStateOf("") }
     val egressEvents by viewModel.egressEvents.collectAsState()
     val egressTimeFormat = remember { java.text.SimpleDateFormat("MMM d, HH:mm", java.util.Locale.getDefault()) }
+    val retentionDays by viewModel.retentionDays.collectAsState()
+    val exportStatus by viewModel.exportStatus.collectAsState()
+    val permissions by viewModel.permissions.collectAsState()
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri -> uri?.let { viewModel.exportNotesToUri(it) } }
 
-    LaunchedEffect(Unit) { viewModel.loadCalendars() }
+    LaunchedEffect(Unit) {
+        viewModel.loadCalendars()
+        viewModel.loadPermissionStatuses()
+    }
 
     Column(
         modifier = Modifier
@@ -240,6 +251,71 @@ fun SettingsScreen(
             }
             testStatus?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+
+        SettingsSectionCard(accent = Color(0xFF6D4C41), title = "Data Management") {
+            Text(
+                "Auto-delete old notes and export your data. Actioned suggestions are always cleaned up.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            val retentionOptions = listOf(0 to "Keep forever", 30 to "30 days", 90 to "90 days", 365 to "1 year")
+            var retentionExpanded by remember { mutableStateOf(false) }
+            val retentionLabel = retentionOptions.firstOrNull { it.first == retentionDays }?.second ?: "Keep forever"
+            ExposedDropdownMenuBox(
+                expanded = retentionExpanded,
+                onExpandedChange = { retentionExpanded = it }
+            ) {
+                OutlinedTextField(
+                    value = retentionLabel,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Keep notes for") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = retentionExpanded) },
+                    modifier = Modifier.menuAnchor().fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = retentionExpanded,
+                    onDismissRequest = { retentionExpanded = false }
+                ) {
+                    retentionOptions.forEach { (days, label) ->
+                        DropdownMenuItem(
+                            text = { Text(label) },
+                            onClick = {
+                                viewModel.updateRetentionDays(days)
+                                retentionExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+            OutlinedButton(onClick = { exportLauncher.launch("taskmind-notes.json") }) {
+                Text("Export Notes (JSON)")
+            }
+            exportStatus?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+
+        SettingsSectionCard(accent = Color(0xFF00838F), title = "Permissions") {
+            Text(
+                "What TaskMind can access right now. Turn sources on/off in the Sources tab.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            permissions.forEach { p ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(p.label, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        if (p.granted) "✓ Granted" else "✗ Not granted",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (p.granted) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
 

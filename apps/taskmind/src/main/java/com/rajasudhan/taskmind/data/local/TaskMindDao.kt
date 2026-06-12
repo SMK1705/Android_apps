@@ -37,4 +37,16 @@ interface TaskMindDao {
 
     @Query("DELETE FROM suggestions")
     suspend fun deleteAllSuggestions()
+
+    /** One-shot snapshot of all notes (for export). */
+    @Query("SELECT * FROM notes ORDER BY createdDate DESC")
+    suspend fun getNotesList(): List<Note>
+
+    /** Retention: drop notes created before [cutoff] (epoch millis). */
+    @Query("DELETE FROM notes WHERE createdDate < :cutoff")
+    suspend fun deleteNotesOlderThan(cutoff: Long)
+
+    /** Cleanup: drop suggestions that are no longer pending (already approved/rejected). */
+    @Query("DELETE FROM suggestions WHERE status != 'pending'")
+    suspend fun deletePurgeableSuggestions()
 }

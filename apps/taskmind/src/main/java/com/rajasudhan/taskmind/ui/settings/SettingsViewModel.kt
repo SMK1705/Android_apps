@@ -1,19 +1,29 @@
 package com.rajasudhan.taskmind.ui.settings
 
 import android.Manifest
+import android.app.AlarmManager
+import android.app.AppOpsManager
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Process
 import android.provider.CalendarContract
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rajasudhan.taskmind.data.local.TaskMindDao
+import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.source.EgressLogger
 import com.rajasudhan.taskmind.data.source.SettingsManager
 import com.rajasudhan.taskmind.data.source.dataStore
 import com.rajasudhan.taskmind.data.source.understanding.OnDeviceLlmProvider
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.datastore.preferences.core.edit
@@ -32,6 +42,7 @@ class SettingsViewModel @Inject constructor(
     private val onDeviceLlm: OnDeviceLlmProvider,
     private val understandingPipeline: UnderstandingPipeline,
     private val egressLogger: EgressLogger,
+    private val moshi: Moshi,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -187,4 +198,65 @@ class SettingsViewModel @Inject constructor(
         }
         _calendars.value = result
     }
+
+    // ---- Data management ----
+
+    private val _retentionDays = MutableStateFlow(settingsManager.retentionDays)
+    val retentionDays: StateFlow<Int> = _retentionDays
+
+    fun updateRetentionDays(days: Int) {
+        settingsManager.retentionDays = days
+        _retentionDays.value = days
+    }
+
+    private val _exportStatus = MutableStateFlow<String?>(null)
+    val exportStatus: StateFlow<String?> = _exportStatus
+
+    /** Serializes all notes as JSON and writes them to [uri] (from ACTION_CREATE_DOCUMENT). */
+    fun exportNotesToUri(uri: Uri) {
+        viewModelScope.launch {
+            val count = withContext(Dispatchers.IO) {
+                runCatching {
+                    val notes = dao.getNotesList()
+                    val type = Types.newParameterizedType(List::class.java, Note::class.java)
+                    val json = moshi.adapter<List<Note>>(type).indent("  ").toJson(notes)
+                    context.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
+                    notes.size
+                }.getOrNull()
+            }
+            _exportStatus.value = if (count != null) "✓ Exported $count note(s)." else "Export failed."
+        }
+    }
+
+    // ---- Permissions summary ----
+
+    private val _permissions = MutableStateFlow<List<PermissionStatus>>(emptyList())
+    val permissions: StateFlow<List<PermissionStatus>> = _permissions
+
+    fun loadPermissionStatuses() {
+        fun granted(p: String) =
+            ContextCompat.checkSelfPermission(context, p) == PackageManager.PERMISSION_GRANTED
+        val exactAlarms = context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() == true
+        val notifAccess = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
+        val usageAccess = runCatching {
+            context.getSystemService(AppOpsManager::class.java)?.unsafeCheckOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName
+            ) == AppOpsManager.MODE_ALLOWED
+        }.getOrDefault(false)
+
+        _permissions.value = listOf(
+            PermissionStatus("SMS", granted(Manifest.permission.READ_SMS)),
+            PermissionStatus("Call log", granted(Manifest.permission.READ_CALL_LOG)),
+            PermissionStatus("Calendar", granted(Manifest.permission.READ_CALENDAR)),
+            PermissionStatus("Audio files", granted(Manifest.permission.READ_MEDIA_AUDIO)),
+            PermissionStatus("Post notifications", granted(Manifest.permission.POST_NOTIFICATIONS)),
+            PermissionStatus("Notification access", notifAccess),
+            PermissionStatus("Usage access", usageAccess),
+            PermissionStatus("Exact alarms", exactAlarms),
+            PermissionStatus("Gmail connected", settingsManager.gmailAccount.isNotBlank())
+        )
+    }
 }
+
+/** One row in the permissions summary panel. */
+data class PermissionStatus(val label: String, val granted: Boolean)
