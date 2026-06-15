@@ -35,7 +35,8 @@ class SourceManager @Inject constructor(
         val KEY_NOTIFICATION_ALLOWLIST = stringSetPreferencesKey("notification_allowlist")
 
         // Gmail message ids already processed, so a still-unread email isn't re-run every scan.
-        val KEY_PROCESSED_EMAIL_IDS = stringSetPreferencesKey("processed_email_ids")
+        // Keyed per account so multiple mailboxes don't share (and evict) each other's ids.
+        fun processedEmailKey(account: String) = stringSetPreferencesKey("processed_email_ids_$account")
         const val MAX_PROCESSED_EMAIL_IDS = 200
 
         // ISO date (yyyy-MM-dd) the app-usage digest was last generated — gates it to once per day.
@@ -84,14 +85,15 @@ class SourceManager @Inject constructor(
         }
     }
 
-    /** Gmail message ids already turned into suggestions (capped, to avoid unbounded growth). */
-    val processedEmailIds: Flow<Set<String>> =
-        context.dataStore.data.map { it[KEY_PROCESSED_EMAIL_IDS] ?: emptySet() }
+    /** Gmail message ids already turned into suggestions for [account] (capped to avoid growth). */
+    fun processedEmailIds(account: String): Flow<Set<String>> =
+        context.dataStore.data.map { it[processedEmailKey(account)] ?: emptySet() }
 
-    suspend fun addProcessedEmailId(id: String) {
+    suspend fun addProcessedEmailId(account: String, id: String) {
+        val key = processedEmailKey(account)
         context.dataStore.edit { preferences ->
-            val updated = (preferences[KEY_PROCESSED_EMAIL_IDS] ?: emptySet()) + id
-            preferences[KEY_PROCESSED_EMAIL_IDS] =
+            val updated = (preferences[key] ?: emptySet()) + id
+            preferences[key] =
                 if (updated.size > MAX_PROCESSED_EMAIL_IDS)
                     updated.toList().takeLast(MAX_PROCESSED_EMAIL_IDS).toSet()
                 else updated

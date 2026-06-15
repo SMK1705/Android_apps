@@ -272,7 +272,7 @@ class SettingsViewModel @Inject constructor(
             PermissionStatus("Notification access", notifAccess),
             PermissionStatus("Usage access", usageAccess),
             PermissionStatus("Exact alarms", exactAlarms),
-            PermissionStatus("Gmail connected", settingsManager.gmailAccount.isNotBlank())
+            PermissionStatus("Gmail connected", settingsManager.gmailAccounts.isNotEmpty())
         )
     }
 }

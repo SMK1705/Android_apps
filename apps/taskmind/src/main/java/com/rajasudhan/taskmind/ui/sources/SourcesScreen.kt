@@ -33,7 +33,7 @@ fun SourcesScreen(
     val calendarEnabled by viewModel.isCalendarEnabled.collectAsState()
     val appUsageEnabled by viewModel.isAppUsageEnabled.collectAsState()
     val emailEnabled by viewModel.isEmailEnabled.collectAsState()
-    val gmailAccount by viewModel.gmailAccount.collectAsState()
+    val gmailAccounts by viewModel.gmailAccounts.collectAsState()
     val gmailStatus by viewModel.gmailStatus.collectAsState()
 
     val callPath by viewModel.callRecordingPath.collectAsState()
@@ -210,8 +210,8 @@ fun SourcesScreen(
         item {
             SourceToggle(
                 title = "Email (Gmail)",
-                subtitle = gmailAccount?.let { "Connected: $it" }
-                    ?: "Read unread Primary emails (read-only)",
+                subtitle = if (gmailAccounts.isEmpty()) "Read unread Primary emails (read-only)"
+                    else "${gmailAccounts.size} account${if (gmailAccounts.size == 1) "" else "s"} connected",
                 isChecked = emailEnabled,
                 onCheckedChange = { viewModel.onEmailToggle(it) }
             )
@@ -223,8 +223,28 @@ fun SourcesScreen(
                     modifier = Modifier.padding(start = 4.dp, top = 4.dp)
                 )
             }
-            if (emailEnabled && gmailAccount != null) {
-                TextButton(onClick = { viewModel.onEmailToggle(false) }) { Text("Disconnect Gmail") }
+            if (emailEnabled) {
+                // One row per connected mailbox, each with its own Disconnect.
+                gmailAccounts.forEach { account ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            account,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { viewModel.disconnectGmailAccount(account) }) {
+                            Text("Disconnect")
+                        }
+                    }
+                }
+                TextButton(onClick = { viewModel.addGmailAccount() }) {
+                    Text(if (gmailAccounts.isEmpty()) "Connect Gmail" else "Add another account")
+                }
             }
         }
 

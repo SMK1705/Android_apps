@@ -1,5 +1,6 @@
 package com.rajasudhan.taskmind.data.source.email
 
+import android.accounts.Account
 import android.content.Context
 import android.content.Intent
 import android.content.IntentSender
@@ -46,19 +47,26 @@ class GmailAuth @Inject constructor(
 ) {
     private val scopes = listOf(Scope(GMAIL_READONLY_SCOPE))
 
-    private fun request(): AuthorizationRequest =
-        AuthorizationRequest.builder().setRequestedScopes(scopes).build()
+    private fun request(accountEmail: String?): AuthorizationRequest {
+        val builder = AuthorizationRequest.builder().setRequestedScopes(scopes)
+        // Pin the request to a specific Google account so each connected mailbox gets its own token.
+        // Null lets Play services show its account chooser/consent (used when adding a new account).
+        if (!accountEmail.isNullOrBlank()) builder.setAccount(Account(accountEmail, "com.google"))
+        return builder.build()
+    }
 
-    val connectedAccount: String?
-        get() = settingsManager.gmailAccount.ifBlank { null }
+    /** All connected Gmail accounts (empty = none connected). */
+    val connectedAccounts: Set<String>
+        get() = settingsManager.gmailAccounts
 
     /**
-     * Attempts authorization. Returns [GmailAuthState.Authorized] with a token if the grant already
-     * exists (works silently, even in the background), [GmailAuthState.NeedsConsent] with an intent
-     * to launch the one-time consent UI, or [GmailAuthState.Error].
+     * Attempts authorization for [accountEmail] (or the chooser-selected account when null). Returns
+     * [GmailAuthState.Authorized] with a token if the grant already exists (works silently, even in
+     * the background), [GmailAuthState.NeedsConsent] with an intent to launch the one-time consent
+     * UI, or [GmailAuthState.Error].
      */
-    suspend fun authorize(): GmailAuthState = try {
-        val result = Identity.getAuthorizationClient(appContext).authorize(request()).await()
+    suspend fun authorize(accountEmail: String? = null): GmailAuthState = try {
+        val result = Identity.getAuthorizationClient(appContext).authorize(request(accountEmail)).await()
         android.util.Log.i(TAG, "authorize: hasResolution=${result.hasResolution()} hasToken=${result.accessToken != null}")
         when {
             result.hasResolution() -> {
@@ -75,8 +83,8 @@ class GmailAuth @Inject constructor(
     }
 
     /** Silent token for background scans; null if not currently authorized (caller skips the scan). */
-    suspend fun silentAccessToken(): String? =
-        (authorize() as? GmailAuthState.Authorized)?.accessToken
+    suspend fun silentAccessToken(accountEmail: String? = null): String? =
+        (authorize(accountEmail) as? GmailAuthState.Authorized)?.accessToken
 
     /** Extracts the access token from the consent activity result intent. */
     fun tokenFromConsent(data: Intent?): String? =
@@ -86,14 +94,14 @@ class GmailAuth @Inject constructor(
                 .accessToken
         }.onFailure { android.util.Log.e(TAG, "tokenFromConsent failed", it) }.getOrNull()
 
-    fun storeAccount(email: String) {
-        settingsManager.gmailAccount = email
+    fun addAccount(email: String) {
+        settingsManager.addGmailAccount(email)
     }
 
-    /** Clears local connection state and best-effort revokes the token with Google. */
-    suspend fun disconnect() {
-        val token = runCatching { silentAccessToken() }.getOrNull()
-        settingsManager.gmailAccount = ""
+    /** Removes [email] from the connected set and best-effort revokes its token with Google. */
+    suspend fun disconnect(email: String) {
+        val token = runCatching { silentAccessToken(email) }.getOrNull()
+        settingsManager.removeGmailAccount(email)
         if (!token.isNullOrBlank()) {
             egressLogger.record("oauth2.googleapis.com", "Gmail token revoke")
             runCatching {
@@ -106,6 +114,11 @@ class GmailAuth @Inject constructor(
                 }
             }
         }
+    }
+
+    /** Disconnects every connected account (used when the Email source is turned off). */
+    suspend fun disconnectAll() {
+        connectedAccounts.toList().forEach { disconnect(it) }
     }
 
     companion object {
