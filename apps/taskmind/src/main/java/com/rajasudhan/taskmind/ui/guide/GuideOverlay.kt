@@ -5,7 +5,15 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Note
+import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.WavingHand
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -16,44 +24,46 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 
-private data class GuidePage(val emoji: String, val title: String, val body: String)
+private data class GuidePage(val icon: ImageVector, val title: String, val body: String)
 
 private val guidePages = listOf(
     GuidePage(
-        "👋", "Welcome to TaskMind",
-        "Your private, on-device assistant. It spots action items in your messages, calls, email and " +
-            "recordings — and saves nothing until you approve it."
+        Icons.Filled.WavingHand, "Welcome to TaskMind",
+        "Your private, on-device assistant. It identifies action items in your messages, calls, email " +
+            "and recordings — and saves nothing until you approve it."
     ),
     GuidePage(
-        "🎚️", "Choose your sources",
-        "Open the Sources tab and turn on what TaskMind should watch — SMS, Notifications, Gmail and " +
-            "more. Grant each permission when asked."
+        Icons.Filled.Tune, "Choose your sources",
+        "Open the Sources tab and enable what TaskMind may watch — SMS, Notifications, Gmail and more. " +
+            "Each requests its permission when it is turned on."
     ),
     GuidePage(
-        "📥", "Review your Inbox",
+        Icons.Filled.Inbox, "Review your Inbox",
         "Suggestions arrive as cards with a short summary. Tap a card to expand the full text, then " +
-            "Approve ✓, Edit ✎ or Reject ✗ — or use Approve all to clear them fast."
+            "Approve, Edit or Reject — or use Approve all to review them quickly."
     ),
     GuidePage(
-        "🎤", "Add by voice",
-        "Tap the mic button in the Inbox to speak a quick note. It's transcribed on-device and added " +
-            "as a suggestion for you to approve."
+        Icons.Filled.Mic, "Add by voice",
+        "Tap the microphone in the Inbox to dictate a quick note. It is transcribed on your device and " +
+            "added as a suggestion for your review."
     ),
     GuidePage(
-        "🗂️", "Find it in Notes",
-        "Everything you approve lands in the Notes tab, color-coded by type. Tap any note to open its " +
+        Icons.AutoMirrored.Filled.Note, "Find it in Notes",
+        "Everything you approve is kept in the Notes tab, organised by type. Tap any note to open its " +
             "full detail — body, source and due date."
     ),
     GuidePage(
-        "🔒", "Private by design",
-        "It all runs on your phone, locked behind biometrics. Open Settings → Data Egress any time to " +
-            "confirm nothing has left your device."
+        Icons.Filled.Lock, "Private by design",
+        "Everything runs on your phone, behind a biometric lock. Open Settings → Data Egress at any " +
+            "time to confirm nothing has left your device. Reopen this guide from the help icon in the top bar."
     ),
 )
 
@@ -66,7 +76,7 @@ fun GuideOverlay(onDismiss: () -> Unit) {
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
-            modifier = Modifier.fillMaxWidth(0.92f).fillMaxHeight(0.78f),
+            modifier = Modifier.fillMaxWidth(0.92f).fillMaxHeight(0.80f),
             shape = MaterialTheme.shapes.extraLarge,
             tonalElevation = 6.dp
         ) {
@@ -85,11 +95,25 @@ fun GuideOverlay(onDismiss: () -> Unit) {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Text(p.emoji, style = MaterialTheme.typography.displayMedium)
-                        Spacer(Modifier.height(20.dp))
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.size(96.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    p.icon,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(44.dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(24.dp))
                         Text(
                             p.title,
                             style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.SemiBold,
                             textAlign = TextAlign.Center
                         )
                         Spacer(Modifier.height(12.dp))
