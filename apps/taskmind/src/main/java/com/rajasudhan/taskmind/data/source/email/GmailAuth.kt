@@ -1,6 +1,7 @@
 package com.rajasudhan.taskmind.data.source.email
 
 import android.accounts.Account
+import android.accounts.AccountManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentSender
@@ -87,6 +88,25 @@ class GmailAuth @Inject constructor(
     /** Silent token for background scans; null if not currently authorized (caller skips the scan). */
     suspend fun silentAccessToken(accountEmail: String? = null): String? =
         (authorize(accountEmail) as? GmailAuthState.Authorized)?.accessToken
+
+    /**
+     * Intent that shows the system Google-account chooser (all Google accounts plus "Add account").
+     * Launch it for a result; the chosen email comes back via [accountFromChooser]. This is what lets
+     * "Add another account" pick a *distinct* account — [authorize] is then pinned to it, so the grant
+     * (and later background [silentAccessToken]) target that specific mailbox instead of silently
+     * reusing whichever account already has a grant. Needs no GET_ACCOUNTS permission on API 23+.
+     */
+    fun accountChooserIntent(): Intent =
+        AccountManager.newChooseAccountIntent(
+            null,                   // no pre-selected account
+            null as List<Account>?, // null = offer all Google accounts
+            arrayOf("com.google"),
+            null, null, null, null
+        )
+
+    /** The email the user picked in the account chooser, or null if they cancelled. */
+    fun accountFromChooser(data: Intent?): String? =
+        data?.getStringExtra(AccountManager.KEY_ACCOUNT_NAME)
 
     /** Extracts the access token from the consent activity result intent. */
     fun tokenFromConsent(data: Intent?): String? =
