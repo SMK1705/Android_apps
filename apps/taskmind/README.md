@@ -7,6 +7,7 @@ sources (SMS, notifications, call logs), uses an **on-device LLM** to extract ac
 It is a personal app you sideload on your own device (not for the Play Store). All understanding
 runs on-device by default; nothing leaves the phone unless you explicitly enable a cloud provider.
 
+- **Version:** Update 2 — latest release (tag `taskmind-v2`)
 - **Target device:** Samsung Galaxy S25 Ultra, One UI, Android 16
 - **Package:** `com.rajasudhan.taskmind`
 - **Stack:** Kotlin, Jetpack Compose (Material 3), Hilt, Room + SQLCipher, DataStore, WorkManager,
