@@ -100,9 +100,9 @@ class SourcesViewModel @Inject constructor(
         viewModelScope.launch { sourceManager.setSourceEnabled(SourceManager.KEY_APP_USAGE_ENABLED, enabled) }
     }
 
-    // ---- Gmail (OAuth) ----
-    private val _gmailAccount = MutableStateFlow(gmailAuth.connectedAccount)
-    val gmailAccount: StateFlow<String?> = _gmailAccount
+    // ---- Gmail (OAuth, multi-account) ----
+    private val _gmailAccounts = MutableStateFlow(gmailAuth.connectedAccounts.toList())
+    val gmailAccounts: StateFlow<List<String>> = _gmailAccounts
 
     private val _gmailStatus = MutableStateFlow<String?>(null)
     val gmailStatus: StateFlow<String?> = _gmailStatus
@@ -111,17 +111,26 @@ class SourcesViewModel @Inject constructor(
     private val _gmailConsent = MutableSharedFlow<IntentSender>(extraBufferCapacity = 1)
     val gmailConsent = _gmailConsent.asSharedFlow()
 
-    /** Handles the Email toggle: connect (OAuth) on enable, disconnect on disable. */
+    /** Email source toggle: connect a first account on enable, disconnect every account on disable. */
     fun onEmailToggle(enabled: Boolean) {
         if (!enabled) {
             viewModelScope.launch {
-                gmailAuth.disconnect()
+                gmailAuth.disconnectAll()
                 sourceManager.setSourceEnabled(SourceManager.KEY_EMAIL_ENABLED, false)
-                _gmailAccount.value = null
+                _gmailAccounts.value = emptyList()
                 _gmailStatus.value = null
             }
             return
         }
+        if (gmailAuth.connectedAccounts.isEmpty()) {
+            addGmailAccount()
+        } else {
+            viewModelScope.launch { sourceManager.setSourceEnabled(SourceManager.KEY_EMAIL_ENABLED, true) }
+        }
+    }
+
+    /** Starts the OAuth flow to connect another Google account. */
+    fun addGmailAccount() {
         viewModelScope.launch {
             _gmailStatus.value = "Connecting…"
             when (val state = gmailAuth.authorize()) {
@@ -147,10 +156,27 @@ class SourcesViewModel @Inject constructor(
         }
     }
 
+    /** Disconnects a single connected account; disables the source if it was the last one. */
+    fun disconnectGmailAccount(email: String) {
+        viewModelScope.launch {
+            gmailAuth.disconnect(email)
+            val remaining = gmailAuth.connectedAccounts.toList()
+            _gmailAccounts.value = remaining
+            if (remaining.isEmpty()) {
+                sourceManager.setSourceEnabled(SourceManager.KEY_EMAIL_ENABLED, false)
+            }
+            _gmailStatus.value = null
+        }
+    }
+
     private suspend fun finishConnect(token: String) {
-        val email = gmailCollector.profileEmail(token) ?: gmailAuth.connectedAccount ?: "Gmail account"
-        gmailAuth.storeAccount(email)
-        _gmailAccount.value = email
+        val email = gmailCollector.profileEmail(token)
+        if (email.isNullOrBlank()) {
+            _gmailStatus.value = "Couldn't read the account email; please try again."
+            return
+        }
+        gmailAuth.addAccount(email)
+        _gmailAccounts.value = gmailAuth.connectedAccounts.toList()
         sourceManager.setSourceEnabled(SourceManager.KEY_EMAIL_ENABLED, true)
         _gmailStatus.value = null
     }

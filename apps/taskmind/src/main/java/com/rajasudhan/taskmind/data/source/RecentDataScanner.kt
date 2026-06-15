@@ -23,6 +23,7 @@ import javax.inject.Singleton
 class RecentDataScanner @Inject constructor(
     @ApplicationContext private val context: Context,
     private val sourceManager: SourceManager,
+    private val settingsManager: SettingsManager,
     private val pipeline: UnderstandingPipeline,
     private val gmailAuth: GmailAuth,
     private val gmailCollector: GmailCollector,
@@ -120,17 +121,25 @@ class RecentDataScanner @Inject constructor(
      * processed message ids are skipped so a still-unread email isn't re-run on every scan.
      */
     private suspend fun scanEmail(since: Long) {
-        val token = gmailAuth.silentAccessToken()
-        if (token == null) {
-            android.util.Log.w("RecentDataScanner", "Gmail enabled but not authorized; skipping email scan")
+        val accounts = settingsManager.gmailAccounts
+        if (accounts.isEmpty()) {
+            android.util.Log.w("RecentDataScanner", "Email enabled but no Gmail account connected; skipping")
             return
         }
-        val skip = sourceManager.processedEmailIds.first()
-        val emails = gmailCollector.fetchUnreadPrimary(token, since, skip)
-        android.util.Log.i("RecentDataScanner", "Gmail fetched ${emails.size} new email(s) since $since")
-        for (email in emails) {
-            pipeline.processText("Email from ${email.sender}", "${email.subject}\n\n${email.body}")
-            sourceManager.addProcessedEmailId(email.id)
+        for (account in accounts) {
+            val token = gmailAuth.silentAccessToken(account)
+            if (token == null) {
+                android.util.Log.w("RecentDataScanner", "Gmail account $account not authorized; skipping it")
+                continue
+            }
+            val skip = sourceManager.processedEmailIds(account).first()
+            val emails = gmailCollector.fetchUnreadPrimary(token, since, skip)
+            android.util.Log.i("RecentDataScanner", "Gmail($account) fetched ${emails.size} new email(s) since $since")
+            for (email in emails) {
+                // Tag the source with the mailbox so the inbox shows which account it came from.
+                pipeline.processText("Email ($account) from ${email.sender}", "${email.subject}\n\n${email.body}")
+                sourceManager.addProcessedEmailId(account, email.id)
+            }
         }
     }
 }

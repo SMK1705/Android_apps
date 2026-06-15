@@ -1,6 +1,7 @@
 package com.rajasudhan.taskmind.ui.notes
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,6 +19,7 @@ import com.rajasudhan.taskmind.ui.common.*
 
 @Composable
 fun NotesScreen(
+    onNoteClick: (Int) -> Unit = {},
     viewModel: NotesViewModel = hiltViewModel()
 ) {
     val notes by viewModel.notes.collectAsState()
@@ -39,7 +41,11 @@ fun NotesScreen(
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(notes, key = { it.id }) { note ->
-                    NoteRow(note = note, onDelete = { viewModel.deleteNote(note) })
+                    NoteRow(
+                        note = note,
+                        onClick = { onNoteClick(note.id) },
+                        onDelete = { viewModel.deleteNote(note) }
+                    )
                 }
             }
         }
@@ -47,10 +53,10 @@ fun NotesScreen(
 }
 
 @Composable
-private fun NoteRow(note: Note, onDelete: () -> Unit) {
+private fun NoteRow(note: Note, onClick: () -> Unit, onDelete: () -> Unit) {
     val category = categoryFor(note.type, note.dueDate, note.dueTime)
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = category.container),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {

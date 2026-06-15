@@ -1,5 +1,9 @@
 package com.rajasudhan.taskmind.ui.inbox
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -16,21 +20,27 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.rajasudhan.taskmind.data.model.Suggestion
+import com.rajasudhan.taskmind.data.source.transcription.AudioRecorder
 import com.rajasudhan.taskmind.ui.common.*
+import kotlinx.coroutines.launch
 
 private val ApproveGreen = Color(0xFF2E7D32)
 private val RejectRed = Color(0xFFD32F2F)
@@ -45,7 +55,72 @@ fun InboxScreen(
     // When approving a dated item that has no time, ask for one before it lands on the calendar.
     var timePickerFor by remember { mutableStateOf<Suggestion?>(null) }
 
-    Scaffold { paddingValues ->
+    // ---- Voice capture ----
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val recorder = remember { AudioRecorder(context) }
+    var isRecording by remember { mutableStateOf(false) }
+    var isProcessingVoice by remember { mutableStateOf(false) }
+
+    // Release the mic (and discard any partial file) if we leave the screen mid-recording.
+    DisposableEffect(Unit) {
+        onDispose { recorder.cancel() }
+    }
+
+    fun startRecording() {
+        if (recorder.start()) isRecording = true
+        else scope.launch { snackbarHostState.showSnackbar("Couldn't start recording.") }
+    }
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) startRecording()
+        else scope.launch { snackbarHostState.showSnackbar("Microphone permission is needed for voice input.") }
+    }
+
+    fun onMicClick() {
+        if (isProcessingVoice) return
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            startRecording()
+        } else {
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    fun finishRecording() {
+        val file = recorder.stop()
+        isRecording = false
+        if (file == null) {
+            scope.launch { snackbarHostState.showSnackbar("Didn't catch that — please try again.") }
+            return
+        }
+        isProcessingVoice = true
+        viewModel.addVoiceNote(file) { message ->
+            isProcessingVoice = false
+            scope.launch { snackbarHostState.showSnackbar(message) }
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { onMicClick() }) {
+                if (isProcessingVoice) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(Icons.Default.Mic, contentDescription = "Add by voice")
+                }
+            }
+        }
+    ) { paddingValues ->
         if (suggestions.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -95,7 +170,7 @@ fun InboxScreen(
                         }
                     }
                 }
-                items(suggestions) { suggestion ->
+                items(suggestions, key = { it.id }) { suggestion ->
                     SuggestionCard(
                         suggestion = suggestion,
                         onApprove = { s ->
@@ -130,7 +205,8 @@ fun InboxScreen(
         timePickerFor?.let { suggestion ->
             ApproveTimePickerDialog(
                 onSetTime = { hour, minute ->
-                    val time = String.format("%02d:%02d", hour, minute)
+                    // Locale.US so digits stay ASCII — the stored value must parse as HH:MM.
+                    val time = String.format(java.util.Locale.US, "%02d:%02d", hour, minute)
                     // Filling in a time promotes it to a timed reminder (alarm + timed calendar event).
                     viewModel.approveSuggestion(suggestion.copy(dueTime = time, type = "reminder"))
                     timePickerFor = null
@@ -140,6 +216,26 @@ fun InboxScreen(
                     timePickerFor = null
                 },
                 onDismiss = { timePickerFor = null }
+            )
+        }
+
+        if (isRecording) {
+            AlertDialog(
+                onDismissRequest = { recorder.cancel(); isRecording = false },
+                title = { Text("Listening…") },
+                text = {
+                    Text("Speak your note, then tap Stop. It's transcribed on-device and added to your inbox to review.")
+                },
+                confirmButton = {
+                    Button(onClick = { finishRecording() }) {
+                        Icon(Icons.Default.Stop, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Stop")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { recorder.cancel(); isRecording = false }) { Text("Cancel") }
+                }
             )
         }
     }
