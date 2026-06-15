@@ -57,6 +57,7 @@ class UnderstandingPipeline @Inject constructor(
                     source = source,
                     rawSnippet = text,
                     extractedTitle = item.title,
+                    summary = item.notes.trim(),
                     dueDate = ExtractionHeuristics.sanitizeDate(item.dueDate),
                     dueTime = ExtractionHeuristics.sanitizeTime(item.dueTime),
                     type = item.type,
