@@ -71,6 +71,16 @@ fun SourcesScreen(
         }
     }
 
+    // Google account chooser: pick which account to connect, then the ViewModel authorizes it.
+    val accountChooserLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result -> viewModel.onAccountChosen(result.data) }
+    LaunchedEffect(Unit) {
+        viewModel.gmailAccountChooser.collect { intent ->
+            accountChooserLauncher.launch(intent)
+        }
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
