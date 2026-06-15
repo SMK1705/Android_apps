@@ -50,6 +50,9 @@ class SourceManager @Inject constructor(
         // MediaStore audio ids already transcribed, so a recording isn't re-transcribed every scan.
         val KEY_PROCESSED_AUDIO_IDS = stringSetPreferencesKey("processed_audio_ids")
 
+        // Whether the one-time in-app guide has been shown (re-openable from the ? in the top bar).
+        val KEY_HAS_SEEN_GUIDE = booleanPreferencesKey("has_seen_guide")
+
         const val DEFAULT_CALL_RECORDING_PATH = "/storage/emulated/0/Recordings/Call/"
         const val DEFAULT_VOICE_RECORDING_PATH = "/storage/emulated/0/Recordings/Voice Recorder/"
     }
@@ -121,6 +124,14 @@ class SourceManager @Inject constructor(
 
     suspend fun setLastAppUsageDigestDate(date: String) {
         context.dataStore.edit { it[KEY_LAST_APP_USAGE_DIGEST_DATE] = date }
+    }
+
+    /** True once the user has seen (or skipped) the in-app guide. */
+    val hasSeenGuide: Flow<Boolean> =
+        context.dataStore.data.map { it[KEY_HAS_SEEN_GUIDE] ?: false }
+
+    suspend fun setHasSeenGuide(seen: Boolean) {
+        context.dataStore.edit { it[KEY_HAS_SEEN_GUIDE] = seen }
     }
 
     /** MediaStore audio ids already transcribed (capped, to avoid unbounded growth). */
