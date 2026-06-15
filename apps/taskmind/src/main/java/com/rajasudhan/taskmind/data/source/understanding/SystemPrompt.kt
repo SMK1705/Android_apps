@@ -15,7 +15,7 @@ Return ONLY a JSON object in exactly this shape. No markdown, no code fences, no
     {
       "type": "reminder",          // "reminder" | "todo" | "note"
       "title": "string",           // concise, max ~8 words
-      "notes": "string",           // extra detail or a list; "" if none
+      "notes": "string",           // a one-line summary of the item (or a short list); "" if none
       "due_date": "YYYY-MM-DD",    // or null if no date stated or implied
       "due_time": "HH:MM",         // 24-hour, or null if no specific time
       "confidence": 0.0            // 0.0–1.0: how sure this is a real action item
