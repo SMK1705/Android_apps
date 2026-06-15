@@ -24,6 +24,7 @@ import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
 import java.io.File
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -131,7 +132,8 @@ class InboxViewModel @Inject constructor(
      * always deleted. [onResult] reports a short user-facing message for a snackbar.
      */
     fun addVoiceNote(file: File, onResult: (String) -> Unit) {
-        viewModelScope.launch {
+        // Off the main thread: model lookup, transcription, and the temp-file delete all touch disk.
+        viewModelScope.launch(Dispatchers.IO) {
             // Always report a result (and delete the temp file) so the UI never gets stuck "processing",
             // even if transcription or the LLM call throws.
             var message = "Didn't catch that — please try again."
