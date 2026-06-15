@@ -5,9 +5,14 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.rajasudhan.taskmind.data.model.Note
+import com.rajasudhan.taskmind.data.model.RejectedPattern
 import com.rajasudhan.taskmind.data.model.Suggestion
 
-@Database(entities = [Note::class, Suggestion::class], version = 2, exportSchema = false)
+@Database(
+    entities = [Note::class, Suggestion::class, RejectedPattern::class],
+    version = 3,
+    exportSchema = false
+)
 abstract class TaskMindDatabase : RoomDatabase() {
     abstract fun taskMindDao(): TaskMindDao
 
@@ -17,6 +22,30 @@ abstract class TaskMindDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE suggestions ADD COLUMN summary TEXT NOT NULL DEFAULT ''")
                 db.execSQL("ALTER TABLE notes ADD COLUMN summary TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        /**
+         * v3 adds task/checklist/recurrence/location columns to notes, a snooze column to
+         * suggestions, and the rejected_patterns learning table. Nullable columns are added without a
+         * DEFAULT; `completed` mirrors its entity `@ColumnInfo(defaultValue = "0")`.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE notes ADD COLUMN completed INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE notes ADD COLUMN completedDate INTEGER")
+                db.execSQL("ALTER TABLE notes ADD COLUMN recurrence TEXT")
+                db.execSQL("ALTER TABLE notes ADD COLUMN checklist TEXT")
+                db.execSQL("ALTER TABLE notes ADD COLUMN locationLat REAL")
+                db.execSQL("ALTER TABLE notes ADD COLUMN locationLng REAL")
+                db.execSQL("ALTER TABLE notes ADD COLUMN locationRadius REAL")
+                db.execSQL("ALTER TABLE notes ADD COLUMN locationLabel TEXT")
+                db.execSQL("ALTER TABLE suggestions ADD COLUMN snoozedUntil INTEGER")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS rejected_patterns (" +
+                        "kind TEXT NOT NULL, value TEXT NOT NULL, count INTEGER NOT NULL, " +
+                        "updatedAt INTEGER NOT NULL, PRIMARY KEY(kind, value))"
+                )
             }
         }
     }
