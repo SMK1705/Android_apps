@@ -63,6 +63,11 @@ fun InboxScreen(
     var isRecording by remember { mutableStateOf(false) }
     var isProcessingVoice by remember { mutableStateOf(false) }
 
+    // Release the mic (and discard any partial file) if we leave the screen mid-recording.
+    DisposableEffect(Unit) {
+        onDispose { recorder.cancel() }
+    }
+
     fun startRecording() {
         if (recorder.start()) isRecording = true
         else scope.launch { snackbarHostState.showSnackbar("Couldn't start recording.") }
@@ -165,7 +170,7 @@ fun InboxScreen(
                         }
                     }
                 }
-                items(suggestions) { suggestion ->
+                items(suggestions, key = { it.id }) { suggestion ->
                     SuggestionCard(
                         suggestion = suggestion,
                         onApprove = { s ->
@@ -200,7 +205,8 @@ fun InboxScreen(
         timePickerFor?.let { suggestion ->
             ApproveTimePickerDialog(
                 onSetTime = { hour, minute ->
-                    val time = String.format("%02d:%02d", hour, minute)
+                    // Locale.US so digits stay ASCII — the stored value must parse as HH:MM.
+                    val time = String.format(java.util.Locale.US, "%02d:%02d", hour, minute)
                     // Filling in a time promotes it to a timed reminder (alarm + timed calendar event).
                     viewModel.approveSuggestion(suggestion.copy(dueTime = time, type = "reminder"))
                     timePickerFor = null

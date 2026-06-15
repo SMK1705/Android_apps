@@ -26,10 +26,15 @@ fun NoteDetailScreen(
 ) {
     val note by viewModel.note.collectAsState()
     val n = note
+    var deleting by remember { mutableStateOf(false) }
 
     if (n == null) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Note not found.", style = MaterialTheme.typography.bodyLarge)
+        // A delete makes the note flow emit null; render nothing until we pop, rather than
+        // flashing a "not found" error in the brief window before navigation completes.
+        if (!deleting) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Note not found.", style = MaterialTheme.typography.bodyLarge)
+            }
         }
         return
     }
@@ -94,7 +99,7 @@ fun NoteDetailScreen(
         )
 
         Spacer(Modifier.height(24.dp))
-        OutlinedButton(onClick = { viewModel.deleteNote(onBack) }) {
+        OutlinedButton(onClick = { deleting = true; viewModel.deleteNote(onBack) }) {
             Icon(Icons.Default.DeleteOutline, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text("Delete")

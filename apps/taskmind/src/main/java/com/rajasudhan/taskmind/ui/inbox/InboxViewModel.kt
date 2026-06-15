@@ -132,19 +132,24 @@ class InboxViewModel @Inject constructor(
      */
     fun addVoiceNote(file: File, onResult: (String) -> Unit) {
         viewModelScope.launch {
-            if (!voskTranscriber.isModelPresent()) {
-                file.delete()
-                onResult("Add an offline voice model in Settings to use voice input.")
-                return@launch
+            // Always report a result (and delete the temp file) so the UI never gets stuck "processing",
+            // even if transcription or the LLM call throws.
+            var message = "Didn't catch that — please try again."
+            try {
+                if (!voskTranscriber.isModelPresent()) {
+                    message = "Add an offline voice model in Settings to use voice input."
+                    return@launch
+                }
+                val transcript = runCatching { voskTranscriber.transcribe(Uri.fromFile(file)) }.getOrNull()
+                if (transcript.isNullOrBlank()) return@launch
+                pipeline.processText("Voice note", transcript)
+                message = "Added to your inbox for review."
+            } catch (e: Exception) {
+                message = "Couldn't process the recording."
+            } finally {
+                runCatching { file.delete() }
+                onResult(message)
             }
-            val transcript = runCatching { voskTranscriber.transcribe(Uri.fromFile(file)) }.getOrNull()
-            file.delete()
-            if (transcript.isNullOrBlank()) {
-                onResult("Didn't catch that — please try again.")
-                return@launch
-            }
-            pipeline.processText("Voice note", transcript)
-            onResult("Added to your inbox for review.")
         }
     }
 
