@@ -12,9 +12,12 @@ import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
 import java.io.File
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -28,35 +31,82 @@ class InboxViewModel @Inject constructor(
     private val pipeline: UnderstandingPipeline
 ) : ViewModel() {
 
-    val pendingSuggestions = dao.getPendingSuggestions()
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    // Ticks every 30s so snoozed items auto-resurface shortly after their time passes.
+    private val nowTicker = flow {
+        while (true) { emit(System.currentTimeMillis()); delay(30_000) }
+    }
+
+    val pendingSuggestions = combine(dao.getPendingSuggestions(), nowTicker) { list, now ->
+        list.filter { it.snoozedUntil == null || it.snoozedUntil!! <= now }
+    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing
 
+    // The most recent reversible action (approve/reject), for the "Undo" snackbar.
+    private var lastUndo: (suspend () -> Unit)? = null
+
     fun approveSuggestion(suggestion: Suggestion) {
-        viewModelScope.launch { approver.approve(suggestion) }
+        viewModelScope.launch {
+            val noteId = approver.approve(suggestion)
+            lastUndo = {
+                dao.updateSuggestion(suggestion.copy(status = "pending", snoozedUntil = null))
+                dao.deleteNoteById(noteId.toInt())
+            }
+        }
     }
 
     fun approveAll() {
         viewModelScope.launch {
             pendingSuggestions.value.forEach { approver.approve(it) }
+            lastUndo = null // bulk action isn't individually undoable
         }
     }
 
     fun rejectAll() {
         viewModelScope.launch {
             pendingSuggestions.value.forEach { dao.updateSuggestion(it.copy(status = "rejected")) }
+            lastUndo = null
         }
     }
 
     fun rejectSuggestion(suggestion: Suggestion) {
         viewModelScope.launch {
-            val updated = suggestion.copy(status = "rejected")
-            dao.updateSuggestion(updated)
+            dao.updateSuggestion(suggestion.copy(status = "rejected"))
+            lastUndo = { dao.updateSuggestion(suggestion.copy(status = "pending", snoozedUntil = null)) }
         }
     }
-    
+
+    /** Hide [suggestion] from the Inbox until [until] (epoch millis). It returns on its own. */
+    fun snooze(suggestion: Suggestion, until: Long) {
+        viewModelScope.launch {
+            dao.updateSuggestion(suggestion.copy(snoozedUntil = until))
+            lastUndo = { dao.updateSuggestion(suggestion.copy(snoozedUntil = null)) }
+        }
+    }
+
+    /** Reverses the most recent approve/reject/snooze. No-op if nothing is undoable. */
+    fun undoLast() {
+        val action = lastUndo ?: return
+        lastUndo = null
+        viewModelScope.launch { action() }
+    }
+
+    /** Type-to-add: feed a typed line through the same pipeline as every other source. */
+    fun addManualEntry(text: String, onResult: (String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            var message = "Couldn't add that — please try again."
+            try {
+                pipeline.processText("Manual entry", text)
+                message = "Added to your inbox for review."
+            } catch (e: Exception) {
+                message = "Couldn't add that — please try again."
+            } finally {
+                onResult(message)
+            }
+        }
+    }
+
     fun updateSuggestion(suggestion: Suggestion) {
         viewModelScope.launch {
             dao.updateSuggestion(suggestion)

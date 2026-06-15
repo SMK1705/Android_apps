@@ -32,8 +32,11 @@ class SuggestionApprover @Inject constructor(
     private val settingsManager: SettingsManager,
     @ApplicationContext private val context: Context
 ) {
-    /** Persists [suggestion] as approved, creates the Note, and schedules alarm/calendar if dated. */
-    suspend fun approve(suggestion: Suggestion) {
+    /**
+     * Persists [suggestion] as approved, creates the Note, and schedules alarm/calendar if dated.
+     * Returns the new note's id so the caller can offer an undo (delete that note + restore pending).
+     */
+    suspend fun approve(suggestion: Suggestion): Long {
         dao.updateSuggestion(suggestion.copy(status = "approved"))
 
         val isReminder = suggestion.type == "reminder" && suggestion.dueTime != null
@@ -49,7 +52,7 @@ class SuggestionApprover @Inject constructor(
             createdDate = System.currentTimeMillis(),
             type = noteType
         )
-        dao.insertNote(note)
+        val noteId = dao.insertNote(note)
 
         if (isReminder) {
             scheduleAlarm(suggestion.extractedTitle, suggestion.dueDate, suggestion.dueTime)
@@ -57,6 +60,7 @@ class SuggestionApprover @Inject constructor(
         } else if (suggestion.type == "todo" && suggestion.dueDate != null) {
             addToCalendar(suggestion.extractedTitle, note.body, suggestion.dueDate, null)
         }
+        return noteId
     }
 
     private fun scheduleAlarm(title: String, dueDate: String?, dueTime: String?) {
