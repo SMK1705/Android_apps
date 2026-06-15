@@ -15,18 +15,23 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -41,10 +46,28 @@ import com.rajasudhan.taskmind.data.model.Suggestion
 import com.rajasudhan.taskmind.data.source.transcription.AudioRecorder
 import com.rajasudhan.taskmind.ui.common.*
 import kotlinx.coroutines.launch
+import java.time.LocalDateTime
+import java.time.ZoneId
 
 private val ApproveGreen = Color(0xFF2E7D32)
 private val RejectRed = Color(0xFFD32F2F)
 
+private val inboxFilters = listOf("All", "Reminders", "To-dos", "Notes")
+
+/** "In 1 hour / This evening / Tomorrow" snooze targets as (label, epochMillis). */
+private fun snoozeOptions(): List<Pair<String, Long>> {
+    val zone = ZoneId.systemDefault()
+    val now = LocalDateTime.now()
+    fun millis(dt: LocalDateTime) = dt.atZone(zone).toInstant().toEpochMilli()
+    val eveningDay = if (now.hour < 18) now.toLocalDate() else now.toLocalDate().plusDays(1)
+    return listOf(
+        "In 1 hour" to System.currentTimeMillis() + 60 * 60 * 1000,
+        "This evening" to millis(eveningDay.atTime(18, 0)),
+        "Tomorrow" to millis(now.toLocalDate().plusDays(1).atTime(9, 0))
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InboxScreen(
     viewModel: InboxViewModel = hiltViewModel()
@@ -52,21 +75,24 @@ fun InboxScreen(
     val suggestions by viewModel.pendingSuggestions.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     var showApproveAllDialog by remember { mutableStateOf(false) }
+    var overflowMenu by remember { mutableStateOf(false) }
+    var selectedFilter by remember { mutableStateOf("All") }
+    var showManualDialog by remember { mutableStateOf(false) }
+    var manualText by remember { mutableStateOf("") }
     // When approving a dated item that has no time, ask for one before it lands on the calendar.
     var timePickerFor by remember { mutableStateOf<Suggestion?>(null) }
 
-    // ---- Voice capture ----
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // ---- Voice capture ----
     val recorder = remember { AudioRecorder(context) }
     var isRecording by remember { mutableStateOf(false) }
     var isProcessingVoice by remember { mutableStateOf(false) }
 
     // Release the mic (and discard any partial file) if we leave the screen mid-recording.
-    DisposableEffect(Unit) {
-        onDispose { recorder.cancel() }
-    }
+    DisposableEffect(Unit) { onDispose { recorder.cancel() } }
 
     fun startRecording() {
         if (recorder.start()) isRecording = true
@@ -84,11 +110,7 @@ fun InboxScreen(
         if (isProcessingVoice) return
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
             == PackageManager.PERMISSION_GRANTED
-        ) {
-            startRecording()
-        } else {
-            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        }
+        ) startRecording() else micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
     }
 
     fun finishRecording() {
@@ -102,6 +124,39 @@ fun InboxScreen(
         viewModel.addVoiceNote(file) { message ->
             isProcessingVoice = false
             scope.launch { snackbarHostState.showSnackbar(message) }
+        }
+    }
+
+    // ---- Review actions (with Undo) ----
+    fun showUndo(message: String) {
+        scope.launch {
+            val r = snackbarHostState.showSnackbar(message, actionLabel = "Undo", duration = SnackbarDuration.Short)
+            if (r == SnackbarResult.ActionPerformed) viewModel.undoLast()
+        }
+    }
+
+    fun doApprove(s: Suggestion) {
+        // A dated item with no time: ask before silently filing it as all-day.
+        if (s.dueDate != null && s.dueTime == null) timePickerFor = s
+        else { viewModel.approveSuggestion(s); showUndo("Approved") }
+    }
+
+    fun doReject(s: Suggestion) {
+        viewModel.rejectSuggestion(s)
+        showUndo("Rejected")
+    }
+
+    fun doSnooze(s: Suggestion, until: Long) {
+        viewModel.snooze(s, until)
+        showUndo("Snoozed")
+    }
+
+    val shown = remember(suggestions, selectedFilter) {
+        when (selectedFilter) {
+            "Reminders" -> suggestions.filter { it.type == "reminder" }
+            "To-dos" -> suggestions.filter { it.type == "todo" }
+            "Notes" -> suggestions.filter { it.type == "note" }
+            else -> suggestions
         }
     }
 
@@ -126,13 +181,20 @@ fun InboxScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(text = "No pending suggestions. All caught up!", style = MaterialTheme.typography.bodyLarge)
                     Spacer(Modifier.height(12.dp))
-                    OutlinedButton(onClick = { viewModel.refreshRecentData() }, enabled = !isRefreshing) {
-                        if (isRefreshing) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(Icons.Default.Refresh, contentDescription = null)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { viewModel.refreshRecentData() }, enabled = !isRefreshing) {
+                            if (isRefreshing) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(Icons.Default.Refresh, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Refresh")
+                            }
+                        }
+                        OutlinedButton(onClick = { showManualDialog = true }) {
+                            Icon(Icons.Default.Add, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Refresh")
+                            Text("Add item")
                         }
                     }
                 }
@@ -162,25 +224,83 @@ fun InboxScreen(
                                 Icon(Icons.Default.Refresh, contentDescription = "Refresh Recent Data")
                             }
                         }
-                        TextButton(onClick = { viewModel.rejectAll() }) {
-                            Text("Reject all", color = RejectRed)
+                        IconButton(onClick = { showManualDialog = true }) {
+                            Icon(Icons.Default.Add, contentDescription = "Add item manually")
                         }
-                        Button(onClick = { showApproveAllDialog = true }) {
-                            Text("Approve all")
+                        Box {
+                            IconButton(onClick = { overflowMenu = true }) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More actions")
+                            }
+                            DropdownMenu(expanded = overflowMenu, onDismissRequest = { overflowMenu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Approve all") },
+                                    onClick = { overflowMenu = false; showApproveAllDialog = true }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Reject all") },
+                                    onClick = { overflowMenu = false; viewModel.rejectAll() }
+                                )
+                            }
                         }
                     }
                 }
-                items(suggestions, key = { it.id }) { suggestion ->
-                    SuggestionCard(
-                        suggestion = suggestion,
-                        onApprove = { s ->
-                            // A dated item with no time: ask before silently filing it as all-day.
-                            if (s.dueDate != null && s.dueTime == null) timePickerFor = s
-                            else viewModel.approveSuggestion(s)
-                        },
-                        onReject = { viewModel.rejectSuggestion(it) },
-                        onEdit = { viewModel.updateSuggestion(it) }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        inboxFilters.forEach { f ->
+                            FilterChip(
+                                selected = selectedFilter == f,
+                                onClick = { selectedFilter = f },
+                                label = { Text(f) }
+                            )
+                        }
+                    }
+                }
+                items(shown, key = { it.id }) { suggestion ->
+                    val dismissState = rememberSwipeToDismissBoxState(
+                        confirmValueChange = { value ->
+                            when (value) {
+                                SwipeToDismissBoxValue.StartToEnd -> doApprove(suggestion)
+                                SwipeToDismissBoxValue.EndToStart -> doReject(suggestion)
+                                SwipeToDismissBoxValue.Settled -> {}
+                            }
+                            // Always return false: the data change (approve/reject) removes the card,
+                            // and an approve that needs a time keeps the card until the dialog resolves.
+                            false
+                        }
                     )
+                    SwipeToDismissBox(
+                        state = dismissState,
+                        backgroundContent = {
+                            val dir = dismissState.dismissDirection
+                            val bg = when (dir) {
+                                SwipeToDismissBoxValue.StartToEnd -> ApproveGreen
+                                SwipeToDismissBoxValue.EndToStart -> RejectRed
+                                else -> Color.Transparent
+                            }
+                            val icon = when (dir) {
+                                SwipeToDismissBoxValue.StartToEnd -> Icons.Default.Check
+                                SwipeToDismissBoxValue.EndToStart -> Icons.Default.Close
+                                else -> null
+                            }
+                            val align =
+                                if (dir == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd
+                            Box(
+                                Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)).background(bg)
+                                    .padding(horizontal = 24.dp),
+                                contentAlignment = align
+                            ) {
+                                if (icon != null) Icon(icon, contentDescription = null, tint = Color.White)
+                            }
+                        }
+                    ) {
+                        SuggestionCard(
+                            suggestion = suggestion,
+                            onApprove = { doApprove(it) },
+                            onReject = { doReject(it) },
+                            onEdit = { viewModel.updateSuggestion(it) },
+                            onSnooze = { until -> doSnooze(suggestion, until) }
+                        )
+                    }
                 }
             }
         }
@@ -202,17 +322,47 @@ fun InboxScreen(
             )
         }
 
+        if (showManualDialog) {
+            AlertDialog(
+                onDismissRequest = { showManualDialog = false },
+                title = { Text("Add an item") },
+                text = {
+                    OutlinedTextField(
+                        value = manualText,
+                        onValueChange = { manualText = it },
+                        label = { Text("Type a note, task or reminder") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = manualText.isNotBlank(),
+                        onClick = {
+                            val t = manualText.trim()
+                            manualText = ""
+                            showManualDialog = false
+                            viewModel.addManualEntry(t) { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } }
+                        }
+                    ) { Text("Add") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showManualDialog = false; manualText = "" }) { Text("Cancel") }
+                }
+            )
+        }
+
         timePickerFor?.let { suggestion ->
             ApproveTimePickerDialog(
                 onSetTime = { hour, minute ->
                     // Locale.US so digits stay ASCII — the stored value must parse as HH:MM.
                     val time = String.format(java.util.Locale.US, "%02d:%02d", hour, minute)
-                    // Filling in a time promotes it to a timed reminder (alarm + timed calendar event).
                     viewModel.approveSuggestion(suggestion.copy(dueTime = time, type = "reminder"))
+                    showUndo("Approved")
                     timePickerFor = null
                 },
                 onKeepAllDay = {
                     viewModel.approveSuggestion(suggestion)
+                    showUndo("Approved")
                     timePickerFor = null
                 },
                 onDismiss = { timePickerFor = null }
@@ -278,10 +428,12 @@ fun SuggestionCard(
     suggestion: Suggestion,
     onApprove: (Suggestion) -> Unit,
     onReject: (Suggestion) -> Unit,
-    onEdit: (Suggestion) -> Unit
+    onEdit: (Suggestion) -> Unit,
+    onSnooze: (Long) -> Unit
 ) {
     var isEditing by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
+    var snoozeMenu by remember { mutableStateOf(false) }
     var editedTitle by remember { mutableStateOf(suggestion.extractedTitle) }
     var editedDueDate by remember { mutableStateOf(suggestion.dueDate ?: "") }
     var editedDueTime by remember { mutableStateOf(suggestion.dueTime ?: "") }
@@ -431,6 +583,19 @@ fun SuggestionCard(
                             Icon(Icons.Default.Close, contentDescription = "Reject", tint = RejectRed)
                         }
                         Row {
+                            Box {
+                                IconButton(onClick = { snoozeMenu = true }) {
+                                    Icon(Icons.Default.Schedule, contentDescription = "Snooze", tint = OnLightCardMuted)
+                                }
+                                DropdownMenu(expanded = snoozeMenu, onDismissRequest = { snoozeMenu = false }) {
+                                    snoozeOptions().forEach { (label, until) ->
+                                        DropdownMenuItem(
+                                            text = { Text(label) },
+                                            onClick = { snoozeMenu = false; onSnooze(until) }
+                                        )
+                                    }
+                                }
+                            }
                             IconButton(onClick = { isEditing = true }) {
                                 Icon(Icons.Default.Edit, contentDescription = "Edit", tint = OnLightCardMuted)
                             }

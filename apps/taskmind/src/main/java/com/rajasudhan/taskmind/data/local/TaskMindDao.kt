@@ -13,13 +13,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TaskMindDao {
-    // Pending and not currently snoozed (snoozedUntil in the past or unset). "now" is evaluated by
-    // SQLite; the list re-queries on any table change.
-    @Query(
-        "SELECT * FROM suggestions WHERE status = 'pending' AND " +
-            "(snoozedUntil IS NULL OR snoozedUntil <= (CAST(strftime('%s','now') AS INTEGER) * 1000)) " +
-            "ORDER BY confidence DESC"
-    )
+    // All pending suggestions. Snooze is applied in the ViewModel (against a ticking clock) so a
+    // snoozed item auto-resurfaces when its time passes, without needing a table change.
+    @Query("SELECT * FROM suggestions WHERE status = 'pending' ORDER BY confidence DESC")
     fun getPendingSuggestions(): Flow<List<Suggestion>>
 
     @Insert
@@ -50,14 +46,18 @@ interface TaskMindDao {
     @Query("SELECT * FROM notes WHERE id = :id")
     fun getNoteById(id: Int): Flow<Note?>
 
+    /** Returns the new row id so an approve can be undone by deleting exactly this note. */
     @Insert
-    suspend fun insertNote(note: Note)
+    suspend fun insertNote(note: Note): Long
 
     @Update
     suspend fun updateNote(note: Note)
 
     @Delete
     suspend fun deleteNote(note: Note)
+
+    @Query("DELETE FROM notes WHERE id = :id")
+    suspend fun deleteNoteById(id: Int)
 
     @Query("DELETE FROM notes")
     suspend fun deleteAllNotes()
