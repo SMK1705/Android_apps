@@ -232,7 +232,7 @@ fun TaskMindAppContent(onLock: () -> Unit) {
             composable("inbox") { com.rajasudhan.taskmind.ui.inbox.InboxScreen() }
             composable("notes") {
                 com.rajasudhan.taskmind.ui.notes.NotesScreen(
-                    onNoteClick = { id -> navController.navigate("notes/$id") }
+                    onNoteClick = { id -> navController.navigate("notes/$id") { launchSingleTop = true } }
                 )
             }
             composable(
