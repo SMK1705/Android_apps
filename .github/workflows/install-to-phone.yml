@@ -1,0 +1,71 @@
+name: Install to phone
+
+# Builds the debug APK and installs it on a phone connected to the SELF-HOSTED runner
+# (i.e. your laptop) over adb. Trigger it manually from the GitHub website or the GitHub
+# mobile app: Actions -> "Install to phone" -> Run workflow.
+#
+# REQUIREMENTS (one-time):
+#   1. A self-hosted runner registered on this repo, running on the laptop your phone connects to.
+#      Repo -> Settings -> Actions -> Runners -> "New self-hosted runner" -> follow the steps.
+#   2. Android SDK on that laptop (ANDROID_HOME set, or the default %LOCALAPPDATA%\Android\Sdk).
+#   3. Phone plugged in with USB debugging enabled and this computer authorized (adb "Allow").
+#
+# Builds on your machine, so the APK is signed with your local debug key — it updates the
+# existing install in place and keeps your on-device data.
+
+on:
+  workflow_dispatch:
+    inputs:
+      launch:
+        description: "Launch the app after installing"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    runs-on: [self-hosted]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve Android SDK + adb
+        id: sdk
+        shell: powershell
+        run: |
+          $sdk = if ($env:ANDROID_HOME) { $env:ANDROID_HOME }
+                 elseif ($env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT }
+                 else { "$env:LOCALAPPDATA\Android\Sdk" }
+          if (-not (Test-Path $sdk)) { Write-Error "Android SDK not found. Set ANDROID_HOME on the runner."; exit 1 }
+          $adb = Join-Path $sdk "platform-tools\adb.exe"
+          if (-not (Test-Path $adb)) { Write-Error "adb not found at $adb"; exit 1 }
+          # local.properties is gitignored, so the fresh checkout needs the SDK path written in.
+          "sdk.dir=$($sdk -replace '\\','\\\\')" | Out-File -FilePath local.properties -Encoding ascii
+          "adb=$adb" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding ascii
+          Write-Host "SDK: $sdk"
+
+      - name: Check phone is connected
+        shell: powershell
+        run: |
+          $adb = "${{ steps.sdk.outputs.adb }}"
+          & $adb start-server | Out-Null
+          $connected = (& $adb devices) | Select-String '\sdevice\s*$'
+          if (-not $connected) {
+            & $adb devices
+            Write-Error "No authorized phone detected. Plug it in (USB debugging on), tap 'Allow' on the authorize prompt, then re-run."
+            exit 1
+          }
+          Write-Host "Connected:`n$connected"
+
+      - name: Build and install on phone
+        shell: powershell
+        run: .\gradlew.bat :apps:taskmind:installDebug --stacktrace
+
+      - name: Launch app
+        if: ${{ inputs.launch }}
+        shell: powershell
+        run: |
+          $adb = "${{ steps.sdk.outputs.adb }}"
+          & $adb shell monkey -p com.rajasudhan.taskmind -c android.intent.category.LAUNCHER 1
