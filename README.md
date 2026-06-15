@@ -30,7 +30,13 @@ Android_apps/
 
 # Install it (APK at apps\taskmind\build\outputs\apk\debug\taskmind-debug.apk)
 adb install -r apps\taskmind\build\outputs\apk\debug\taskmind-debug.apk
+
+# Or build + install to a connected device in one step
+.\gradlew.bat :apps:taskmind:installDebug
 ```
+
+CI builds and unit-tests every app on each PR; the **Install to phone** workflow installs a build on a
+USB-connected device via a self-hosted runner. `main` is protected — changes land via PR.
 
 ## Adding a new app
 
