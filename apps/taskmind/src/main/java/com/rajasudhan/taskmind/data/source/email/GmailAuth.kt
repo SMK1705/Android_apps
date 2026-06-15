@@ -1,6 +1,7 @@
 package com.rajasudhan.taskmind.data.source.email
 
 import android.accounts.Account
+import android.accounts.AccountManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentSender
@@ -10,6 +11,7 @@ import com.google.android.gms.common.api.Scope
 import com.google.android.gms.tasks.Task
 import com.rajasudhan.taskmind.data.source.EgressLogger
 import com.rajasudhan.taskmind.data.source.SettingsManager
+import com.rajasudhan.taskmind.data.source.SourceManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -42,6 +44,7 @@ sealed interface GmailAuthState {
 class GmailAuth @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val settingsManager: SettingsManager,
+    private val sourceManager: SourceManager,
     private val egressLogger: EgressLogger,
     private val okHttpClient: OkHttpClient
 ) {
@@ -86,6 +89,25 @@ class GmailAuth @Inject constructor(
     suspend fun silentAccessToken(accountEmail: String? = null): String? =
         (authorize(accountEmail) as? GmailAuthState.Authorized)?.accessToken
 
+    /**
+     * Intent that shows the system Google-account chooser (all Google accounts plus "Add account").
+     * Launch it for a result; the chosen email comes back via [accountFromChooser]. This is what lets
+     * "Add another account" pick a *distinct* account — [authorize] is then pinned to it, so the grant
+     * (and later background [silentAccessToken]) target that specific mailbox instead of silently
+     * reusing whichever account already has a grant. Needs no GET_ACCOUNTS permission on API 23+.
+     */
+    fun accountChooserIntent(): Intent =
+        AccountManager.newChooseAccountIntent(
+            null,                   // no pre-selected account
+            null as List<Account>?, // null = offer all Google accounts
+            arrayOf("com.google"),
+            null, null, null, null
+        )
+
+    /** The email the user picked in the account chooser, or null if they cancelled. */
+    fun accountFromChooser(data: Intent?): String? =
+        data?.getStringExtra(AccountManager.KEY_ACCOUNT_NAME)
+
     /** Extracts the access token from the consent activity result intent. */
     fun tokenFromConsent(data: Intent?): String? =
         runCatching {
@@ -102,6 +124,8 @@ class GmailAuth @Inject constructor(
     suspend fun disconnect(email: String) {
         val token = runCatching { silentAccessToken(email) }.getOrNull()
         settingsManager.removeGmailAccount(email)
+        // Drop this account's dedup set so reconnecting later doesn't silently skip new mail.
+        runCatching { sourceManager.clearProcessedEmailIds(email) }
         if (!token.isNullOrBlank()) {
             egressLogger.record("oauth2.googleapis.com", "Gmail token revoke")
             runCatching {

@@ -111,6 +111,10 @@ class SourcesViewModel @Inject constructor(
     private val _gmailConsent = MutableSharedFlow<IntentSender>(extraBufferCapacity = 1)
     val gmailConsent = _gmailConsent.asSharedFlow()
 
+    /** One-shot events carrying the Google account-chooser intent for the screen to launch. */
+    private val _gmailAccountChooser = MutableSharedFlow<Intent>(extraBufferCapacity = 1)
+    val gmailAccountChooser = _gmailAccountChooser.asSharedFlow()
+
     /** Email source toggle: connect a first account on enable, disconnect every account on disable. */
     fun onEmailToggle(enabled: Boolean) {
         if (!enabled) {
@@ -129,11 +133,32 @@ class SourcesViewModel @Inject constructor(
         }
     }
 
-    /** Starts the OAuth flow to connect another Google account. */
+    /**
+     * Starts connecting another Google account by showing the account chooser first. Pinning the
+     * subsequent authorize() to the picked account is what lets a *distinct* second mailbox be added
+     * (authorize(null) would silently reuse the first account's existing grant).
+     */
     fun addGmailAccount() {
         viewModelScope.launch {
-            _gmailStatus.value = "Connecting…"
-            when (val state = gmailAuth.authorize()) {
+            _gmailStatus.value = null
+            _gmailAccountChooser.emit(gmailAuth.accountChooserIntent())
+        }
+    }
+
+    /** Called by the screen with the account-chooser result; authorizes the picked account. */
+    fun onAccountChosen(data: Intent?) {
+        val email = gmailAuth.accountFromChooser(data)
+        if (email.isNullOrBlank()) {
+            _gmailStatus.value = "No account selected."
+            return
+        }
+        if (email in gmailAuth.connectedAccounts) {
+            _gmailStatus.value = "$email is already connected."
+            return
+        }
+        viewModelScope.launch {
+            _gmailStatus.value = "Connecting $email…"
+            when (val state = gmailAuth.authorize(email)) {
                 is GmailAuthState.Authorized -> finishConnect(state.accessToken)
                 is GmailAuthState.NeedsConsent -> {
                     _gmailStatus.value = null
