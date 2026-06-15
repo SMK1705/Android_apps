@@ -70,6 +70,28 @@ Open the app and authenticate with biometrics/PIN on every launch.
 
 ---
 
+## Quick start (how to use)
+
+1. **Unlock** — open the app and authenticate (fingerprint / face / PIN). Required on every launch.
+2. **Pick sources** — open the **Sources** tab and toggle on what TaskMind should watch (SMS,
+   Notifications, Gmail, Call Logs, App Usage, Voice/Call Recordings). Grant each permission when
+   prompted. Email and voice transcription need a little one-time setup (sections below).
+3. **Get understanding working** — set up the on-device model (below) so extraction is free and
+   offline. Items then arrive on their own; tap **↻** in the Inbox header to scan the last 10 minutes
+   right now.
+4. **Review the Inbox** — every suggestion is a card with a short **summary + source**; tap it to
+   expand the full original text. **Approve** (✓), **Edit** (✎), or **Reject** (✗) each — or
+   **Approve all** / **Reject all**. Approving a dated item with no time asks you to pick one (or keep
+   it all-day). Tap the **🎤** button to add an item by speaking.
+5. **Find what you kept in Notes** — approved items live here, color-coded by type; tap any note to
+   open its full detail (body, source, due date).
+6. **Stay private** — everything runs on-device by default; open **Settings → Data Egress** to confirm
+   nothing has left the phone.
+
+> New here? Tap the **?** in the top bar anytime to replay the in-app guide.
+
+---
+
 ## On-device LLM setup (required for free, offline understanding)
 
 The model is **not bundled** (it's ~0.5–4 GB). You provide it once.
