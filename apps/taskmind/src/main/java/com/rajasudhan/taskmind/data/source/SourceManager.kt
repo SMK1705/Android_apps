@@ -39,6 +39,11 @@ class SourceManager @Inject constructor(
         fun processedEmailKey(account: String) = stringSetPreferencesKey("processed_email_ids_$account")
         const val MAX_PROCESSED_EMAIL_IDS = 200
 
+        // Pre-multi-account installs stored processed ids under a single global key. Honored as a
+        // read-only fallback so an upgraded user doesn't re-process (and re-suggest) already-seen
+        // mail. Gmail message ids are globally unique, so merging it into any account is safe.
+        val LEGACY_PROCESSED_EMAIL_IDS = stringSetPreferencesKey("processed_email_ids")
+
         // ISO date (yyyy-MM-dd) the app-usage digest was last generated — gates it to once per day.
         val KEY_LAST_APP_USAGE_DIGEST_DATE = stringPreferencesKey("last_app_usage_digest_date")
 
@@ -85,9 +90,14 @@ class SourceManager @Inject constructor(
         }
     }
 
-    /** Gmail message ids already turned into suggestions for [account] (capped to avoid growth). */
+    /**
+     * Gmail message ids already turned into suggestions for [account] (capped to avoid growth).
+     * Merges the legacy single-mailbox set so upgraded installs don't re-process old mail.
+     */
     fun processedEmailIds(account: String): Flow<Set<String>> =
-        context.dataStore.data.map { it[processedEmailKey(account)] ?: emptySet() }
+        context.dataStore.data.map {
+            (it[processedEmailKey(account)] ?: emptySet()) + (it[LEGACY_PROCESSED_EMAIL_IDS] ?: emptySet())
+        }
 
     suspend fun addProcessedEmailId(account: String, id: String) {
         val key = processedEmailKey(account)
@@ -98,6 +108,11 @@ class SourceManager @Inject constructor(
                     updated.toList().takeLast(MAX_PROCESSED_EMAIL_IDS).toSet()
                 else updated
         }
+    }
+
+    /** Drops an account's dedup set on disconnect, so reconnecting doesn't hide mail (and avoids a leak). */
+    suspend fun clearProcessedEmailIds(account: String) {
+        context.dataStore.edit { it.remove(processedEmailKey(account)) }
     }
 
     /** ISO date (yyyy-MM-dd) of the last app-usage digest; empty if never generated. */

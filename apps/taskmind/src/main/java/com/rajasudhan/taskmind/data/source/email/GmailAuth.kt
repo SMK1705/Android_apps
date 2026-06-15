@@ -10,6 +10,7 @@ import com.google.android.gms.common.api.Scope
 import com.google.android.gms.tasks.Task
 import com.rajasudhan.taskmind.data.source.EgressLogger
 import com.rajasudhan.taskmind.data.source.SettingsManager
+import com.rajasudhan.taskmind.data.source.SourceManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -42,6 +43,7 @@ sealed interface GmailAuthState {
 class GmailAuth @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val settingsManager: SettingsManager,
+    private val sourceManager: SourceManager,
     private val egressLogger: EgressLogger,
     private val okHttpClient: OkHttpClient
 ) {
@@ -102,6 +104,8 @@ class GmailAuth @Inject constructor(
     suspend fun disconnect(email: String) {
         val token = runCatching { silentAccessToken(email) }.getOrNull()
         settingsManager.removeGmailAccount(email)
+        // Drop this account's dedup set so reconnecting later doesn't silently skip new mail.
+        runCatching { sourceManager.clearProcessedEmailIds(email) }
         if (!token.isNullOrBlank()) {
             egressLogger.record("oauth2.googleapis.com", "Gmail token revoke")
             runCatching {
