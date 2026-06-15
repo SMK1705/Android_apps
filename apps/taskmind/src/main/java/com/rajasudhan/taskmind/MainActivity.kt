@@ -23,6 +23,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.rajasudhan.taskmind.ui.guide.GuideOverlay
+import com.rajasudhan.taskmind.ui.guide.GuideViewModel
 import com.rajasudhan.taskmind.ui.theme.TaskMindTheme
 import dagger.hilt.android.AndroidEntryPoint
 import androidx.compose.material.icons.Icons
@@ -32,6 +35,7 @@ import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.filled.Source
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
@@ -139,6 +143,9 @@ fun TaskMindAppContent(onLock: () -> Unit) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    val guideViewModel: GuideViewModel = hiltViewModel()
+    val showGuide by guideViewModel.showGuide.collectAsState()
+
     val isNoteDetail = currentRoute?.startsWith("notes/") == true
     val screenTitle = when {
         isNoteDetail -> "Note"
@@ -160,6 +167,9 @@ fun TaskMindAppContent(onLock: () -> Unit) {
                     }
                 },
                 actions = {
+                    IconButton(onClick = { guideViewModel.open() }) {
+                        Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = "How to use TaskMind")
+                    }
                     IconButton(onClick = onLock) {
                         Icon(Icons.Default.Lock, contentDescription = "Lock app")
                     }
@@ -246,6 +256,11 @@ fun TaskMindAppContent(onLock: () -> Unit) {
             composable("sources") { com.rajasudhan.taskmind.ui.sources.SourcesScreen() }
             composable("settings") { com.rajasudhan.taskmind.ui.settings.SettingsScreen() }
         }
+    }
+
+    // First-run walkthrough (and re-openable from the "?" action).
+    if (showGuide) {
+        GuideOverlay(onDismiss = { guideViewModel.dismiss() })
     }
 }
 
