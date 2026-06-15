@@ -16,5 +16,7 @@ data class Suggestion(
     val dueTime: String?, // HH:MM
     val type: String, // "note" | "todo" | "reminder"
     val confidence: Double,
-    val status: String // "pending" | "approved" | "rejected"
+    val status: String, // "pending" | "approved" | "rejected"
+    // v3 (MIGRATION_2_3): when set, the item is hidden from the Inbox until this time (snooze).
+    val snoozedUntil: Long? = null
 )
