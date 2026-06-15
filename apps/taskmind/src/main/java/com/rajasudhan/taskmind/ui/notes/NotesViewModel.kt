@@ -5,8 +5,12 @@ import androidx.lifecycle.viewModelScope
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -14,23 +18,51 @@ import java.time.LocalDate
 import java.time.LocalTime
 import javax.inject.Inject
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class NotesViewModel @Inject constructor(
     private val dao: TaskMindDao
 ) : ViewModel() {
 
+    private val _query = MutableStateFlow("")
+    val query: StateFlow<String> = _query
+
+    private val _showCompleted = MutableStateFlow(false)
+    val showCompleted: StateFlow<Boolean> = _showCompleted
+
     /**
-     * All approved items, ordered "important first":
-     *  1. by type priority — reminders, then todos, then notes
-     *  2. within a type, by due date/time ascending (soonest first; undated last)
+     * The list to display, driven by the search box and the Active/Completed segment:
+     *  - searching: matches within the current segment;
+     *  - Active: open items, "important first" (reminders → todos → notes, soonest due first);
+     *  - Completed: done items, most-recently-completed first.
      */
-    val notes: StateFlow<List<Note>> = dao.getAllNotes()
-        .map { list -> list.sortedWith(compareBy({ typeRank(it.type) }, { dueSortKey(it) })) }
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    val notes: StateFlow<List<Note>> =
+        combine(_query, _showCompleted) { q, c -> q to c }
+            .flatMapLatest { (q, completed) ->
+                when {
+                    q.isNotBlank() ->
+                        dao.searchNotes("%$q%").map { list -> prioritise(list.filter { it.completed == completed }) }
+                    completed -> dao.getCompletedNotes()
+                    else -> dao.getActiveNotes().map { prioritise(it) }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    fun setQuery(q: String) { _query.value = q }
+    fun setShowCompleted(c: Boolean) { _showCompleted.value = c }
+
+    fun setCompleted(note: Note, completed: Boolean) {
+        viewModelScope.launch {
+            dao.setNoteCompleted(note.id, completed, if (completed) System.currentTimeMillis() else null)
+        }
+    }
 
     fun deleteNote(note: Note) {
         viewModelScope.launch { dao.deleteNote(note) }
     }
+
+    private fun prioritise(list: List<Note>) =
+        list.sortedWith(compareBy({ typeRank(it.type) }, { dueSortKey(it) }))
 
     private fun typeRank(type: String): Int = when (type) {
         "reminder" -> 0

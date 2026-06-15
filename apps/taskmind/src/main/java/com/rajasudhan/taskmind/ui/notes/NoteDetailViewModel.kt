@@ -32,4 +32,17 @@ class NoteDetailViewModel @Inject constructor(
             onDeleted()
         }
     }
+
+    fun setCompleted(completed: Boolean) {
+        val current = note.value ?: return
+        viewModelScope.launch {
+            dao.setNoteCompleted(current.id, completed, if (completed) System.currentTimeMillis() else null)
+        }
+    }
+
+    /** Persists a toggled checklist (encoded by [Checklist.encode]). */
+    fun updateChecklist(encoded: String) {
+        val current = note.value ?: return
+        viewModelScope.launch { dao.updateNoteChecklist(current.id, encoded) }
+    }
 }
