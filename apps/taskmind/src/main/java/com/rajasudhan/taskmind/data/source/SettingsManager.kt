@@ -15,7 +15,8 @@ class SettingsManager @Inject constructor(
         private const val KEY_EVENT_DURATION_MINUTES = "event_duration_minutes"
         private const val KEY_CALENDAR_ID = "calendar_id"
         private const val KEY_ON_DEVICE_MODEL_PATH = "on_device_model_path"
-        private const val KEY_GMAIL_ACCOUNT = "gmail_account"
+        private const val KEY_GMAIL_ACCOUNT = "gmail_account" // legacy single account (migrated below)
+        private const val KEY_GMAIL_ACCOUNTS = "gmail_accounts"
         private const val KEY_RETENTION_DAYS = "retention_days"
 
         const val CALENDAR_ID_AUTO = -1L
@@ -50,10 +51,31 @@ class SettingsManager @Inject constructor(
         get() = encryptedPrefs.getString(KEY_ON_DEVICE_MODEL_PATH, "") ?: ""
         set(value) = encryptedPrefs.edit().putString(KEY_ON_DEVICE_MODEL_PATH, value).apply()
 
-    /** Connected Gmail account address; blank = not connected. (OAuth tokens are NOT stored here.) */
-    var gmailAccount: String
-        get() = encryptedPrefs.getString(KEY_GMAIL_ACCOUNT, "") ?: ""
-        set(value) = encryptedPrefs.edit().putString(KEY_GMAIL_ACCOUNT, value).apply()
+    /**
+     * All connected Gmail account addresses. Reads the multi-account set, seeding it once from the
+     * legacy single-account key so existing users keep their connection. (OAuth tokens are NOT stored.)
+     */
+    val gmailAccounts: Set<String>
+        get() {
+            encryptedPrefs.getStringSet(KEY_GMAIL_ACCOUNTS, null)?.let { return it.toSet() }
+            val legacy = encryptedPrefs.getString(KEY_GMAIL_ACCOUNT, "") ?: ""
+            return if (legacy.isBlank()) emptySet() else setOf(legacy)
+        }
+
+    fun addGmailAccount(email: String) {
+        if (email.isBlank()) return
+        val updated = gmailAccounts + email
+        encryptedPrefs.edit().putStringSet(KEY_GMAIL_ACCOUNTS, updated).apply()
+    }
+
+    fun removeGmailAccount(email: String) {
+        val updated = gmailAccounts - email
+        encryptedPrefs.edit()
+            .putStringSet(KEY_GMAIL_ACCOUNTS, updated)
+            // Clear the legacy key too, so a removed account isn't resurrected by the migration above.
+            .remove(KEY_GMAIL_ACCOUNT)
+            .apply()
+    }
 
     /** Auto-delete notes older than this many days; 0 = keep forever (default). */
     var retentionDays: Int
@@ -73,6 +95,7 @@ class SettingsManager @Inject constructor(
             .remove(KEY_CALENDAR_ID)
             .remove(KEY_ON_DEVICE_MODEL_PATH)
             .remove(KEY_GMAIL_ACCOUNT)
+            .remove(KEY_GMAIL_ACCOUNTS)
             .remove(KEY_RETENTION_DAYS)
             .apply()
     }
