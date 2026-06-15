@@ -1,5 +1,13 @@
 package com.rajasudhan.taskmind.ui.inbox
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -7,21 +15,22 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.foundation.background
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.rajasudhan.taskmind.data.model.Suggestion
 import com.rajasudhan.taskmind.ui.common.*
-
-import androidx.compose.material.icons.filled.Refresh
 
 private val ApproveGreen = Color(0xFF2E7D32)
 private val RejectRed = Color(0xFFD32F2F)
@@ -33,36 +42,37 @@ fun InboxScreen(
     val suggestions by viewModel.pendingSuggestions.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     var showApproveAllDialog by remember { mutableStateOf(false) }
+    // When approving a dated item that has no time, ask for one before it lands on the calendar.
+    var timePickerFor by remember { mutableStateOf<Suggestion?>(null) }
 
-    Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(onClick = { viewModel.refreshRecentData() }) {
-                if (isRefreshing) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Icon(Icons.Default.Refresh, contentDescription = "Refresh Recent Data")
-                }
-            }
-        }
-    ) { paddingValues ->
+    Scaffold { paddingValues ->
         if (suggestions.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
-                Text(text = "No pending suggestions. All caught up!", style = MaterialTheme.typography.bodyLarge)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "No pending suggestions. All caught up!", style = MaterialTheme.typography.bodyLarge)
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedButton(onClick = { viewModel.refreshRecentData() }, enabled = !isRefreshing) {
+                        if (isRefreshing) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Default.Refresh, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Refresh")
+                        }
+                    }
+                }
             }
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(paddingValues),
-                contentPadding = PaddingValues(16.dp),
+                // Extra bottom inset so the last card's actions always clear the floating mic button.
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
@@ -70,6 +80,13 @@ fun InboxScreen(
                             style = MaterialTheme.typography.labelLarge,
                             modifier = Modifier.weight(1f)
                         )
+                        IconButton(onClick = { viewModel.refreshRecentData() }, enabled = !isRefreshing) {
+                            if (isRefreshing) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(Icons.Default.Refresh, contentDescription = "Refresh Recent Data")
+                            }
+                        }
                         TextButton(onClick = { viewModel.rejectAll() }) {
                             Text("Reject all", color = RejectRed)
                         }
@@ -81,7 +98,11 @@ fun InboxScreen(
                 items(suggestions) { suggestion ->
                     SuggestionCard(
                         suggestion = suggestion,
-                        onApprove = { viewModel.approveSuggestion(it) },
+                        onApprove = { s ->
+                            // A dated item with no time: ask before silently filing it as all-day.
+                            if (s.dueDate != null && s.dueTime == null) timePickerFor = s
+                            else viewModel.approveSuggestion(s)
+                        },
                         onReject = { viewModel.rejectSuggestion(it) },
                         onEdit = { viewModel.updateSuggestion(it) }
                     )
@@ -105,7 +126,55 @@ fun InboxScreen(
                 }
             )
         }
+
+        timePickerFor?.let { suggestion ->
+            ApproveTimePickerDialog(
+                onSetTime = { hour, minute ->
+                    val time = String.format("%02d:%02d", hour, minute)
+                    // Filling in a time promotes it to a timed reminder (alarm + timed calendar event).
+                    viewModel.approveSuggestion(suggestion.copy(dueTime = time, type = "reminder"))
+                    timePickerFor = null
+                },
+                onKeepAllDay = {
+                    viewModel.approveSuggestion(suggestion)
+                    timePickerFor = null
+                },
+                onDismiss = { timePickerFor = null }
+            )
+        }
     }
+}
+
+/**
+ * Asked when approving a dated item that has no time. "Set time" turns it into a timed reminder;
+ * "Keep as all-day" approves it unchanged (the all-day calendar entry).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ApproveTimePickerDialog(
+    onSetTime: (Int, Int) -> Unit,
+    onKeepAllDay: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val state = rememberTimePickerState(initialHour = 9, initialMinute = 0, is24Hour = false)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Set a time?") },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("No time was detected. Pick a time to add a timed reminder, or keep it as an all-day item.")
+                Spacer(Modifier.height(16.dp))
+                // Compact text-entry variant keeps the dialog from overflowing on small screens.
+                TimeInput(state = state)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSetTime(state.hour, state.minute) }) { Text("Set time") }
+        },
+        dismissButton = {
+            TextButton(onClick = onKeepAllDay) { Text("Keep as all-day") }
+        }
+    )
 }
 
 @Composable
@@ -116,12 +185,16 @@ fun SuggestionCard(
     onEdit: (Suggestion) -> Unit
 ) {
     var isEditing by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(false) }
     var editedTitle by remember { mutableStateOf(suggestion.extractedTitle) }
     var editedDueDate by remember { mutableStateOf(suggestion.dueDate ?: "") }
     var editedDueTime by remember { mutableStateOf(suggestion.dueTime ?: "") }
 
     val category = categoryFor(suggestion.type, suggestion.dueDate, suggestion.dueTime)
     val darkFieldStyle = TextStyle(color = OnLightCard)
+    // Show the model's one-line summary when present; otherwise fall back to the raw message preview.
+    val preview = suggestion.summary.ifBlank { suggestion.rawSnippet }
+    val chevronRotation by animateFloatAsState(if (expanded) 180f else 0f, label = "chevron")
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -133,26 +206,13 @@ fun SuggestionCard(
             Box(modifier = Modifier.width(6.dp).fillMaxHeight().background(category.accent))
 
             Column(modifier = Modifier.weight(1f).padding(16.dp)) {
-                // Source Context
-                Text(
-                    text = "From ${suggestion.source}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = OnLightCardMuted
-                )
-                Text(
-                    text = "\"${suggestion.rawSnippet}\"",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontStyle = FontStyle.Italic,
-                    color = OnLightCard,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-
-                HorizontalDivider(
-                    color = OnLightCardMuted.copy(alpha = 0.25f),
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
                 if (isEditing) {
+                    Text(
+                        text = "From ${suggestion.source}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = OnLightCardMuted
+                    )
+                    Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = editedTitle,
                         onValueChange = { editedTitle = it },
@@ -208,17 +268,68 @@ fun SuggestionCard(
                             )
                         }
                     }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = suggestion.extractedTitle,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = OnLightCard
-                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    // Heading + one-line summary + source. Tap anywhere here to expand the full message.
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = suggestion.extractedTitle,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = OnLightCard
+                            )
+                            if (preview.isNotBlank()) {
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = preview,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = OnLightCard,
+                                    maxLines = if (expanded) Int.MAX_VALUE else 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = "From ${suggestion.source}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = OnLightCardMuted
+                            )
+                        }
+                        Icon(
+                            Icons.Default.ExpandMore,
+                            contentDescription = if (expanded) "Collapse" else "Expand",
+                            tint = OnLightCardMuted,
+                            modifier = Modifier.rotate(chevronRotation)
+                        )
+                    }
+
+                    // Full original message, revealed with a smooth expand/collapse animation.
+                    AnimatedVisibility(
+                        visible = expanded,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Column {
+                            Spacer(Modifier.height(8.dp))
+                            HorizontalDivider(color = OnLightCardMuted.copy(alpha = 0.25f))
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = "\"${suggestion.rawSnippet}\"",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontStyle = FontStyle.Italic,
+                                color = OnLightCard
+                            )
+                        }
+                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(onClick = { onReject(suggestion) }) {
                             Icon(Icons.Default.Close, contentDescription = "Reject", tint = RejectRed)

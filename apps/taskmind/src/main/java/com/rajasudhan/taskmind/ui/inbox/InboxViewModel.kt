@@ -72,6 +72,7 @@ class InboxViewModel @Inject constructor(
 
         val note = Note(
             title = suggestion.extractedTitle,
+            summary = suggestion.summary,
             body = "Extracted from ${suggestion.source}:\n\n${suggestion.rawSnippet}",
             dueDate = suggestion.dueDate,
             dueTime = suggestion.dueTime,
