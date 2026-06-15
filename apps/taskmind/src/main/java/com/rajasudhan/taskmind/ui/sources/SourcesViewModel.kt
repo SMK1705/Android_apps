@@ -115,6 +115,9 @@ class SourcesViewModel @Inject constructor(
     private val _gmailAccountChooser = MutableSharedFlow<Intent>(extraBufferCapacity = 1)
     val gmailAccountChooser = _gmailAccountChooser.asSharedFlow()
 
+    /** The account picked in the chooser, kept across the consent round-trip as a fallback email. */
+    private var pendingAccountEmail: String? = null
+
     /** Email source toggle: connect a first account on enable, disconnect every account on disable. */
     fun onEmailToggle(enabled: Boolean) {
         if (!enabled) {
@@ -156,6 +159,7 @@ class SourcesViewModel @Inject constructor(
             _gmailStatus.value = "$email is already connected."
             return
         }
+        pendingAccountEmail = email
         viewModelScope.launch {
             _gmailStatus.value = "Connecting $email…"
             when (val state = gmailAuth.authorize(email)) {
@@ -174,6 +178,7 @@ class SourcesViewModel @Inject constructor(
         viewModelScope.launch {
             val token = gmailAuth.tokenFromConsent(data)
             if (token == null) {
+                pendingAccountEmail = null
                 _gmailStatus.value = "Gmail connection cancelled."
                 return@launch
             }
@@ -195,7 +200,10 @@ class SourcesViewModel @Inject constructor(
     }
 
     private suspend fun finishConnect(token: String) {
-        val email = gmailCollector.profileEmail(token)
+        // Prefer the verified profile email; if that lookup transiently fails (e.g. flaky network),
+        // fall back to the account the user picked in the chooser — the token is pinned to it — so a
+        // hiccup doesn't throw away an otherwise-successful consent.
+        val email = gmailCollector.profileEmail(token)?.takeIf { it.isNotBlank() } ?: pendingAccountEmail
         if (email.isNullOrBlank()) {
             _gmailStatus.value = "Couldn't read the account email; please try again."
             return
@@ -204,6 +212,7 @@ class SourcesViewModel @Inject constructor(
         _gmailAccounts.value = gmailAuth.connectedAccounts.toList()
         sourceManager.setSourceEnabled(SourceManager.KEY_EMAIL_ENABLED, true)
         _gmailStatus.value = null
+        pendingAccountEmail = null
     }
 
     fun updateCallRecordingPath(path: String) {
