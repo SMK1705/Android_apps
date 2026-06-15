@@ -17,14 +17,17 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.rajasudhan.taskmind.ui.theme.TaskMindTheme
 import dagger.hilt.android.AndroidEntryPoint
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.filled.Source
 import androidx.compose.material.icons.filled.Settings
@@ -136,10 +139,12 @@ fun TaskMindAppContent(onLock: () -> Unit) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    val screenTitle = when (currentRoute) {
-        "notes" -> "Notes"
-        "sources" -> "Sources"
-        "settings" -> "Settings"
+    val isNoteDetail = currentRoute?.startsWith("notes/") == true
+    val screenTitle = when {
+        isNoteDetail -> "Note"
+        currentRoute == "notes" -> "Notes"
+        currentRoute == "sources" -> "Sources"
+        currentRoute == "settings" -> "Settings"
         else -> "Inbox"
     }
 
@@ -147,6 +152,13 @@ fun TaskMindAppContent(onLock: () -> Unit) {
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text(screenTitle) },
+                navigationIcon = {
+                    if (isNoteDetail) {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                },
                 actions = {
                     IconButton(onClick = onLock) {
                         Icon(Icons.Default.Lock, contentDescription = "Lock app")
@@ -218,7 +230,19 @@ fun TaskMindAppContent(onLock: () -> Unit) {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable("inbox") { com.rajasudhan.taskmind.ui.inbox.InboxScreen() }
-            composable("notes") { com.rajasudhan.taskmind.ui.notes.NotesScreen() }
+            composable("notes") {
+                com.rajasudhan.taskmind.ui.notes.NotesScreen(
+                    onNoteClick = { id -> navController.navigate("notes/$id") }
+                )
+            }
+            composable(
+                route = "notes/{noteId}",
+                arguments = listOf(navArgument("noteId") { type = NavType.IntType })
+            ) {
+                com.rajasudhan.taskmind.ui.notes.NoteDetailScreen(
+                    onBack = { navController.popBackStack() }
+                )
+            }
             composable("sources") { com.rajasudhan.taskmind.ui.sources.SourcesScreen() }
             composable("settings") { com.rajasudhan.taskmind.ui.settings.SettingsScreen() }
         }

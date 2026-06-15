@@ -23,6 +23,9 @@ interface TaskMindDao {
     @Query("SELECT * FROM notes ORDER BY createdDate DESC")
     fun getAllNotes(): Flow<List<Note>>
 
+    @Query("SELECT * FROM notes WHERE id = :id")
+    fun getNoteById(id: Int): Flow<Note?>
+
     @Insert
     suspend fun insertNote(note: Note)
 

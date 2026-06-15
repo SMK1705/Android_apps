@@ -6,6 +6,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.provider.CalendarContract
 import android.provider.CallLog
 import android.provider.Telephony
@@ -18,6 +19,9 @@ import com.rajasudhan.taskmind.data.model.Suggestion
 import com.rajasudhan.taskmind.data.source.AlarmReceiver
 import com.rajasudhan.taskmind.data.source.RecentDataScanner
 import com.rajasudhan.taskmind.data.source.SettingsManager
+import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
+import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
+import java.io.File
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +42,8 @@ class InboxViewModel @Inject constructor(
     private val dao: TaskMindDao,
     private val scanner: RecentDataScanner,
     private val settingsManager: SettingsManager,
+    private val voskTranscriber: VoskTranscriber,
+    private val pipeline: UnderstandingPipeline,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -116,6 +122,29 @@ class InboxViewModel @Inject constructor(
             // Manual refresh scans the last 10 minutes; the periodic worker covers longer gaps.
             scanner.scanSince(System.currentTimeMillis() - 600_000)
             _isRefreshing.value = false
+        }
+    }
+
+    /**
+     * Transcribes a recorded voice note on-device (Vosk) and runs it through the understanding
+     * pipeline, so it lands in the Inbox as a pending suggestion to approve. The temp [file] is
+     * always deleted. [onResult] reports a short user-facing message for a snackbar.
+     */
+    fun addVoiceNote(file: File, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            if (!voskTranscriber.isModelPresent()) {
+                file.delete()
+                onResult("Add an offline voice model in Settings to use voice input.")
+                return@launch
+            }
+            val transcript = runCatching { voskTranscriber.transcribe(Uri.fromFile(file)) }.getOrNull()
+            file.delete()
+            if (transcript.isNullOrBlank()) {
+                onResult("Didn't catch that — please try again.")
+                return@launch
+            }
+            pipeline.processText("Voice note", transcript)
+            onResult("Added to your inbox for review.")
         }
     }
 
