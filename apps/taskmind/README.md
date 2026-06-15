@@ -7,6 +7,7 @@ sources (SMS, notifications, call logs), uses an **on-device LLM** to extract ac
 It is a personal app you sideload on your own device (not for the Play Store). All understanding
 runs on-device by default; nothing leaves the phone unless you explicitly enable a cloud provider.
 
+- **Version:** Update 2 — latest release (tag `taskmind-v2`)
 - **Target device:** Samsung Galaxy S25 Ultra, One UI, Android 16
 - **Package:** `com.rajasudhan.taskmind`
 - **Stack:** Kotlin, Jetpack Compose (Material 3), Hilt, Room + SQLCipher, DataStore, WorkManager,
@@ -19,7 +20,8 @@ runs on-device by default; nothing leaves the phone unless you explicitly enable
 
 ```
 Live: SMS (ContentObserver) + Notifications (NotificationListenerService)
-Periodic: WorkManager scan of recent SMS / call logs (every 30 min, battery-not-low)
+Periodic: WorkManager scan of SMS / call logs / Gmail / recordings (every 30 min, battery-not-low)
+On-demand: Inbox 🎤 voice note, ↻ refresh
         │
         ▼
   Noise pre-filter  ──►  On-device LLM (Gemma via MediaPipe)  ──►  JSON parse + dedup
@@ -55,9 +57,38 @@ Run from the monorepo root (`Android_apps/`):
 
 # Install (preserves app data)
 adb install -r apps\taskmind\build\outputs\apk\debug\taskmind-debug.apk
+
+# …or build + install to a connected device in one step:
+.\gradlew.bat :apps:taskmind:installDebug
 ```
 
 Open the app and authenticate with biometrics/PIN on every launch.
+
+> **Install from your phone:** the **Install to phone** GitHub Actions workflow (manual trigger)
+> builds and `adb install`s to a USB-connected device via a self-hosted runner on your laptop — so
+> you can push a new build to the phone from the GitHub mobile app without touching the terminal.
+
+---
+
+## Quick start (how to use)
+
+1. **Unlock** — open the app and authenticate (fingerprint / face / PIN). Required on every launch.
+2. **Pick sources** — open the **Sources** tab and toggle on what TaskMind should watch (SMS,
+   Notifications, Gmail, Call Logs, App Usage, Voice/Call Recordings). Grant each permission when
+   prompted. Email and voice transcription need a little one-time setup (sections below).
+3. **Get understanding working** — set up the on-device model (below) so extraction is free and
+   offline. Items then arrive on their own; tap **↻** in the Inbox header to scan the last 10 minutes
+   right now.
+4. **Review the Inbox** — every suggestion is a card with a short **summary + source**; tap it to
+   expand the full original text. **Approve** (✓), **Edit** (✎), or **Reject** (✗) each — or
+   **Approve all** / **Reject all**. Approving a dated item with no time asks you to pick one (or keep
+   it all-day). Tap the **🎤** button to add an item by speaking.
+5. **Find what you kept in Notes** — approved items live here, color-coded by type; tap any note to
+   open its full detail (body, source, due date).
+6. **Stay private** — everything runs on-device by default; open **Settings → Data Egress** to confirm
+   nothing has left the phone.
+
+> New here? Tap the **?** in the top bar anytime to replay the in-app guide.
 
 ---
 
@@ -114,11 +145,12 @@ Toggle sources in the **Sources** tab; each requests its permission when enabled
 | Call Logs | `READ_CALL_LOG` | Scanned on refresh / periodically |
 | Calendar | `READ_CALENDAR` + `WRITE_CALENDAR` | Read to dedup; writes events on approval (no duplicates) |
 | App Usage | Usage access (system settings) | **Daily screen-time digest** (total + top apps) → a note you can approve. Once per day, on-device |
-| Email (Gmail) | Google OAuth (`gmail.readonly`) | Reads **unread Primary** emails; connect/disconnect in Sources. Needs a one-time Google Cloud setup (below). Understanding stays on-device — email content never leaves the phone |
+| Email (Gmail) | Google OAuth (`gmail.readonly`) | Reads **unread Primary** emails. Connect **multiple accounts** via the system account chooser; each gets its own row with a per-account **Disconnect**. Needs a one-time Google Cloud setup (below). Understanding stays on-device — email content never leaves the phone |
 | Voice/Call Recordings | `READ_MEDIA_AUDIO` | **On-device transcription (Vosk)** of recordings → suggestions. Needs a Vosk model pushed (below); audio never leaves the phone |
 
 Also needed: `POST_NOTIFICATIONS` (for the "N suggestions to review" alert),
-`SCHEDULE_EXACT_ALARM`/`USE_EXACT_ALARM` (reminders), `QUERY_ALL_PACKAGES` (to list apps in the picker).
+`SCHEDULE_EXACT_ALARM`/`USE_EXACT_ALARM` (reminders), `RECORD_AUDIO` (the Inbox voice-note button),
+`QUERY_ALL_PACKAGES` (to list apps in the picker).
 
 ### Gmail setup (one-time, Google Cloud)
 
@@ -130,13 +162,18 @@ Google matches it by package name + signing SHA-1. In [console.cloud.google.com]
    a **Test user** (leave it in *Testing* — no verification needed for personal use).
 3. **Credentials → Create credentials → OAuth client ID → Android:** package `com.rajasudhan.taskmind`,
    SHA-1 of your debug cert (`gradlew :apps:taskmind:signingReport`). No secret to paste back.
-4. In the app: **Sources → Email (Gmail) → on** → grant consent. The connected account shows under the
-   toggle; **Disconnect** revokes the token. Every Gmail fetch appears in **Settings → Data Egress**.
+4. In the app: **Sources → Email (Gmail) → on** → pick an account in the chooser → grant consent. Use
+   **Add another account** to connect more mailboxes; each gets its own **Disconnect** (which revokes
+   that account's token). Every Gmail fetch appears in **Settings → Data Egress**.
 
 ### Transcription model setup (on-device Vosk)
 
-Call/voice transcription runs **fully on-device** via [Vosk](https://alphacephei.com/vosk/models) — no
-audio leaves the phone. The model isn't bundled; push one once:
+Call/voice transcription **and the Inbox voice-note button** run **fully on-device** via
+[Vosk](https://alphacephei.com/vosk/models) — no audio leaves the phone. The model isn't bundled.
+
+> **Easiest:** run `python tools/setup_vosk_model.py` (see [`tools/README.md`](../../tools/README.md)) —
+> it downloads a model and installs it into app storage on a connected device. The manual steps below
+> do the same thing by hand.
 
 1. Download a small Vosk model, e.g. **`vosk-model-small-en-in-0.4`** (Indian English, ~36 MB) — or
    `vosk-model-small-en-us-0.15`.
@@ -154,9 +191,13 @@ audio leaves the phone. The model isn't bundled; push one once:
 
 ## Using it
 
-- **Inbox** — pending suggestions (color-coded by type; soonest/important first). Approve / Edit /
-  Reject each, or **Approve all** / **Reject all**. The ↻ button scans the last 10 minutes on demand.
-- **Notes** — everything you approved, consolidated and color-coded; swipe-free delete.
+- **Inbox** — pending suggestions (color-coded by type; soonest/important first). Each card shows a
+  short **summary + source**; tap to expand the full original message. Approve / Edit / Reject each,
+  or **Approve all** / **Reject all**. Approving a dated item with **no time** prompts you to set one
+  (or keep it all-day). The **🎤 button** records a quick voice note (on-device) → a new suggestion;
+  the **↻** in the header scans the last 10 minutes on demand.
+- **Notes** — everything you approved, consolidated and color-coded. **Tap a note** to open its full
+  detail (summary, body, source, due date); delete from the list or the detail screen.
 - **Sources** — per-source toggles + the per-app notification picker.
 - **Settings** — provider choice + model setup, calendar event duration/target, Data Egress audit,
   Test Extraction box, and **Delete All Private Data**.
