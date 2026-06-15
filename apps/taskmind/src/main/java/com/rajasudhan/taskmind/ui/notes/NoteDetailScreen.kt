@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.rajasudhan.taskmind.ui.common.CategoryBadge
@@ -73,6 +74,15 @@ fun NoteDetailScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
+        Spacer(Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = n.completed, onCheckedChange = { viewModel.setCompleted(it) })
+            Text(
+                text = if (n.completed) "Completed" else "Mark complete",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+
         if (n.summary.isNotBlank()) {
             Spacer(Modifier.height(16.dp))
             Text(
@@ -80,6 +90,27 @@ fun NoteDetailScreen(
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
+        }
+
+        // Checklist: shown for to-dos whose content is list-like; ticks persist to the note.
+        val checklistItems = if (!n.checklist.isNullOrBlank()) Checklist.decode(n.checklist!!)
+            else if (n.type == "todo") Checklist.derive(n.summary) else emptyList()
+        if (checklistItems.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            Text("Checklist", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            checklistItems.forEachIndexed { i, item ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = item.checked,
+                        onCheckedChange = { viewModel.updateChecklist(Checklist.toggleEncoded(checklistItems, i)) }
+                    )
+                    Text(
+                        text = item.text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textDecoration = if (item.checked) TextDecoration.LineThrough else null
+                    )
+                }
+            }
         }
 
         Spacer(Modifier.height(16.dp))
@@ -93,7 +124,7 @@ fun NoteDetailScreen(
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = n.body,
+            text = linkifyNoteBody(n.body, MaterialTheme.colorScheme.primary),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface
         )
