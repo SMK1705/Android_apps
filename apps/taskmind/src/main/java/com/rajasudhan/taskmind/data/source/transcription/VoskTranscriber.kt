@@ -103,10 +103,17 @@ class VoskTranscriber @Inject constructor(
 
     private fun unzip(zip: File, dest: File) {
         dest.mkdirs()
+        val destRoot = dest.canonicalFile.toPath()
         ZipInputStream(zip.inputStream().buffered()).use { zis ->
             var entry = zis.nextEntry
             while (entry != null) {
                 val outFile = File(dest, entry.name)
+                // Guard against zip-slip: skip any entry whose path escapes the model dir
+                // (e.g. "../../databases/x") so a crafted zip can't overwrite other app files.
+                if (!outFile.canonicalFile.toPath().startsWith(destRoot)) {
+                    entry = zis.nextEntry
+                    continue
+                }
                 if (entry.isDirectory) {
                     outFile.mkdirs()
                 } else {
