@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">TaskMind</string>
+    <string name="widget_add">+ Add</string>
+    <string name="tile_label">Add to TaskMind</string>
 </resources>
