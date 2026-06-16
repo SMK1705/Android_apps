@@ -1,6 +1,7 @@
 package com.rajasudhan.taskmind
 
 import android.app.Application
+import android.content.Context
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.Constraints
@@ -8,6 +9,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.rajasudhan.taskmind.data.source.DataCollectionWorker
+import com.rajasudhan.taskmind.data.source.SettingsManager
 import dagger.hilt.android.HiltAndroidApp
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -18,6 +20,9 @@ class TaskMindApp : Application(), Configuration.Provider {
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
+    @Inject
+    lateinit var settingsManager: SettingsManager
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -25,22 +30,30 @@ class TaskMindApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
-        schedulePeriodicScan()
+        // Keep the existing schedule on launch; only an explicit settings change replaces it.
+        scheduleScan(this, settingsManager.scanFrequencyMinutes.toLong(), replace = false)
     }
 
-    /** Schedules a battery-friendly periodic scan of recent data. */
-    private fun schedulePeriodicScan() {
-        val request = PeriodicWorkRequestBuilder<DataCollectionWorker>(30, TimeUnit.MINUTES)
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiresBatteryNotLow(true)
-                    .build()
+    companion object {
+        const val PERIODIC_WORK_NAME = "taskmind_periodic_scan"
+
+        /**
+         * (Re)schedules the battery-friendly periodic scan of recent data. Pass [replace] = true to
+         * apply a changed interval immediately (e.g. from Settings); false keeps any existing schedule.
+         */
+        fun scheduleScan(context: Context, minutes: Long, replace: Boolean) {
+            val request = PeriodicWorkRequestBuilder<DataCollectionWorker>(minutes, TimeUnit.MINUTES)
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiresBatteryNotLow(true)
+                        .build()
+                )
+                .build()
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                PERIODIC_WORK_NAME,
+                if (replace) ExistingPeriodicWorkPolicy.UPDATE else ExistingPeriodicWorkPolicy.KEEP,
+                request
             )
-            .build()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "taskmind_periodic_scan",
-            ExistingPeriodicWorkPolicy.KEEP,
-            request
-        )
+        }
     }
 }
