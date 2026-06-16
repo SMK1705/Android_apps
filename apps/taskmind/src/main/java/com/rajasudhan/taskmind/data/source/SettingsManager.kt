@@ -1,6 +1,9 @@
 package com.rajasudhan.taskmind.data.source
 
 import android.content.SharedPreferences
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,6 +22,7 @@ class SettingsManager @Inject constructor(
         private const val KEY_GMAIL_ACCOUNTS = "gmail_accounts"
         private const val KEY_RETENTION_DAYS = "retention_days"
         private const val KEY_SCAN_FREQUENCY_MINUTES = "scan_frequency_minutes"
+        private const val KEY_DYNAMIC_COLOR = "dynamic_color"
 
         const val CALENDAR_ID_AUTO = -1L
         const val DEFAULT_EVENT_DURATION_MINUTES = 60
@@ -89,6 +93,19 @@ class SettingsManager @Inject constructor(
         get() = encryptedPrefs.getInt(KEY_SCAN_FREQUENCY_MINUTES, DEFAULT_SCAN_FREQUENCY_MINUTES)
         set(value) = encryptedPrefs.edit().putInt(KEY_SCAN_FREQUENCY_MINUTES, value).apply()
 
+    // ---- Material You (dynamic color) ----
+    // Off by default to keep the brand violet identity; exposed as a StateFlow so the theme in
+    // MainActivity re-themes live the moment the Settings toggle flips.
+    private val _dynamicColor = MutableStateFlow(encryptedPrefs.getBoolean(KEY_DYNAMIC_COLOR, false))
+    val dynamicColorFlow: StateFlow<Boolean> = _dynamicColor.asStateFlow()
+
+    var dynamicColor: Boolean
+        get() = _dynamicColor.value
+        set(value) {
+            encryptedPrefs.edit().putBoolean(KEY_DYNAMIC_COLOR, value).apply()
+            _dynamicColor.value = value
+        }
+
     /**
      * Clears all user-facing settings (API keys, provider choice, calendar prefs).
      * Deliberately leaves the DB encryption key intact so the (now-emptied) database stays readable.
@@ -105,6 +122,8 @@ class SettingsManager @Inject constructor(
             .remove(KEY_GMAIL_ACCOUNTS)
             .remove(KEY_RETENTION_DAYS)
             .remove(KEY_SCAN_FREQUENCY_MINUTES)
+            .remove(KEY_DYNAMIC_COLOR)
             .apply()
+        _dynamicColor.value = false
     }
 }
