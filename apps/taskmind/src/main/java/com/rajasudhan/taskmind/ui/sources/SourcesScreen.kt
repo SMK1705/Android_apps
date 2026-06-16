@@ -6,18 +6,32 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.accompanist.permissions.*
+
+/** Health of an observation stream, shown as a colored badge on each source. */
+enum class ObserverStatus { ACTIVE, ATTENTION, OFF }
+
+private fun statusFor(enabled: Boolean, ready: Boolean): ObserverStatus = when {
+    !enabled -> ObserverStatus.OFF
+    ready -> ObserverStatus.ACTIVE
+    else -> ObserverStatus.ATTENTION
+}
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -83,25 +97,29 @@ fun SourcesScreen(
         }
     }
 
+    // Honest, derivable telemetry only (no fabricated "scanned this week" counts).
+    val activeCount = listOf(
+        notificationsEnabled, smsEnabled, callLogEnabled, appUsageEnabled,
+        emailEnabled, calendarEnabled, audioEnabled, imagesEnabled
+    ).count { it }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Text(
-                text = "Turn sources on or off. Note: Some require special Android permissions which will be requested when toggled on.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+            IngestionSummary(activeCount = activeCount, totalCount = 8, gmailAccounts = gmailAccounts.size)
         }
+
+        item { SectionHeader("Passive observers") }
 
         item {
             SourceToggle(
                 title = "Notifications",
                 subtitle = "Read incoming notification text",
                 isChecked = notificationsEnabled,
+                status = statusFor(notificationsEnabled, ready = true),
                 onCheckedChange = {
                     if (it) {
                         context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
@@ -155,7 +173,6 @@ fun SourcesScreen(
                             }
                         }
                     }
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 }
             }
         }
@@ -165,6 +182,7 @@ fun SourcesScreen(
                 title = "SMS Messages",
                 subtitle = "Read incoming and recent text messages",
                 isChecked = smsEnabled,
+                status = statusFor(smsEnabled, ready = smsPermissionState.status.isGranted),
                 onCheckedChange = {
                     if (it && !smsPermissionState.status.isGranted) {
                         smsPermissionState.launchPermissionRequest()
@@ -180,6 +198,7 @@ fun SourcesScreen(
                 title = "Call Logs",
                 subtitle = "Read recent call history context",
                 isChecked = callLogEnabled,
+                status = statusFor(callLogEnabled, ready = callLogPermissionState.status.isGranted),
                 onCheckedChange = {
                     if (it && !callLogPermissionState.status.isGranted) {
                         callLogPermissionState.launchPermissionRequest()
@@ -192,24 +211,10 @@ fun SourcesScreen(
 
         item {
             SourceToggle(
-                title = "Calendar",
-                subtitle = "Read to prevent duplicates; write to add events on approve",
-                isChecked = calendarEnabled,
-                onCheckedChange = {
-                    if (it && !calendarPermissionState.allPermissionsGranted) {
-                        calendarPermissionState.launchMultiplePermissionRequest()
-                    } else {
-                        viewModel.toggleCalendar(it)
-                    }
-                }
-            )
-        }
-
-        item {
-            SourceToggle(
                 title = "App Usage",
                 subtitle = "Track which apps you use and when",
                 isChecked = appUsageEnabled,
+                status = statusFor(appUsageEnabled, ready = true),
                 onCheckedChange = {
                     if (it) {
                         context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
@@ -219,12 +224,15 @@ fun SourcesScreen(
             )
         }
 
+        item { SectionHeader("Connected accounts") }
+
         item {
             SourceToggle(
                 title = "Email (Gmail)",
                 subtitle = if (gmailAccounts.isEmpty()) "Read unread Primary emails (read-only)"
                     else "${gmailAccounts.size} account${if (gmailAccounts.size == 1) "" else "s"} connected",
                 isChecked = emailEnabled,
+                status = statusFor(emailEnabled, ready = gmailAccounts.isNotEmpty()),
                 onCheckedChange = { viewModel.onEmailToggle(it) }
             )
             gmailStatus?.let {
@@ -261,15 +269,29 @@ fun SourcesScreen(
         }
 
         item {
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            Text("Media Folders", style = MaterialTheme.typography.titleLarge)
+            SourceToggle(
+                title = "Calendar",
+                subtitle = "Read to prevent duplicates; write to add events on approve",
+                isChecked = calendarEnabled,
+                status = statusFor(calendarEnabled, ready = calendarPermissionState.allPermissionsGranted),
+                onCheckedChange = {
+                    if (it && !calendarPermissionState.allPermissionsGranted) {
+                        calendarPermissionState.launchMultiplePermissionRequest()
+                    } else {
+                        viewModel.toggleCalendar(it)
+                    }
+                }
+            )
         }
+
+        item { SectionHeader("Reactive sensors") }
 
         item {
             SourceToggle(
                 title = "Voice/Call Recordings",
                 subtitle = "Watch folders for new audio to transcribe",
                 isChecked = audioEnabled,
+                status = statusFor(audioEnabled, ready = audioPermissionState.status.isGranted),
                 onCheckedChange = {
                     if (it && !audioPermissionState.status.isGranted) {
                         audioPermissionState.launchPermissionRequest()
@@ -299,6 +321,7 @@ fun SourcesScreen(
                 title = "Screenshots (OCR)",
                 subtitle = "Read text from new screenshots on-device. Needs a Tesseract model (Settings).",
                 isChecked = imagesEnabled,
+                status = statusFor(imagesEnabled, ready = imagesPermissionState.status.isGranted),
                 onCheckedChange = {
                     if (it && !imagesPermissionState.status.isGranted) {
                         imagesPermissionState.launchPermissionRequest()
@@ -311,11 +334,61 @@ fun SourcesScreen(
     }
 }
 
+/** Top-of-screen "cockpit" summary — only facts we can actually derive. */
+@Composable
+private fun IngestionSummary(activeCount: Int, totalCount: Int, gmailAccounts: Int) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                "$activeCount of $totalCount sources active",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Text(
+                if (gmailAccounts > 0) "$gmailAccounts Gmail account${if (gmailAccounts == 1) "" else "s"} connected · understanding runs on-device"
+                else "Understanding runs on-device by default",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(text: String) {
+    Text(
+        text = text.uppercase(),
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+    )
+}
+
+@Composable
+private fun StatusPill(status: ObserverStatus) {
+    val (color, label) = when (status) {
+        ObserverStatus.ACTIVE -> Color(0xFF2E9E4F) to "Active"
+        ObserverStatus.ATTENTION -> Color(0xFFE0A100) to "Needs setup"
+        ObserverStatus.OFF -> Color(0xFF9E9E9E) to "Off"
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
+        Spacer(Modifier.width(4.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall, color = color, fontWeight = FontWeight.SemiBold)
+    }
+}
+
 @Composable
 fun SourceToggle(
     title: String,
     subtitle: String,
     isChecked: Boolean,
+    status: ObserverStatus,
     onCheckedChange: (Boolean) -> Unit
 ) {
     Card(
@@ -328,7 +401,11 @@ fun SourceToggle(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                Text(text = title, style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = title, style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.width(8.dp))
+                    StatusPill(status)
+                }
                 Text(text = subtitle, style = MaterialTheme.typography.bodySmall)
             }
             Switch(

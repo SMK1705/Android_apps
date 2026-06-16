@@ -34,7 +34,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -256,11 +258,18 @@ fun InboxScreen(
                     }
                 }
                 items(shown, key = { it.id }) { suggestion ->
+                    val haptic = LocalHapticFeedback.current
                     val dismissState = rememberSwipeToDismissBoxState(
                         confirmValueChange = { value ->
                             when (value) {
-                                SwipeToDismissBoxValue.StartToEnd -> doApprove(suggestion)
-                                SwipeToDismissBoxValue.EndToStart -> doReject(suggestion)
+                                SwipeToDismissBoxValue.StartToEnd -> {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    doApprove(suggestion)
+                                }
+                                SwipeToDismissBoxValue.EndToStart -> {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    doReject(suggestion)
+                                }
                                 SwipeToDismissBoxValue.Settled -> {}
                             }
                             // Always return false: the data change (approve/reject) removes the card,
@@ -504,15 +513,27 @@ fun SuggestionCard(
                         }
                     }
                 } else {
+                    val visual = sourceVisual(suggestion.source)
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            visual.icon,
+                            contentDescription = visual.label,
+                            tint = visual.tint,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
                         CategoryBadge(category)
+                        Spacer(Modifier.width(6.dp))
+                        ConfidencePill(suggestion.confidence)
                         if (suggestion.dueDate != null) {
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "${suggestion.dueDate} ${suggestion.dueTime ?: ""}".trim(),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = category.accent(),
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
