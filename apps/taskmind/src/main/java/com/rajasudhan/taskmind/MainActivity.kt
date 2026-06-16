@@ -7,11 +7,19 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -35,16 +43,22 @@ import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.filled.Source
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import com.rajasudhan.taskmind.data.source.SettingsManager
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
+    @Inject lateinit var settingsManager: SettingsManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
+
         setContent {
-            TaskMindTheme {
+            val dynamicColor by settingsManager.dynamicColorFlow.collectAsState()
+            TaskMindTheme(dynamicColor = dynamicColor) {
                 var isAuthenticated by remember { mutableStateOf(false) }
 
                 // Re-lock whenever the app leaves the foreground, so auth is required on every return.
@@ -127,17 +141,74 @@ class MainActivity : AppCompatActivity() {
 
 @Composable
 fun LockScreen(onUnlockClick: () -> Unit) {
-    Scaffold { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(text = "App is locked.", style = MaterialTheme.typography.titleLarge)
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = onUnlockClick) {
+    val scheme = MaterialTheme.colorScheme
+    // Gentle "breathing" pulse on the lock emblem.
+    val pulse = rememberInfiniteTransition(label = "lockPulse")
+    val scale by pulse.animateFloat(
+        initialValue = 0.92f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "lockScale"
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(scheme.background),
+        contentAlignment = Alignment.Center
+    ) {
+        // Soft blurred aurora blobs give a frosted, premium backdrop without exposing any real content.
+        Box(
+            Modifier
+                .align(Alignment.TopStart)
+                .offset(x = (-60).dp, y = (-90).dp)
+                .size(260.dp)
+                .blur(90.dp)
+                .clip(CircleShape)
+                .background(scheme.primary.copy(alpha = 0.45f))
+        )
+        Box(
+            Modifier
+                .align(Alignment.BottomEnd)
+                .offset(x = 60.dp, y = 90.dp)
+                .size(240.dp)
+                .blur(90.dp)
+                .clip(CircleShape)
+                .background(scheme.tertiary.copy(alpha = 0.40f))
+        )
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier
+                    .size(132.dp)
+                    .scale(scale)
+                    .clip(CircleShape)
+                    .background(scheme.primaryContainer.copy(alpha = 0.55f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = scheme.primary,
+                    modifier = Modifier.size(64.dp)
+                )
+            }
+            Spacer(Modifier.height(28.dp))
+            Text(
+                text = "TaskMind is locked",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = scheme.onBackground
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Your data stays private behind biometrics.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(28.dp))
+            Button(onClick = onUnlockClick, modifier = Modifier.height(52.dp)) {
+                Icon(Icons.Default.Fingerprint, contentDescription = null)
+                Spacer(Modifier.width(10.dp))
                 Text("Unlock")
             }
         }
@@ -245,7 +316,19 @@ fun TaskMindAppContent(onLock: () -> Unit) {
         NavHost(
             navController = navController,
             startDestination = "inbox",
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding),
+            enterTransition = {
+                fadeIn(tween(220)) + slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(220))
+            },
+            exitTransition = {
+                fadeOut(tween(180)) + slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(180))
+            },
+            popEnterTransition = {
+                fadeIn(tween(220)) + slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(220))
+            },
+            popExitTransition = {
+                fadeOut(tween(180)) + slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(180))
+            }
         ) {
             composable("inbox") { com.rajasudhan.taskmind.ui.inbox.InboxScreen() }
             composable("notes") {

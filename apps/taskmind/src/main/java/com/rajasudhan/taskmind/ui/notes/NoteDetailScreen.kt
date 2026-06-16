@@ -26,6 +26,7 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.rajasudhan.taskmind.data.source.RecurrenceUtil
 import com.rajasudhan.taskmind.ui.common.CategoryBadge
+import com.rajasudhan.taskmind.ui.common.accent
 import com.rajasudhan.taskmind.ui.common.categoryFor
 
 /**
@@ -85,7 +86,7 @@ fun NoteDetailScreen(
                 Text(
                     text = "${n.dueDate} ${n.dueTime ?: ""}".trim(),
                     style = MaterialTheme.typography.labelLarge,
-                    color = category.accent,
+                    color = category.accent(),
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -177,7 +178,7 @@ fun NoteDetailScreen(
             Spacer(Modifier.height(8.dp))
             if (n.locationLabel != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Place, contentDescription = null, tint = category.accent)
+                    Icon(Icons.Default.Place, contentDescription = null, tint = category.accent())
                     Spacer(Modifier.width(4.dp))
                     Text("Remind me at: ${n.locationLabel}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     TextButton(onClick = { viewModel.clearLocationReminder() }) { Text("Remove") }

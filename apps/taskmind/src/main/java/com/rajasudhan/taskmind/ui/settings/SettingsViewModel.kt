@@ -53,6 +53,10 @@ class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
+    // ---- Appearance (Material You / dynamic color) ----
+    val dynamicColor: StateFlow<Boolean> = settingsManager.dynamicColorFlow
+    fun updateDynamicColor(enabled: Boolean) { settingsManager.dynamicColor = enabled }
+
     // ---- Transcription (on-device Vosk) ----
     private val _transcriptionStatus = MutableStateFlow<String?>(null)
     val transcriptionStatus: StateFlow<String?> = _transcriptionStatus

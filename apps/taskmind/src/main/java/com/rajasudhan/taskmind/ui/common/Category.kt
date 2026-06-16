@@ -1,6 +1,7 @@
 package com.rajasudhan.taskmind.ui.common
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -10,23 +11,56 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 
-/** Shared color category so Inbox, Notes (and beyond) speak the same visual language. */
-data class Category(val label: String, val accent: Color, val container: Color)
+/**
+ * Shared color category so Inbox, Notes (and beyond) speak the same visual language.
+ *
+ * Each category carries a light **and** a dark pairing. Previously the containers were fixed light
+ * pastels with hardcoded dark text, which looked jarring once the rest of the app was in Dark Mode;
+ * now [container]/[accent] resolve to the right tone for the active theme.
+ */
+data class Category(
+    val label: String,
+    val accentLight: Color,
+    val containerLight: Color,
+    val accentDark: Color,
+    val containerDark: Color
+)
 
-val OverdueCategory = Category("OVERDUE", Color(0xFFB71C1C), Color(0xFFFFE1E1))
-val ReminderCategory = Category("REMINDER", Color(0xFFD32F2F), Color(0xFFFDECEA))
-val TodoCategory = Category("TO-DO", Color(0xFFF57C00), Color(0xFFFFF4E5))
-val NoteCategory = Category("NOTE", Color(0xFF1976D2), Color(0xFFE8F1FB))
+// Light pairs keep the original palette. Dark pairs use deep-toned containers with brighter accents
+// so the left bar, badges, and colored dates stay legible against them.
+val OverdueCategory = Category("OVERDUE", Color(0xFFB71C1C), Color(0xFFFFE1E1), Color(0xFFFF8A80), Color(0xFF3A1414))
+val ReminderCategory = Category("REMINDER", Color(0xFFD32F2F), Color(0xFFFDECEA), Color(0xFFFF8A80), Color(0xFF3A1A18))
+val TodoCategory = Category("TO-DO", Color(0xFFF57C00), Color(0xFFFFF4E5), Color(0xFFFFB74D), Color(0xFF3A2A12))
+val NoteCategory = Category("NOTE", Color(0xFF1976D2), Color(0xFFE8F1FB), Color(0xFF82B1FF), Color(0xFF132A3F))
 
-// Card backgrounds are always light pastels, so card text uses fixed dark colors for contrast.
+/** Accent (left bar, badge background, colored date) for the active theme. */
+@Composable
+fun Category.accent(dark: Boolean = isSystemInDarkTheme()): Color = if (dark) accentDark else accentLight
+
+/** Card container fill for the active theme. */
+@Composable
+fun Category.container(dark: Boolean = isSystemInDarkTheme()): Color = if (dark) containerDark else containerLight
+
+// Text colors that sit on a category container. Dark in light mode, light in dark mode.
 val OnLightCard = Color(0xFF1B1B1B)
 val OnLightCardMuted = Color(0xFF5F5F5F)
+private val OnDarkCard = Color(0xFFEDEDED)
+private val OnDarkCardMuted = Color(0xFFB0AAB8)
+
+/** Primary text/icon color on a category container, theme-aware. */
+@Composable
+fun onCard(dark: Boolean = isSystemInDarkTheme()): Color = if (dark) OnDarkCard else OnLightCard
+
+/** Muted/secondary text/icon color on a category container, theme-aware. */
+@Composable
+fun onCardMuted(dark: Boolean = isSystemInDarkTheme()): Color = if (dark) OnDarkCardMuted else OnLightCardMuted
 
 fun isOverdue(dueDate: String?, dueTime: String?): Boolean {
     val date = dueDate ?: return false
@@ -52,16 +86,20 @@ fun categoryFor(type: String, dueDate: String?, dueTime: String?): Category = wh
 
 @Composable
 fun CategoryBadge(category: Category) {
+    val accent = category.accent()
+    // Pick black/white label text by accent luminance: dark accents (light theme) read with white,
+    // bright accents (dark theme) read with near-black.
+    val textColor = if (accent.luminance() > 0.4f) Color(0xFF1B1B1B) else Color.White
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(4.dp))
-            .background(category.accent)
+            .background(accent)
             .padding(horizontal = 6.dp, vertical = 2.dp)
     ) {
         Text(
             text = category.label,
             style = MaterialTheme.typography.labelSmall,
-            color = Color.White,
+            color = textColor,
             fontWeight = FontWeight.Bold
         )
     }
@@ -70,9 +108,9 @@ fun CategoryBadge(category: Category) {
 @Composable
 fun CategoryLegend() {
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        LegendDot("Reminder", ReminderCategory.accent)
-        LegendDot("To-do", TodoCategory.accent)
-        LegendDot("Note", NoteCategory.accent)
+        LegendDot("Reminder", ReminderCategory.accent())
+        LegendDot("To-do", TodoCategory.accent())
+        LegendDot("Note", NoteCategory.accent())
     }
 }
 

@@ -83,12 +83,12 @@ private fun NoteRow(note: Note, onToggleComplete: () -> Unit, onClick: () -> Uni
     val category = categoryFor(note.type, note.dueDate, note.dueTime)
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = category.container),
+        colors = CardDefaults.cardColors(containerColor = category.container()),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(modifier = Modifier.height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
             // Colored accent bar on the left edge.
-            Box(modifier = Modifier.width(6.dp).fillMaxHeight().background(category.accent))
+            Box(modifier = Modifier.width(6.dp).fillMaxHeight().background(category.accent()))
 
             Checkbox(checked = note.completed, onCheckedChange = { onToggleComplete() })
 
@@ -100,7 +100,7 @@ private fun NoteRow(note: Note, onToggleComplete: () -> Unit, onClick: () -> Uni
                         Text(
                             text = "${note.dueDate} ${note.dueTime ?: ""}".trim(),
                             style = MaterialTheme.typography.labelMedium,
-                            color = category.accent,
+                            color = category.accent(),
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -110,18 +110,18 @@ private fun NoteRow(note: Note, onToggleComplete: () -> Unit, onClick: () -> Uni
                     text = note.title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = OnLightCard,
+                    color = onCard(),
                     textDecoration = if (note.completed) TextDecoration.LineThrough else null
                 )
                 Text(
                     text = "from ${note.source}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = OnLightCardMuted
+                    color = onCardMuted()
                 )
             }
 
             IconButton(onClick = onDelete) {
-                Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = OnLightCardMuted)
+                Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = onCardMuted())
             }
         }
     }

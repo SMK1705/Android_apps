@@ -8,6 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +52,7 @@ fun SettingsScreen(
     val backupStatus by viewModel.backupStatus.collectAsState()
     val restartRequired by viewModel.restartRequired.collectAsState()
     val permissions by viewModel.permissions.collectAsState()
+    val dynamicColor by viewModel.dynamicColor.collectAsState()
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri -> uri?.let { viewModel.exportNotesToUri(it) } }
@@ -86,6 +88,24 @@ fun SettingsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        SettingsSectionCard(accent = Color(0xFF5C6BC0), title = "Appearance") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Material You (dynamic color)", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Tint the app from your wallpaper (Android 12+). Off keeps the TaskMind violet identity.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(checked = dynamicColor, onCheckedChange = { viewModel.updateDynamicColor(it) })
+            }
+        }
+
         SettingsSectionCard(accent = EngineAccent, title = "Understanding Engine") {
             Text(
                 "On-device is the fast, private default. Switch to Cloud only when you want higher " +

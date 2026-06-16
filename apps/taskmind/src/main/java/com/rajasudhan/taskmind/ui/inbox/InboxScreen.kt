@@ -439,26 +439,26 @@ fun SuggestionCard(
     var editedDueTime by remember { mutableStateOf(suggestion.dueTime ?: "") }
 
     val category = categoryFor(suggestion.type, suggestion.dueDate, suggestion.dueTime)
-    val darkFieldStyle = TextStyle(color = OnLightCard)
+    val darkFieldStyle = TextStyle(color = onCard())
     // Show the model's one-line summary when present; otherwise fall back to the raw message preview.
     val preview = suggestion.summary.ifBlank { suggestion.rawSnippet }
     val chevronRotation by animateFloatAsState(if (expanded) 180f else 0f, label = "chevron")
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = category.container),
+        colors = CardDefaults.cardColors(containerColor = category.container()),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(modifier = Modifier.height(IntrinsicSize.Min)) {
             // Colored accent bar on the left edge.
-            Box(modifier = Modifier.width(6.dp).fillMaxHeight().background(category.accent))
+            Box(modifier = Modifier.width(6.dp).fillMaxHeight().background(category.accent()))
 
             Column(modifier = Modifier.weight(1f).padding(16.dp)) {
                 if (isEditing) {
                     Text(
                         text = "From ${suggestion.source}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = OnLightCardMuted
+                        color = onCardMuted()
                     )
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
@@ -489,7 +489,7 @@ fun SuggestionCard(
                         horizontalArrangement = Arrangement.End
                     ) {
                         TextButton(onClick = { isEditing = false }) {
-                            Text("Cancel", color = OnLightCardMuted)
+                            Text("Cancel", color = onCardMuted())
                         }
                         Button(onClick = {
                             val updated = suggestion.copy(
@@ -511,7 +511,7 @@ fun SuggestionCard(
                             Text(
                                 text = "${suggestion.dueDate} ${suggestion.dueTime ?: ""}".trim(),
                                 style = MaterialTheme.typography.labelMedium,
-                                color = category.accent,
+                                color = category.accent(),
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
@@ -528,14 +528,14 @@ fun SuggestionCard(
                                 text = suggestion.extractedTitle,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = OnLightCard
+                                color = onCard()
                             )
                             if (preview.isNotBlank()) {
                                 Spacer(Modifier.height(2.dp))
                                 Text(
                                     text = preview,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = OnLightCard,
+                                    color = onCard(),
                                     maxLines = if (expanded) Int.MAX_VALUE else 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -544,13 +544,13 @@ fun SuggestionCard(
                             Text(
                                 text = "From ${suggestion.source}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = OnLightCardMuted
+                                color = onCardMuted()
                             )
                         }
                         Icon(
                             Icons.Default.ExpandMore,
                             contentDescription = if (expanded) "Collapse" else "Expand",
-                            tint = OnLightCardMuted,
+                            tint = onCardMuted(),
                             modifier = Modifier.rotate(chevronRotation)
                         )
                     }
@@ -563,13 +563,13 @@ fun SuggestionCard(
                     ) {
                         Column {
                             Spacer(Modifier.height(8.dp))
-                            HorizontalDivider(color = OnLightCardMuted.copy(alpha = 0.25f))
+                            HorizontalDivider(color = onCardMuted().copy(alpha = 0.25f))
                             Spacer(Modifier.height(8.dp))
                             Text(
                                 text = "\"${suggestion.rawSnippet}\"",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontStyle = FontStyle.Italic,
-                                color = OnLightCard
+                                color = onCard()
                             )
                         }
                     }
@@ -585,7 +585,7 @@ fun SuggestionCard(
                         Row {
                             Box {
                                 IconButton(onClick = { snoozeMenu = true }) {
-                                    Icon(Icons.Default.Schedule, contentDescription = "Snooze", tint = OnLightCardMuted)
+                                    Icon(Icons.Default.Schedule, contentDescription = "Snooze", tint = onCardMuted())
                                 }
                                 DropdownMenu(expanded = snoozeMenu, onDismissRequest = { snoozeMenu = false }) {
                                     snoozeOptions().forEach { (label, until) ->
@@ -597,7 +597,7 @@ fun SuggestionCard(
                                 }
                             }
                             IconButton(onClick = { isEditing = true }) {
-                                Icon(Icons.Default.Edit, contentDescription = "Edit", tint = OnLightCardMuted)
+                                Icon(Icons.Default.Edit, contentDescription = "Edit", tint = onCardMuted())
                             }
                             IconButton(onClick = { onApprove(suggestion) }) {
                                 Icon(Icons.Default.Check, contentDescription = "Approve", tint = ApproveGreen)
