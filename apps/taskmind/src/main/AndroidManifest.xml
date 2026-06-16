@@ -60,6 +60,9 @@
 
         <receiver android:name=".data.source.AlarmReceiver" android:exported="false" />
 
+        <!-- Approve/Reject actions on the review notification. -->
+        <receiver android:name=".data.source.NotificationActionReceiver" android:exported="false" />
+
         <!-- Quick capture: share-sheet target (text), Quick Settings tile, and home-screen widget. -->
         <activity
             android:name=".ui.capture.ShareTargetActivity"

@@ -2,6 +2,7 @@ package com.rajasudhan.taskmind.data.source.understanding
 
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Suggestion
+import com.rajasudhan.taskmind.data.source.RejectionLearner
 import com.rajasudhan.taskmind.data.source.SuggestionNotifier
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.flow.first
@@ -23,7 +24,8 @@ class UnderstandingPipeline @Inject constructor(
     private val llmProvider: LlmProvider,
     private val moshi: Moshi,
     private val dao: TaskMindDao,
-    private val notifier: SuggestionNotifier
+    private val notifier: SuggestionNotifier,
+    private val rejectionLearner: RejectionLearner
 ) {
     suspend fun processText(source: String, text: String) {
         // Cheap pre-filter: skip obvious non-actionable noise (OTPs, promos, opt-outs)
@@ -50,9 +52,13 @@ class UnderstandingPipeline @Inject constructor(
 
         val items = parsedResult?.items ?: return
 
+        // Down-rank items from senders the user keeps rejecting (on-device learning).
+        val penalty = rejectionLearner.confidencePenalty(source)
+
         var insertedAny = false
         for (item in items) {
-            if (ExtractionHeuristics.isAcceptable(item) && !isDuplicate(item)) {
+            val scored = if (penalty > 0) item.copy(confidence = (item.confidence - penalty).coerceAtLeast(0.0)) else item
+            if (ExtractionHeuristics.isAcceptable(scored) && !isDuplicate(item)) {
                 val suggestion = Suggestion(
                     source = source,
                     rawSnippet = text,
@@ -61,7 +67,7 @@ class UnderstandingPipeline @Inject constructor(
                     dueDate = ExtractionHeuristics.sanitizeDate(item.dueDate),
                     dueTime = ExtractionHeuristics.sanitizeTime(item.dueTime),
                     type = item.type,
-                    confidence = item.confidence,
+                    confidence = scored.confidence,
                     status = "pending"
                 )
                 dao.insertSuggestion(suggestion)
@@ -69,9 +75,9 @@ class UnderstandingPipeline @Inject constructor(
             }
         }
 
-        // Surface a single, self-updating "N suggestions to review" notification.
+        // Surface a single, self-updating review notification (top item + Approve/Reject actions).
         if (insertedAny) {
-            notifier.notifyPending(dao.getPendingSuggestions().first().size)
+            notifier.notifyPending()
         }
     }
 
