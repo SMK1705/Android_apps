@@ -12,8 +12,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import net.sqlcipher.database.SQLiteDatabase
-import net.sqlcipher.database.SupportFactory
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.security.SecureRandom
 import javax.inject.Singleton
 
@@ -53,10 +52,12 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context, dbKey: ByteArray): TaskMindDatabase {
-        // Required by the legacy net.zetetic:android-database-sqlcipher library:
-        // the native libs must be loaded before any encrypted DB is opened.
-        SQLiteDatabase.loadLibs(context)
-        val factory = SupportFactory(dbKey)
+        // net.zetetic:sqlcipher-android ships 16 KB-page-aligned native libraries (the legacy
+        // android-database-sqlcipher did not). Load the native lib before opening the encrypted DB.
+        // The on-disk format is unchanged (both are SQLCipher 4), so existing databases reopen with
+        // the same key — no data migration needed.
+        System.loadLibrary("sqlcipher")
+        val factory = SupportOpenHelperFactory(dbKey)
         return Room.databaseBuilder(
             context,
             TaskMindDatabase::class.java,
