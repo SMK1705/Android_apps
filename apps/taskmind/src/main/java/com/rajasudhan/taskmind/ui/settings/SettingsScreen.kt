@@ -15,6 +15,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.rajasudhan.taskmind.AppLock
 import com.rajasudhan.taskmind.data.source.SettingsManager
 
 private val EngineAccent = Color(0xFF7C4DFF)
@@ -346,7 +347,10 @@ fun SettingsScreen(
                     }
                 }
             }
-            OutlinedButton(onClick = { exportLauncher.launch("taskmind-notes.json") }) {
+            OutlinedButton(onClick = {
+                AppLock.expectResult()
+                exportLauncher.launch("taskmind-notes.json")
+            }) {
                 Text("Export Notes (JSON)")
             }
             exportStatus?.let {
@@ -499,6 +503,7 @@ fun SettingsScreen(
                             pendingPassphrase = passphraseInput
                             passphraseMode = null
                             passphraseInput = ""
+                            AppLock.expectResult()
                             if (isBackup) backupLauncher.launch("taskmind-backup-$backupDate.tmbk")
                             else restoreLauncher.launch(arrayOf("*/*"))
                         }
