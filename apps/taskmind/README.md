@@ -81,21 +81,33 @@ Open the app and authenticate with biometrics/PIN on every launch.
 
 ### Install from your phone (GitHub Actions)
 
-The **Install to phone** workflow (manual `workflow_dispatch`) builds and `adb install`s a fresh debug
-build, so you can push a new build without touching the terminal. It checks out the branch you pick in
-*Run workflow* (default `main`) and runs `installDebug`, so it always installs the latest **merged**
+Two ways to get a fresh build onto the phone without touching a terminal.
+
+#### A. Over-the-air via Releases — works from anywhere (recommended)
+
+The **Publish debug APK** workflow (`release-apk.yml`) builds on a GitHub-hosted runner and publishes
+the APK to a rolling **`debug-latest`** pre-release. It runs automatically on every push to `main`, and
+you can trigger it by hand (**Actions → Publish debug APK → Run workflow**). No laptop required.
+
+1. On the phone, open the repo → **Releases** → **"TaskMind debug build (latest)"**.
+2. Download the **`taskmind-debug.apk`** asset.
+3. Open it and allow your browser / Files app to **install unknown apps** when prompted.
+
+It's signed with the debug key, so it updates an existing install **in place and keeps your data**. The
+download URL is stable across builds, so you can bookmark it:
+`https://github.com/<owner>/Android_apps/releases/download/debug-latest/taskmind-debug.apk`.
+
+#### B. Direct USB install via your laptop — the `Install to phone` workflow
+
+Builds and `adb install`s to a phone **plugged into the laptop** that hosts the self-hosted runner. It
+checks out the branch you pick in *Run workflow* (default `main`), so it installs the latest **merged**
 code — not unpushed local work.
 
-> ⚠️ **It's tethered, not over-the-air.** The job runs on a **self-hosted runner (your laptop)** and
-> installs to a phone **plugged into that laptop** by USB. Triggering it from the GitHub mobile app only
-> *starts* the job remotely — the install still happens laptop→USB→phone. So it needs, at trigger time:
-> the laptop's runner **online**, and the phone **connected with USB debugging authorized**. If you run
-> it while holding the phone (unplugged, away from the laptop) it fails at the connection check with
-> **"No authorized phone detected."**
->
-> **To install while away from the laptop:** open the latest **Android CI** run → download the
-> `taskmind-debug-apk` artifact → unzip → sideload the APK (enable "install unknown apps" for your
-> browser/Files app). Same debug signature, so it updates in place and keeps your data.
+> ⚠️ **This path is tethered, not over-the-air.** Triggering it from the GitHub mobile app only *starts*
+> the job — the install still happens laptop→USB→phone. It needs, at trigger time: the laptop's runner
+> **online**, and the phone **connected with USB debugging authorized**. Run it while holding the phone
+> (unplugged, away from the laptop) and it fails the connection check with **"No authorized phone
+> detected"** — use method **A** instead.
 
 ---
 
