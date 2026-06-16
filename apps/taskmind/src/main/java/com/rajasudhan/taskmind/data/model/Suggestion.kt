@@ -18,5 +18,7 @@ data class Suggestion(
     val confidence: Double,
     val status: String, // "pending" | "approved" | "rejected"
     // v3 (MIGRATION_2_3): when set, the item is hidden from the Inbox until this time (snooze).
-    val snoozedUntil: Long? = null
+    val snoozedUntil: Long? = null,
+    // v4 (MIGRATION_3_4): a place named in the source text (geocoded into the note on approval).
+    val location: String? = null
 )

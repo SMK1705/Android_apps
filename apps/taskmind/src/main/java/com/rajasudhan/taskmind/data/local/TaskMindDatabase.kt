@@ -10,7 +10,7 @@ import com.rajasudhan.taskmind.data.model.Suggestion
 
 @Database(
     entities = [Note::class, Suggestion::class, RejectedPattern::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class TaskMindDatabase : RoomDatabase() {
@@ -46,6 +46,13 @@ abstract class TaskMindDatabase : RoomDatabase() {
                         "kind TEXT NOT NULL, value TEXT NOT NULL, count INTEGER NOT NULL, " +
                         "updatedAt INTEGER NOT NULL, PRIMARY KEY(kind, value))"
                 )
+            }
+        }
+
+        /** v4 adds a nullable `location` column to suggestions (the place named in the source text). */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE suggestions ADD COLUMN location TEXT")
             }
         }
     }

@@ -64,7 +64,7 @@ object DatabaseModule {
             "taskmind_db"
         )
         .openHelperFactory(factory)
-        .addMigrations(TaskMindDatabase.MIGRATION_1_2, TaskMindDatabase.MIGRATION_2_3)
+        .addMigrations(TaskMindDatabase.MIGRATION_1_2, TaskMindDatabase.MIGRATION_2_3, TaskMindDatabase.MIGRATION_3_4)
         .build()
     }
 
