@@ -10,6 +10,9 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+    <!-- Location reminders (geofences). Background is required for geofences to fire when away. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -62,6 +65,9 @@
 
         <!-- Approve/Reject actions on the review notification. -->
         <receiver android:name=".data.source.NotificationActionReceiver" android:exported="false" />
+
+        <!-- Fires location reminders when entering a saved place. -->
+        <receiver android:name=".data.source.GeofenceBroadcastReceiver" android:exported="false" />
 
         <!-- Quick capture: share-sheet target (text), Quick Settings tile, and home-screen widget. -->
         <activity

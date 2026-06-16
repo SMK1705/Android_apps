@@ -46,6 +46,18 @@ interface TaskMindDao {
     @Query("UPDATE notes SET checklist = :checklist WHERE id = :id")
     suspend fun updateNoteChecklist(id: Int, checklist: String?)
 
+    @Query("UPDATE notes SET dueDate = :dueDate WHERE id = :id")
+    suspend fun updateNoteDueDate(id: Int, dueDate: String)
+
+    @Query("UPDATE notes SET recurrence = :recurrence WHERE id = :id")
+    suspend fun updateNoteRecurrence(id: Int, recurrence: String?)
+
+    @Query("UPDATE notes SET locationLat = :lat, locationLng = :lng, locationRadius = :radius, locationLabel = :label WHERE id = :id")
+    suspend fun updateNoteLocation(id: Int, lat: Double?, lng: Double?, radius: Double?, label: String?)
+
+    @Query("SELECT * FROM notes WHERE id = :id")
+    suspend fun getNoteByIdNow(id: Int): Note?
+
     @Query("SELECT * FROM notes WHERE id = :id")
     fun getNoteById(id: Int): Flow<Note?>
 
