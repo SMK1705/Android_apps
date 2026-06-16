@@ -1,0 +1,67 @@
+name: Publish debug APK
+
+# Builds the debug APK on a GitHub-hosted runner (no laptop needed) and publishes it to a rolling
+# "debug-latest" pre-release. That gives you an over-the-air install path from your phone:
+#   Releases -> "TaskMind debug build (latest)" -> download taskmind-debug.apk -> open to install.
+# Runs on every push to main, and can be triggered manually (Actions -> "Publish debug APK" ->
+# Run workflow). The APK is signed with the repo's debug key, so it updates an existing install in
+# place and keeps your on-device data. The download URL is stable across runs:
+#   https://github.com/<owner>/<repo>/releases/download/debug-latest/taskmind-debug.apk
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # required to create/update the release
+
+concurrency:
+  group: release-apk
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Assemble debug APK
+        run: ./gradlew :apps:taskmind:assembleDebug --stacktrace
+
+      - name: Publish to the rolling "debug-latest" pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=debug-latest
+          APK=apps/taskmind/build/outputs/apk/debug/taskmind-debug.apk
+          SHORT=${GITHUB_SHA::7}
+          DATE=$(date -u '+%Y-%m-%d %H:%M UTC')
+          printf '%s\n\n%s\n' \
+            "Auto-published debug APK from main @ ${SHORT} (build #${GITHUB_RUN_NUMBER}, ${DATE})." \
+            "Install on your phone: download taskmind-debug.apk below, open it, and allow your browser/Files app to install unknown apps. Signed with the debug key, so it updates an existing install in place and keeps your data." > _release_notes.md
+          # Recreate the rolling release so its tag points at this commit and the asset is replaced;
+          # the tag (and therefore the download URL) stays stable across runs.
+          gh release delete "$TAG" --yes --cleanup-tag || true
+          gh release create "$TAG" "$APK#taskmind-debug.apk" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "TaskMind debug build (latest)" \
+            --notes-file _release_notes.md
