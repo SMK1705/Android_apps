@@ -2,18 +2,25 @@ package com.rajasudhan.taskmind.ui.notes
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -24,6 +31,14 @@ import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.Circle
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.rememberCameraPositionState
+import com.google.maps.android.compose.rememberMarkerState
 import com.rajasudhan.taskmind.data.source.RecurrenceUtil
 import com.rajasudhan.taskmind.ui.common.CategoryBadge
 import com.rajasudhan.taskmind.ui.common.accent
@@ -183,6 +198,27 @@ fun NoteDetailScreen(
                     Text("Remind me at: ${n.locationLabel}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     TextButton(onClick = { viewModel.clearLocationReminder() }) { Text("Remove") }
                 }
+                // Mini map of the saved place + a shortcut to navigate there in Google Maps.
+                val lat = n.locationLat
+                val lng = n.locationLng
+                if (lat != null && lng != null) {
+                    Spacer(Modifier.height(8.dp))
+                    LocationMapCard(
+                        lat = lat,
+                        lng = lng,
+                        radiusMeters = n.locationRadius ?: 150.0,
+                        accent = category.accent()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = { openDirections(context, lat, lng) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Directions, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Get directions")
+                    }
+                }
             } else {
                 OutlinedButton(onClick = { locationLabel = ""; showLocationDialog = true }) {
                     Icon(Icons.Default.Place, contentDescription = null)
@@ -258,4 +294,51 @@ private fun captureCurrentLocation(context: Context, onResult: (Double, Double) 
         .addOnFailureListener {
             Toast.makeText(context, "Couldn't get your location.", Toast.LENGTH_SHORT).show()
         }
+}
+
+/** A non-interactive Google Maps preview of the saved place, with its geofence circle drawn on. */
+@Composable
+private fun LocationMapCard(lat: Double, lng: Double, radiusMeters: Double, accent: Color) {
+    val target = LatLng(lat, lng)
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(target, 15f)
+    }
+    GoogleMap(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(180.dp)
+            .clip(RoundedCornerShape(12.dp)),
+        cameraPositionState = cameraPositionState,
+        // A static preview: gestures off so it never fights the page's vertical scroll.
+        uiSettings = MapUiSettings(
+            zoomControlsEnabled = false,
+            scrollGesturesEnabled = false,
+            zoomGesturesEnabled = false,
+            tiltGesturesEnabled = false,
+            rotationGesturesEnabled = false,
+            mapToolbarEnabled = false,
+            compassEnabled = false
+        )
+    ) {
+        Marker(state = rememberMarkerState(position = target), title = "Reminder location")
+        Circle(
+            center = target,
+            radius = radiusMeters,
+            strokeColor = accent,
+            strokeWidth = 4f,
+            fillColor = accent.copy(alpha = 0.18f)
+        )
+    }
+}
+
+/** Open turn-by-turn directions to the saved place in Google Maps (origin = current location). */
+private fun openDirections(context: Context, lat: Double, lng: Double) {
+    val uri = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$lat,$lng")
+    val maps = Intent(Intent.ACTION_VIEW, uri).setPackage("com.google.android.apps.maps")
+    try {
+        context.startActivity(maps)
+    } catch (e: ActivityNotFoundException) {
+        // Google Maps app not installed — let any handler (e.g. a browser) take the URL.
+        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+    }
 }

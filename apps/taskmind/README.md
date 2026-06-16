@@ -211,6 +211,25 @@ Google matches it by package name + signing SHA-1. In [console.cloud.google.com]
    **Add another account** to connect more mailboxes; each gets its own **Disconnect** (which revokes
    that account's token). Every Gmail fetch appears in **Settings → Data Egress**.
 
+### Maps setup (one-time, for the geofence map)
+
+A note with a **location reminder** shows a mini Google Map of the saved place (with its geofence
+circle) plus a **Get directions** button. Drawing the map needs a **Maps SDK for Android** API key; the
+*Get directions* button opens the Google Maps app and needs **no** key. The key is read from
+`local.properties` (gitignored), so it never lands in the repo.
+
+1. In [console.cloud.google.com](https://console.cloud.google.com) (you can reuse the Gmail project):
+   **APIs & Services → Library → enable "Maps SDK for Android"** (this requires billing enabled on the
+   project; the free monthly tier is generous).
+2. **Credentials → Create credentials → API key.** Optionally restrict it to *Android apps* with package
+   `com.rajasudhan.taskmind` + your debug SHA-1 (`gradlew :apps:taskmind:signingReport`).
+3. Add it to **`local.properties`** at the repo root (create the line; it's gitignored):
+   ```properties
+   MAPS_API_KEY=AIza...your-key...
+   ```
+4. Rebuild/reinstall. Without a key the app still runs and *Get directions* still works — only the
+   embedded map preview stays blank.
+
 ### Transcription model setup (on-device Vosk)
 
 Call/voice transcription **and the Inbox voice-note button** run **fully on-device** via
