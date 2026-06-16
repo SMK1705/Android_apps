@@ -18,6 +18,9 @@ interface TaskMindDao {
     @Query("SELECT * FROM suggestions WHERE status = 'pending' ORDER BY confidence DESC")
     fun getPendingSuggestions(): Flow<List<Suggestion>>
 
+    @Query("SELECT * FROM suggestions WHERE id = :id")
+    suspend fun getSuggestionById(id: Int): Suggestion?
+
     @Insert
     suspend fun insertSuggestion(suggestion: Suggestion)
 

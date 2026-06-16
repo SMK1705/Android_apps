@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Suggestion
 import com.rajasudhan.taskmind.data.source.RecentDataScanner
+import com.rajasudhan.taskmind.data.source.RejectionLearner
 import com.rajasudhan.taskmind.data.source.SuggestionApprover
 import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
@@ -27,6 +28,7 @@ class InboxViewModel @Inject constructor(
     private val dao: TaskMindDao,
     private val scanner: RecentDataScanner,
     private val approver: SuggestionApprover,
+    private val rejectionLearner: RejectionLearner,
     private val voskTranscriber: VoskTranscriber,
     private val pipeline: UnderstandingPipeline
 ) : ViewModel() {
@@ -65,7 +67,10 @@ class InboxViewModel @Inject constructor(
 
     fun rejectAll() {
         viewModelScope.launch {
-            pendingSuggestions.value.forEach { dao.updateSuggestion(it.copy(status = "rejected")) }
+            pendingSuggestions.value.forEach {
+                dao.updateSuggestion(it.copy(status = "rejected"))
+                rejectionLearner.recordRejection(it)
+            }
             lastUndo = null
         }
     }
@@ -73,6 +78,7 @@ class InboxViewModel @Inject constructor(
     fun rejectSuggestion(suggestion: Suggestion) {
         viewModelScope.launch {
             dao.updateSuggestion(suggestion.copy(status = "rejected"))
+            rejectionLearner.recordRejection(suggestion)
             lastUndo = { dao.updateSuggestion(suggestion.copy(status = "pending", snoozedUntil = null)) }
         }
     }

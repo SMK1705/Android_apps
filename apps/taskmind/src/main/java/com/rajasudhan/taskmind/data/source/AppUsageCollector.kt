@@ -67,6 +67,6 @@ class AppUsageCollector @Inject constructor(
             status = "pending"
         )
         dao.insertSuggestion(suggestion)
-        notifier.notifyPending(dao.getPendingSuggestions().first().size)
+        notifier.notifyPending()
     }
 }
