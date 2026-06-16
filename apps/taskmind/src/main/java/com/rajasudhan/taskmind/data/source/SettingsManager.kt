@@ -18,9 +18,11 @@ class SettingsManager @Inject constructor(
         private const val KEY_GMAIL_ACCOUNT = "gmail_account" // legacy single account (migrated below)
         private const val KEY_GMAIL_ACCOUNTS = "gmail_accounts"
         private const val KEY_RETENTION_DAYS = "retention_days"
+        private const val KEY_SCAN_FREQUENCY_MINUTES = "scan_frequency_minutes"
 
         const val CALENDAR_ID_AUTO = -1L
         const val DEFAULT_EVENT_DURATION_MINUTES = 60
+        const val DEFAULT_SCAN_FREQUENCY_MINUTES = 30
     }
 
     var llmApiKey: String
@@ -82,6 +84,11 @@ class SettingsManager @Inject constructor(
         get() = encryptedPrefs.getInt(KEY_RETENTION_DAYS, 0)
         set(value) = encryptedPrefs.edit().putInt(KEY_RETENTION_DAYS, value).apply()
 
+    /** How often the background scan runs, in minutes (WorkManager floor is 15). */
+    var scanFrequencyMinutes: Int
+        get() = encryptedPrefs.getInt(KEY_SCAN_FREQUENCY_MINUTES, DEFAULT_SCAN_FREQUENCY_MINUTES)
+        set(value) = encryptedPrefs.edit().putInt(KEY_SCAN_FREQUENCY_MINUTES, value).apply()
+
     /**
      * Clears all user-facing settings (API keys, provider choice, calendar prefs).
      * Deliberately leaves the DB encryption key intact so the (now-emptied) database stays readable.
@@ -97,6 +104,7 @@ class SettingsManager @Inject constructor(
             .remove(KEY_GMAIL_ACCOUNT)
             .remove(KEY_GMAIL_ACCOUNTS)
             .remove(KEY_RETENTION_DAYS)
+            .remove(KEY_SCAN_FREQUENCY_MINUTES)
             .apply()
     }
 }

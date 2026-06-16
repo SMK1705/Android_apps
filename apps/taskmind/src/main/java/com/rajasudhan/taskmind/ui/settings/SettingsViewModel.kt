@@ -12,8 +12,10 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.rajasudhan.taskmind.TaskMindApp
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
+import com.rajasudhan.taskmind.data.source.BackupManager
 import com.rajasudhan.taskmind.data.source.EgressLogger
 import com.rajasudhan.taskmind.data.source.SettingsManager
 import com.rajasudhan.taskmind.data.source.dataStore
@@ -46,6 +48,7 @@ class SettingsViewModel @Inject constructor(
     private val egressLogger: EgressLogger,
     private val voskTranscriber: VoskTranscriber,
     private val ocrEngine: OcrEngine,
+    private val backupManager: BackupManager,
     private val moshi: Moshi,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -266,6 +269,63 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    // ---- Scan frequency (reschedules the periodic WorkManager job) ----
+
+    private val _scanFrequencyMinutes = MutableStateFlow(settingsManager.scanFrequencyMinutes)
+    val scanFrequencyMinutes: StateFlow<Int> = _scanFrequencyMinutes
+
+    fun updateScanFrequency(minutes: Int) {
+        settingsManager.scanFrequencyMinutes = minutes
+        _scanFrequencyMinutes.value = minutes
+        TaskMindApp.scheduleScan(context, minutes.toLong(), replace = true)
+    }
+
+    // ---- Encrypted backup / restore ----
+
+    private val _backupStatus = MutableStateFlow<String?>(null)
+    val backupStatus: StateFlow<String?> = _backupStatus
+
+    /** Set after a successful restore; the UI shows a blocking "restart now" prompt. */
+    private val _restartRequired = MutableStateFlow(false)
+    val restartRequired: StateFlow<Boolean> = _restartRequired
+
+    /** Encrypts a full DB backup (DB + key) under [passphrase] and writes it to [uri]. */
+    fun backupToUri(uri: Uri, passphrase: String) {
+        if (passphrase.length < MIN_PASSPHRASE_LENGTH) {
+            _backupStatus.value = "Use a passphrase of at least $MIN_PASSPHRASE_LENGTH characters."
+            return
+        }
+        viewModelScope.launch {
+            _backupStatus.value = "Encrypting backup…"
+            val result = withContext(Dispatchers.IO) { backupManager.backup(uri, passphrase.toCharArray()) }
+            _backupStatus.value = when (result) {
+                is BackupManager.Result.Success -> result.message
+                is BackupManager.Result.Failure -> result.message
+            }
+        }
+    }
+
+    /** Decrypts and restores a backup from [uri]; on success the app must restart ([restartApp]). */
+    fun restoreFromUri(uri: Uri, passphrase: String) {
+        if (passphrase.isEmpty()) {
+            _backupStatus.value = "Enter the backup's passphrase."
+            return
+        }
+        viewModelScope.launch {
+            _backupStatus.value = "Decrypting & restoring…"
+            val result = withContext(Dispatchers.IO) { backupManager.restore(uri, passphrase.toCharArray()) }
+            when (result) {
+                is BackupManager.Result.Success -> {
+                    _backupStatus.value = result.message
+                    _restartRequired.value = true
+                }
+                is BackupManager.Result.Failure -> _backupStatus.value = result.message
+            }
+        }
+    }
+
+    fun restartApp() = backupManager.scheduleRestartAndExit()
+
     // ---- Permissions summary ----
 
     private val _permissions = MutableStateFlow<List<PermissionStatus>>(emptyList())
@@ -293,6 +353,10 @@ class SettingsViewModel @Inject constructor(
             PermissionStatus("Exact alarms", exactAlarms),
             PermissionStatus("Gmail connected", settingsManager.gmailAccounts.isNotEmpty())
         )
+    }
+
+    companion object {
+        private const val MIN_PASSPHRASE_LENGTH = 6
     }
 }
 

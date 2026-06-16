@@ -45,11 +45,33 @@ fun SettingsScreen(
     val egressEvents by viewModel.egressEvents.collectAsState()
     val egressTimeFormat = remember { java.text.SimpleDateFormat("MMM d, HH:mm", java.util.Locale.getDefault()) }
     val retentionDays by viewModel.retentionDays.collectAsState()
+    val scanFrequencyMinutes by viewModel.scanFrequencyMinutes.collectAsState()
     val exportStatus by viewModel.exportStatus.collectAsState()
+    val backupStatus by viewModel.backupStatus.collectAsState()
+    val restartRequired by viewModel.restartRequired.collectAsState()
     val permissions by viewModel.permissions.collectAsState()
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri -> uri?.let { viewModel.exportNotesToUri(it) } }
+
+    // ---- Encrypted backup / restore plumbing ----
+    // The passphrase is collected first, then carried across the SAF round-trip to the file callback.
+    var passphraseMode by remember { mutableStateOf<String?>(null) } // "backup" | "restore" | null
+    var passphraseInput by remember { mutableStateOf("") }
+    var pendingPassphrase by remember { mutableStateOf("") }
+    val backupDate = remember { java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault()).format(java.util.Date()) }
+    val backupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        uri?.let { viewModel.backupToUri(it, pendingPassphrase) }
+        pendingPassphrase = ""
+    }
+    val restoreLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { viewModel.restoreFromUri(it, pendingPassphrase) }
+        pendingPassphrase = ""
+    }
 
     LaunchedEffect(Unit) {
         viewModel.loadCalendars()
@@ -330,6 +352,62 @@ fun SettingsScreen(
             exportStatus?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+
+            HorizontalDivider()
+            Text(
+                "How often TaskMind scans recent data in the background. Less frequent saves battery.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            val scanOptions = listOf(15 to "Every 15 min", 30 to "Every 30 min", 60 to "Hourly", 180 to "Every 3 hours", 360 to "Every 6 hours")
+            var scanExpanded by remember { mutableStateOf(false) }
+            val scanLabel = scanOptions.firstOrNull { it.first == scanFrequencyMinutes }?.second ?: "Every 30 min"
+            ExposedDropdownMenuBox(
+                expanded = scanExpanded,
+                onExpandedChange = { scanExpanded = it }
+            ) {
+                OutlinedTextField(
+                    value = scanLabel,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Scan frequency") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = scanExpanded) },
+                    modifier = Modifier.menuAnchor().fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = scanExpanded,
+                    onDismissRequest = { scanExpanded = false }
+                ) {
+                    scanOptions.forEach { (minutes, label) ->
+                        DropdownMenuItem(
+                            text = { Text(label) },
+                            onClick = {
+                                viewModel.updateScanFrequency(minutes)
+                                scanExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        SettingsSectionCard(accent = Color(0xFFAD1457), title = "Encrypted Backup & Restore") {
+            Text(
+                "Back up everything — notes, suggestions, and the database key — into a single file " +
+                    "encrypted with a passphrase you choose. Nothing is readable without it. Restore " +
+                    "replaces all current data and restarts the app.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(onClick = { passphraseInput = ""; passphraseMode = "backup" }) {
+                Text("Back up (encrypted)")
+            }
+            OutlinedButton(onClick = { passphraseInput = ""; passphraseMode = "restore" }) {
+                Text("Restore from backup")
+            }
+            backupStatus?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
 
         SettingsSectionCard(accent = Color(0xFF00838F), title = "Permissions") {
@@ -384,6 +462,62 @@ fun SettingsScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+                }
+            )
+        }
+
+        // Passphrase prompt for backup/restore; on confirm it launches the file picker.
+        passphraseMode?.let { mode ->
+            val isBackup = mode == "backup"
+            AlertDialog(
+                onDismissRequest = { passphraseMode = null; passphraseInput = "" },
+                title = { Text(if (isBackup) "Set a backup passphrase" else "Enter backup passphrase") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            if (isBackup)
+                                "This passphrase encrypts your backup. If you lose it, the backup can't be opened — there's no recovery."
+                            else
+                                "Enter the passphrase used when this backup was created.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = passphraseInput,
+                            onValueChange = { passphraseInput = it },
+                            label = { Text("Passphrase") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = passphraseInput.isNotBlank(),
+                        onClick = {
+                            pendingPassphrase = passphraseInput
+                            passphraseMode = null
+                            passphraseInput = ""
+                            if (isBackup) backupLauncher.launch("taskmind-backup-$backupDate.tmbk")
+                            else restoreLauncher.launch(arrayOf("*/*"))
+                        }
+                    ) { Text("Continue") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { passphraseMode = null; passphraseInput = "" }) { Text("Cancel") }
+                }
+            )
+        }
+
+        // After a restore the live DB is closed; the app must restart to reopen the restored data.
+        if (restartRequired) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text("Restore complete") },
+                text = { Text("TaskMind needs to restart to load the restored data.") },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.restartApp() }) { Text("Restart now") }
                 }
             )
         }
