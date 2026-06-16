@@ -30,6 +30,7 @@ import javax.inject.Singleton
 class SuggestionApprover @Inject constructor(
     private val dao: TaskMindDao,
     private val settingsManager: SettingsManager,
+    private val alarmScheduler: AlarmScheduler,
     @ApplicationContext private val context: Context
 ) {
     /**
@@ -55,35 +56,12 @@ class SuggestionApprover @Inject constructor(
         val noteId = dao.insertNote(note)
 
         if (isReminder) {
-            scheduleAlarm(suggestion.extractedTitle, suggestion.dueDate, suggestion.dueTime)
+            alarmScheduler.schedule(noteId.toInt(), suggestion.extractedTitle, suggestion.dueDate, suggestion.dueTime, null)
             addToCalendar(suggestion.extractedTitle, note.body, suggestion.dueDate, suggestion.dueTime)
         } else if (suggestion.type == "todo" && suggestion.dueDate != null) {
             addToCalendar(suggestion.extractedTitle, note.body, suggestion.dueDate, null)
         }
         return noteId
-    }
-
-    private fun scheduleAlarm(title: String, dueDate: String?, dueTime: String?) {
-        if (dueDate == null || dueTime == null) return
-        try {
-            val dateTimeStr = "${dueDate}T$dueTime"
-            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
-            val localDateTime = LocalDateTime.parse(dateTimeStr, formatter)
-            val timeMillis = localDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-
-            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val intent = Intent(context, AlarmReceiver::class.java).apply { putExtra("title", title) }
-            val requestCode = dateTimeStr.hashCode()
-            val pendingIntent = PendingIntent.getBroadcast(
-                context, requestCode, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            if (alarmManager.canScheduleExactAlarms()) {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timeMillis, pendingIntent)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
     }
 
     /**
