@@ -50,6 +50,9 @@ class SourceManager @Inject constructor(
         // MediaStore audio ids already transcribed, so a recording isn't re-transcribed every scan.
         val KEY_PROCESSED_AUDIO_IDS = stringSetPreferencesKey("processed_audio_ids")
 
+        // MediaStore image ids already OCR'd, so a screenshot isn't re-read every scan.
+        val KEY_PROCESSED_IMAGE_IDS = stringSetPreferencesKey("processed_image_ids")
+
         // Whether the one-time in-app guide has been shown (re-openable from the ? in the top bar).
         val KEY_HAS_SEEN_GUIDE = booleanPreferencesKey("has_seen_guide")
 
@@ -142,6 +145,20 @@ class SourceManager @Inject constructor(
         context.dataStore.edit { preferences ->
             val updated = (preferences[KEY_PROCESSED_AUDIO_IDS] ?: emptySet()) + id
             preferences[KEY_PROCESSED_AUDIO_IDS] =
+                if (updated.size > MAX_PROCESSED_EMAIL_IDS)
+                    updated.toList().takeLast(MAX_PROCESSED_EMAIL_IDS).toSet()
+                else updated
+        }
+    }
+
+    /** MediaStore image ids already OCR'd (capped, to avoid unbounded growth). */
+    val processedImageIds: Flow<Set<String>> =
+        context.dataStore.data.map { it[KEY_PROCESSED_IMAGE_IDS] ?: emptySet() }
+
+    suspend fun addProcessedImageId(id: String) {
+        context.dataStore.edit { preferences ->
+            val updated = (preferences[KEY_PROCESSED_IMAGE_IDS] ?: emptySet()) + id
+            preferences[KEY_PROCESSED_IMAGE_IDS] =
                 if (updated.size > MAX_PROCESSED_EMAIL_IDS)
                     updated.toList().takeLast(MAX_PROCESSED_EMAIL_IDS).toSet()
                 else updated

@@ -7,6 +7,7 @@ import android.provider.MediaStore
 import android.provider.Telephony
 import com.rajasudhan.taskmind.data.source.email.GmailAuth
 import com.rajasudhan.taskmind.data.source.email.GmailCollector
+import com.rajasudhan.taskmind.data.source.ocr.OcrEngine
 import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -28,7 +29,8 @@ class RecentDataScanner @Inject constructor(
     private val gmailAuth: GmailAuth,
     private val gmailCollector: GmailCollector,
     private val appUsageCollector: AppUsageCollector,
-    private val voskTranscriber: VoskTranscriber
+    private val voskTranscriber: VoskTranscriber,
+    private val ocrEngine: OcrEngine
 ) {
     suspend fun scanSince(sinceMillis: Long) {
         if (sourceManager.isSmsEnabled.first()) runCatching { scanSms(sinceMillis) }
@@ -36,6 +38,16 @@ class RecentDataScanner @Inject constructor(
         if (sourceManager.isEmailEnabled.first()) runCatching { scanEmail(sinceMillis) }
         if (sourceManager.isAppUsageEnabled.first()) runCatching { appUsageCollector.generateDailyDigestIfDue() }
         if (sourceManager.isAudioEnabled.first()) runCatching { scanAudio(sinceMillis) }
+        if (sourceManager.isImagesEnabled.first()) runCatching { scanImages(sinceMillis) }
+    }
+
+    /** Live entry points used by the foreground-service media observers (last few minutes only). */
+    suspend fun scanAudioRecent() {
+        if (sourceManager.isAudioEnabled.first()) runCatching { scanAudio(System.currentTimeMillis() - 5 * 60 * 1000) }
+    }
+
+    suspend fun scanImagesRecent() {
+        if (sourceManager.isImagesEnabled.first()) runCatching { scanImages(System.currentTimeMillis() - 5 * 60 * 1000) }
     }
 
     private suspend fun scanSms(since: Long) {
@@ -110,6 +122,43 @@ class RecentDataScanner @Inject constructor(
                 android.util.Log.i("RecentDataScanner", "Transcribed $name -> ${transcript?.length ?: 0} chars")
                 if (!transcript.isNullOrBlank()) {
                     pipeline.processText("Recording: $name", transcript)
+                }
+            }
+        }
+    }
+
+    /**
+     * OCRs recent screenshots on-device (Tesseract) and runs the text through the pipeline. Finds
+     * images in the Screenshots folder modified since [since]; already-read ids are skipped. Skips
+     * silently if no OCR model is present.
+     */
+    private suspend fun scanImages(since: Long) {
+        if (!ocrEngine.isModelPresent()) {
+            android.util.Log.w("RecentDataScanner", "Images enabled but no OCR model present; skipping")
+            return
+        }
+        val processed = sourceManager.processedImageIds.first()
+        val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        val projection = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DISPLAY_NAME)
+        val selection = "${MediaStore.Images.Media.DATE_MODIFIED} >= ? AND " +
+            "${MediaStore.Images.Media.RELATIVE_PATH} LIKE '%Screenshots%'"
+        val args = arrayOf((since / 1000).toString())
+        context.contentResolver.query(
+            collection, projection, selection, args,
+            "${MediaStore.Images.Media.DATE_MODIFIED} DESC"
+        )?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
+            val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
+            while (cursor.moveToNext()) {
+                val id = cursor.getLong(idCol)
+                if (id.toString() in processed) continue
+                val name = cursor.getString(nameCol) ?: "screenshot"
+                val uri = ContentUris.withAppendedId(collection, id)
+                val text = runCatching { ocrEngine.recognize(uri) }.getOrNull()
+                sourceManager.addProcessedImageId(id.toString())
+                android.util.Log.i("RecentDataScanner", "OCR'd $name -> ${text?.length ?: 0} chars")
+                if (!text.isNullOrBlank()) {
+                    pipeline.processText("Screenshot: $name", text)
                 }
             }
         }
