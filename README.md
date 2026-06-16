@@ -25,22 +25,30 @@ Android_apps/
 ### TaskMind
 
 **TaskMind** is a private, on-device personal assistant for Android. It monitors the data sources you
-choose — SMS, notifications, call logs, Gmail, app usage, and call/voice recordings — and uses an
-on-device LLM to extract action items. Nothing is saved or scheduled until you approve it.
+choose — SMS, notifications, call logs, Gmail, app usage, call/voice recordings, and screenshots — and
+uses an on-device LLM to extract action items. Nothing is saved or scheduled until you approve it.
 
-- **Capture** — items are collected live, on a periodic background scan, or on demand, including a
-  voice-note button that transcribes your speech on-device.
-- **Review** — each suggestion appears in the Inbox as a concise summary card you can expand, then
-  approve, edit, or reject. Approving a dated item schedules a reminder and a calendar event, prompting
-  for a time when none was detected.
-- **Keep** — approved items are organised in Notes, each with a full detail view.
+- **Capture** — items are collected live, on a configurable background scan, or on demand: a voice-note
+  button (transcribed on-device), a share-sheet target for text and images, a Quick Settings tile, a
+  home-screen widget, and manual entry. Screenshots are read with on-device OCR; new voice/call
+  recordings are transcribed the moment they appear.
+- **Review** — each suggestion is a concise summary card in the Inbox: approve, edit, reject, or snooze
+  it, undo the last action, and filter by type or source. Approving a dated item schedules a reminder
+  and a calendar event, prompting for a time when none was detected. You can approve or reject straight
+  from the notification, and repeatedly rejecting a sender down-ranks similar future suggestions.
+- **Keep** — approved items live in Notes with completion checkboxes (Active/Completed split), tickable
+  checklists, tappable deep links (phone, URL, email, address), full-text search, and a detail view.
+- **Schedule** — reminders can recur (daily / weekly / monthly) or trigger by **location** (a geofence
+  fires when you arrive at a saved place).
 - **Private by design** — understanding runs locally by default; data is encrypted at rest (SQLCipher),
   the app is locked behind biometrics, and every network egress is auditable in-app. A cloud LLM is
-  available but strictly opt-in.
+  available but strictly opt-in. Carry your data to a new device with an **encrypted, passphrase-sealed
+  backup** (AES-256-GCM).
 - **Guided** — a first-run in-app walkthrough, re-openable from the help button, introduces the flow.
 
-Current release: **Update 2** (`taskmind-v2`). Full setup, permissions, and model instructions are in
-[`apps/taskmind/README.md`](apps/taskmind/README.md).
+Current release: **Update 3** (`taskmind-v3`). Full setup, permissions, and model instructions are in
+[`apps/taskmind/README.md`](apps/taskmind/README.md); per-release history is in
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ## Build / install
 
@@ -55,8 +63,22 @@ adb install -r apps\taskmind\build\outputs\apk\debug\taskmind-debug.apk
 .\gradlew.bat :apps:taskmind:installDebug
 ```
 
-CI builds and unit-tests every app on each PR; the **Install to phone** workflow installs a build on a
-USB-connected device via a self-hosted runner. `main` is protected — changes land via PR.
+### CI / CD
+
+| Workflow | Runs on | Trigger | What it does |
+|---|---|---|---|
+| **Android CI** (`android.yml`) | GitHub-hosted `ubuntu-latest` | every push / PR to `main` | unit tests + `assembleDebug`, uploads the APK as the `taskmind-debug-apk` artifact |
+| **Install to phone** (`install-to-phone.yml`) | **self-hosted** runner (your laptop) | manual (`workflow_dispatch`) | `installDebug` over `adb` to a phone **plugged into that laptop** |
+
+> **"Install to phone" is tethered, not over-the-air.** Triggering it from the GitHub mobile app only
+> *starts* the job — the actual build and install run on your laptop and push to a phone connected to
+> **that laptop** by USB. It checks out and builds the branch you pick in *Run workflow* (default
+> `main`), so it installs the latest *merged* code, not unpushed local work. It fails with
+> **"No authorized phone detected"** when the laptop's self-hosted runner is offline or the phone isn't
+> plugged in with USB debugging authorized. To install while away from the laptop, download the
+> `taskmind-debug-apk` artifact from the latest **Android CI** run and sideload it.
+
+`main` is protected — changes land via PR.
 
 ## Adding a new app
 
