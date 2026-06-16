@@ -48,10 +48,18 @@ class MainActivity : AppCompatActivity() {
                 var isAuthenticated by remember { mutableStateOf(false) }
 
                 // Re-lock whenever the app leaves the foreground, so auth is required on every return.
+                // Exception: a deliberate SAF/document-picker round-trip (flagged via AppLock) also
+                // fires ON_STOP — re-locking there would tear down the picker's result callback and
+                // drop the write, so that one background is allowed to stay unlocked.
                 val lifecycleOwner = LocalLifecycleOwner.current
                 DisposableEffect(lifecycleOwner) {
                     val observer = LifecycleEventObserver { _, event ->
-                        if (event == Lifecycle.Event.ON_STOP) isAuthenticated = false
+                        when (event) {
+                            Lifecycle.Event.ON_STOP ->
+                                if (!AppLock.shouldKeepUnlockedOnStop()) isAuthenticated = false
+                            Lifecycle.Event.ON_RESUME -> AppLock.reset()
+                            else -> {}
+                        }
                     }
                     lifecycleOwner.lifecycle.addObserver(observer)
                     onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
