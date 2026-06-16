@@ -19,6 +19,7 @@ import com.rajasudhan.taskmind.data.source.SettingsManager
 
 private val EngineAccent = Color(0xFF7C4DFF)
 private val TranscriptionAccent = Color(0xFF00897B)
+private val OcrAccent = Color(0xFF5E35B1)
 private val CalendarAccent = Color(0xFF2E7D32)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -30,6 +31,8 @@ fun SettingsScreen(
     val sttApiKey by viewModel.sttApiKey.collectAsState()
     val transcriptionStatus by viewModel.transcriptionStatus.collectAsState()
     val transcriptionModelPath = viewModel.transcriptionModelPath
+    val ocrStatus by viewModel.ocrStatus.collectAsState()
+    val ocrModelPath = viewModel.ocrModelPath
     val useOnDeviceLlm by viewModel.useOnDeviceLlm.collectAsState()
     val eventDurationMinutes by viewModel.eventDurationMinutes.collectAsState()
     val calendarId by viewModel.calendarId.collectAsState()
@@ -132,6 +135,22 @@ fun SettingsScreen(
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth()
             )
+        }
+
+        SettingsSectionCard(accent = OcrAccent, title = "Screenshot OCR") {
+            Text(
+                "On-device text recognition (Tesseract) for screenshots — runs offline. Enable the " +
+                    "Screenshots (OCR) source (Sources tab), then push eng.traineddata to:\n" +
+                    ocrModelPath,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(onClick = { viewModel.checkOcrModel() }) {
+                Text("Check OCR model")
+            }
+            ocrStatus?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
 
         SettingsSectionCard(accent = CalendarAccent, title = "Calendar Events") {

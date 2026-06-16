@@ -23,3 +23,19 @@ python tools/setup_vosk_model.py --device <adb-serial> \
 uses `adb run-as`, which only works on debuggable apps).
 
 After it finishes, open the app → **Settings → Check transcription model** to confirm it loaded.
+
+## `setup_tesseract_model.py`
+
+Downloads a [Tesseract](https://github.com/tesseract-ocr/tessdata_fast) English model
+(`eng.traineddata`, ~12 MB) and installs it into the app's private storage, so on-device
+**screenshot OCR** works. Like the Vosk model, it is **not** bundled in the APK.
+
+```bash
+python tools/setup_tesseract_model.py
+# Target a specific device / a different model
+python tools/setup_tesseract_model.py --device <adb-serial> \
+  --url https://github.com/tesseract-ocr/tessdata/raw/main/eng.traineddata
+```
+
+Same requirements as above. After it finishes, open the app → **Settings → Check OCR model**, then
+enable **Sources → Screenshots (OCR)**.

@@ -17,6 +17,7 @@ import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.source.EgressLogger
 import com.rajasudhan.taskmind.data.source.SettingsManager
 import com.rajasudhan.taskmind.data.source.dataStore
+import com.rajasudhan.taskmind.data.source.ocr.OcrEngine
 import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
 import com.rajasudhan.taskmind.data.source.understanding.OnDeviceLlmProvider
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
@@ -44,6 +45,7 @@ class SettingsViewModel @Inject constructor(
     private val understandingPipeline: UnderstandingPipeline,
     private val egressLogger: EgressLogger,
     private val voskTranscriber: VoskTranscriber,
+    private val ocrEngine: OcrEngine,
     private val moshi: Moshi,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -59,6 +61,23 @@ class SettingsViewModel @Inject constructor(
             val err = voskTranscriber.tryLoad()
             _transcriptionStatus.value = if (err == null) {
                 "✓ Vosk model loaded — transcription runs offline."
+            } else {
+                "Model not ready: ${err.message ?: err::class.java.simpleName}"
+            }
+        }
+    }
+
+    // ---- OCR (on-device Tesseract) ----
+    private val _ocrStatus = MutableStateFlow<String?>(null)
+    val ocrStatus: StateFlow<String?> = _ocrStatus
+    val ocrModelPath: String get() = ocrEngine.tessDataPath()
+
+    fun checkOcrModel() {
+        viewModelScope.launch {
+            _ocrStatus.value = "Checking OCR model…"
+            val err = ocrEngine.tryLoad()
+            _ocrStatus.value = if (err == null) {
+                "✓ Tesseract model loaded — screenshot OCR runs offline."
             } else {
                 "Model not ready: ${err.message ?: err::class.java.simpleName}"
             }

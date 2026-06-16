@@ -30,6 +30,7 @@ fun SourcesScreen(
     val smsEnabled by viewModel.isSmsEnabled.collectAsState()
     val callLogEnabled by viewModel.isCallLogEnabled.collectAsState()
     val audioEnabled by viewModel.isAudioEnabled.collectAsState()
+    val imagesEnabled by viewModel.isImagesEnabled.collectAsState()
     val calendarEnabled by viewModel.isCalendarEnabled.collectAsState()
     val appUsageEnabled by viewModel.isAppUsageEnabled.collectAsState()
     val emailEnabled by viewModel.isEmailEnabled.collectAsState()
@@ -57,6 +58,7 @@ fun SourcesScreen(
     val smsPermissionState = rememberPermissionState(Manifest.permission.READ_SMS)
     val callLogPermissionState = rememberPermissionState(Manifest.permission.READ_CALL_LOG)
     val audioPermissionState = rememberPermissionState(Manifest.permission.READ_MEDIA_AUDIO)
+    val imagesPermissionState = rememberPermissionState(Manifest.permission.READ_MEDIA_IMAGES)
     val calendarPermissionState = rememberMultiplePermissionsState(
         listOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
     )
@@ -290,6 +292,21 @@ fun SourcesScreen(
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                 )
             }
+        }
+
+        item {
+            SourceToggle(
+                title = "Screenshots (OCR)",
+                subtitle = "Read text from new screenshots on-device. Needs a Tesseract model (Settings).",
+                isChecked = imagesEnabled,
+                onCheckedChange = {
+                    if (it && !imagesPermissionState.status.isGranted) {
+                        imagesPermissionState.launchPermissionRequest()
+                    } else {
+                        viewModel.toggleImages(it)
+                    }
+                }
+            )
         }
     }
 }
