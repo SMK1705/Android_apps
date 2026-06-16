@@ -68,15 +68,18 @@ adb install -r apps\taskmind\build\outputs\apk\debug\taskmind-debug.apk
 | Workflow | Runs on | Trigger | What it does |
 |---|---|---|---|
 | **Android CI** (`android.yml`) | GitHub-hosted `ubuntu-latest` | every push / PR to `main` | unit tests + `assembleDebug`, uploads the APK as the `taskmind-debug-apk` artifact |
+| **Publish debug APK** (`release-apk.yml`) | GitHub-hosted `ubuntu-latest` | every push to `main` + manual | builds the APK and publishes it to the rolling **`debug-latest`** pre-release for **over-the-air install** |
 | **Install to phone** (`install-to-phone.yml`) | **self-hosted** runner (your laptop) | manual (`workflow_dispatch`) | `installDebug` over `adb` to a phone **plugged into that laptop** |
 
-> **"Install to phone" is tethered, not over-the-air.** Triggering it from the GitHub mobile app only
-> *starts* the job — the actual build and install run on your laptop and push to a phone connected to
-> **that laptop** by USB. It checks out and builds the branch you pick in *Run workflow* (default
-> `main`), so it installs the latest *merged* code, not unpushed local work. It fails with
-> **"No authorized phone detected"** when the laptop's self-hosted runner is offline or the phone isn't
-> plugged in with USB debugging authorized. To install while away from the laptop, download the
-> `taskmind-debug-apk` artifact from the latest **Android CI** run and sideload it.
+> **Installing on the phone — two paths:**
+> - **Over-the-air (works from anywhere):** open **Releases → "TaskMind debug build (latest)"** on the
+>   phone, download `taskmind-debug.apk`, and open it to install (allow "install unknown apps"). The
+>   **Publish debug APK** workflow keeps this current on every push to `main`. Steps are in the
+>   [TaskMind README](apps/taskmind/README.md#install-from-your-phone-github-actions).
+> - **Tethered (`Install to phone`):** runs on your laptop's self-hosted runner and installs to a phone
+>   **plugged into that laptop** by USB. Triggering it from the GitHub mobile app only *starts* the job;
+>   if the phone isn't plugged in it fails with **"No authorized phone detected."** Use the OTA path when
+>   you're away from the laptop.
 
 `main` is protected — changes land via PR.
 
