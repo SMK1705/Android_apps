@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -5,6 +7,13 @@ plugins {
     alias(libs.plugins.jetbrains.kotlin.plugin.serialization)
     alias(libs.plugins.hilt.android)
 }
+
+// Maps SDK key is kept out of git: set MAPS_API_KEY in local.properties (gitignored). Falls back to
+// an empty string so the build still succeeds without it (the embedded map just won't load tiles).
+val mapsApiKey: String = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}.getProperty("MAPS_API_KEY", "")
 
 android {
     namespace = "com.rajasudhan.taskmind"
@@ -18,6 +27,9 @@ android {
         versionName = "3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Injected into the manifest's com.google.android.geo.API_KEY meta-data.
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     buildTypes {
@@ -74,6 +86,8 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.play.services.location)
     implementation(libs.play.services.auth)
+    implementation(libs.play.services.maps)
+    implementation(libs.maps.compose)
     implementation(libs.retrofit)
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.security.crypto)
