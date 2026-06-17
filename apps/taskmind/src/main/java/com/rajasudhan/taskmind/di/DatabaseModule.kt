@@ -13,6 +13,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
+import java.security.KeyStore
 import java.security.SecureRandom
 import javax.inject.Singleton
 
@@ -23,16 +24,34 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideEncryptedPrefs(@ApplicationContext context: Context): SharedPreferences {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-        return EncryptedSharedPreferences.create(
-            context,
-            "secret_shared_prefs",
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
+        fun build(): SharedPreferences {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            return EncryptedSharedPreferences.create(
+                context,
+                "secret_shared_prefs",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        }
+        return try {
+            build()
+        } catch (e: Exception) {
+            // The Keystore master key can no longer decrypt these prefs (e.g. after a backup
+            // restore or a keystore reset) — left unguarded this crashes the app at startup, since
+            // the prefs are built here in the DI graph. Reset the unreadable store + its master key
+            // so they can be regenerated. The DB encryption key lived here too, so the encrypted
+            // database can't be opened either; drop it so a fresh one is created.
+            runCatching {
+                KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+                    .deleteEntry(MasterKey.DEFAULT_MASTER_KEY_ALIAS)
+            }
+            context.deleteSharedPreferences("secret_shared_prefs")
+            context.deleteDatabase("taskmind_db")
+            build()
+        }
     }
 
     @Provides
