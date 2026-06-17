@@ -2,16 +2,14 @@ package com.rajasudhan.taskmind.ui.notes
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.content.ActivityNotFoundException
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Place
@@ -39,10 +37,13 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
+import com.rajasudhan.taskmind.data.source.PhoneUtil
 import com.rajasudhan.taskmind.data.source.RecurrenceUtil
 import com.rajasudhan.taskmind.ui.common.CategoryBadge
 import com.rajasudhan.taskmind.ui.common.accent
 import com.rajasudhan.taskmind.ui.common.categoryFor
+import com.rajasudhan.taskmind.ui.common.dialNumber
+import com.rajasudhan.taskmind.ui.common.openDirections
 
 /**
  * Full view of a single approved item: heading, summary, the complete body, and metadata.
@@ -119,6 +120,31 @@ fun NoteDetailScreen(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        // Call shortcut for "call X / call me back" items: prefer a number named in the message,
+        // else fall back to the sender's number. Opens the dialer with it pre-filled.
+        val rawSnippet = remember(n.body) { n.body.substringAfter("\n\n", n.body) }
+        val callNumber = remember(n.id, n.body, n.title, n.summary, n.source) {
+            if (PhoneUtil.isCallIntent(n.title, n.summary, rawSnippet)) {
+                // Prefer a number stated in the item itself (a voice note spells digits out as
+                // words, so the real number survives only in the model's title/summary); fall back
+                // to the message body, then the sender's number for a "call me back".
+                PhoneUtil.extractFirst(n.title)
+                    ?: PhoneUtil.extractFirst(n.summary)
+                    ?: PhoneUtil.extractFirst(rawSnippet)
+                    ?: PhoneUtil.extractFirst(n.source)
+            } else null
+        }
+        if (callNumber != null) {
+            Spacer(Modifier.height(12.dp))
+            FilledTonalButton(
+                onClick = { dialNumber(context, callNumber) }
+            ) {
+                Icon(Icons.Default.Call, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Call $callNumber", maxLines = 1)
+            }
+        }
 
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -330,25 +356,5 @@ private fun LocationMapCard(lat: Double, lng: Double, radiusMeters: Double, acce
             strokeWidth = 4f,
             fillColor = accent.copy(alpha = 0.18f)
         )
-    }
-}
-
-/**
- * Open directions to the place in Google Maps (origin = current location). Prefers the geocoded
- * coordinates; otherwise sends the place name as a destination query so Maps resolves the venue.
- */
-private fun openDirections(context: Context, placeName: String?, lat: Double?, lng: Double?) {
-    val destination = when {
-        lat != null && lng != null -> "$lat,$lng"
-        !placeName.isNullOrBlank() -> Uri.encode(placeName)
-        else -> return
-    }
-    val uri = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$destination")
-    val maps = Intent(Intent.ACTION_VIEW, uri).setPackage("com.google.android.apps.maps")
-    try {
-        context.startActivity(maps)
-    } catch (e: ActivityNotFoundException) {
-        // Google Maps app not installed — let any handler (e.g. a browser) take the URL.
-        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
     }
 }
