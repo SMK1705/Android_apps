@@ -160,13 +160,20 @@ fun SettingsScreen(
         SettingsSectionCard(accent = TranscriptionAccent, title = "Transcription (Audio)") {
             Text(
                 "On-device speech-to-text (Vosk) for call/voice recordings — runs offline. Enable the " +
-                    "Voice/Call Recordings source (Sources tab), then push a Vosk model to:\n" +
+                    "Voice/Call Recordings source (Sources tab), then tap Download to fetch and install " +
+                    "the model (~36 MB), or push your own to:\n" +
                     transcriptionModelPath,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            OutlinedButton(onClick = { viewModel.checkTranscriptionModel() }) {
-                Text("Check transcription model")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { viewModel.downloadTranscriptionModel() },
+                    enabled = transcriptionStatus?.startsWith("Downloading") != true
+                ) { Text("Download model") }
+                OutlinedButton(onClick = { viewModel.checkTranscriptionModel() }) {
+                    Text("Check")
+                }
             }
             transcriptionStatus?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -183,13 +190,20 @@ fun SettingsScreen(
         SettingsSectionCard(accent = OcrAccent, title = "Screenshot OCR") {
             Text(
                 "On-device text recognition (Tesseract) for screenshots — runs offline. Enable the " +
-                    "Screenshots (OCR) source (Sources tab), then push eng.traineddata to:\n" +
+                    "Screenshots (OCR) source (Sources tab), then tap Download to fetch and install the " +
+                    "model (~4 MB), or push eng.traineddata to:\n" +
                     ocrModelPath,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            OutlinedButton(onClick = { viewModel.checkOcrModel() }) {
-                Text("Check OCR model")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { viewModel.downloadOcrModel() },
+                    enabled = ocrStatus?.startsWith("Downloading") != true
+                ) { Text("Download model") }
+                OutlinedButton(onClick = { viewModel.checkOcrModel() }) {
+                    Text("Check")
+                }
             }
             ocrStatus?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
