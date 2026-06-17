@@ -18,8 +18,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Mic
@@ -45,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.rajasudhan.taskmind.data.model.Suggestion
+import com.rajasudhan.taskmind.data.source.PhoneUtil
 import com.rajasudhan.taskmind.data.source.transcription.AudioRecorder
 import com.rajasudhan.taskmind.ui.common.*
 import kotlinx.coroutines.launch
@@ -453,6 +456,18 @@ fun SuggestionCard(
     val preview = suggestion.summary.ifBlank { suggestion.rawSnippet }
     val chevronRotation by animateFloatAsState(if (expanded) 180f else 0f, label = "chevron")
 
+    // Quick actions: a number to call (for "call …" items) and a place to navigate to.
+    val context = LocalContext.current
+    val callNumber = remember(suggestion) {
+        if (PhoneUtil.isCallIntent(suggestion.extractedTitle, suggestion.summary, suggestion.rawSnippet)) {
+            PhoneUtil.extractFirst(suggestion.extractedTitle)
+                ?: PhoneUtil.extractFirst(suggestion.summary)
+                ?: PhoneUtil.extractFirst(suggestion.rawSnippet)
+                ?: PhoneUtil.extractFirst(suggestion.source)
+        } else null
+    }
+    val place = suggestion.location?.trim()?.ifBlank { null }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = category.container()),
@@ -592,6 +607,35 @@ fun SuggestionCard(
                                 fontStyle = FontStyle.Italic,
                                 color = onCard()
                             )
+                        }
+                    }
+
+                    // Quick actions before approving: call the number / get directions to the place.
+                    if (callNumber != null || place != null) {
+                        Row(
+                            modifier = Modifier.padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            if (callNumber != null) {
+                                TextButton(
+                                    onClick = { dialNumber(context, callNumber) },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(Icons.Default.Call, contentDescription = null, tint = category.accent(), modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Call", color = category.accent())
+                                }
+                            }
+                            if (place != null) {
+                                TextButton(
+                                    onClick = { openDirections(context, place, null, null) },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(Icons.Default.Directions, contentDescription = null, tint = category.accent(), modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Directions", color = category.accent())
+                                }
+                            }
                         }
                     }
 

@@ -2,10 +2,7 @@ package com.rajasudhan.taskmind.ui.notes
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.content.ActivityNotFoundException
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -45,6 +42,8 @@ import com.rajasudhan.taskmind.data.source.RecurrenceUtil
 import com.rajasudhan.taskmind.ui.common.CategoryBadge
 import com.rajasudhan.taskmind.ui.common.accent
 import com.rajasudhan.taskmind.ui.common.categoryFor
+import com.rajasudhan.taskmind.ui.common.dialNumber
+import com.rajasudhan.taskmind.ui.common.openDirections
 
 /**
  * Full view of a single approved item: heading, summary, the complete body, and metadata.
@@ -139,7 +138,7 @@ fun NoteDetailScreen(
         if (callNumber != null) {
             Spacer(Modifier.height(12.dp))
             FilledTonalButton(
-                onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$callNumber"))) }
+                onClick = { dialNumber(context, callNumber) }
             ) {
                 Icon(Icons.Default.Call, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
@@ -357,25 +356,5 @@ private fun LocationMapCard(lat: Double, lng: Double, radiusMeters: Double, acce
             strokeWidth = 4f,
             fillColor = accent.copy(alpha = 0.18f)
         )
-    }
-}
-
-/**
- * Open directions to the place in Google Maps (origin = current location). Prefers the geocoded
- * coordinates; otherwise sends the place name as a destination query so Maps resolves the venue.
- */
-private fun openDirections(context: Context, placeName: String?, lat: Double?, lng: Double?) {
-    val destination = when {
-        lat != null && lng != null -> "$lat,$lng"
-        !placeName.isNullOrBlank() -> Uri.encode(placeName)
-        else -> return
-    }
-    val uri = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$destination")
-    val maps = Intent(Intent.ACTION_VIEW, uri).setPackage("com.google.android.apps.maps")
-    try {
-        context.startActivity(maps)
-    } catch (e: ActivityNotFoundException) {
-        // Google Maps app not installed — let any handler (e.g. a browser) take the URL.
-        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
     }
 }
