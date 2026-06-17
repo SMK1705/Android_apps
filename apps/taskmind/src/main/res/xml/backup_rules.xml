@@ -1,13 +1,11 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Legacy auto-backup rules (API < 31). The EncryptedSharedPreferences store and the SQLCipher
+   database are protected by a device-bound Keystore key that is NOT backed up — restoring them onto
+   a device with a different key makes them undecryptable and crashes the app at startup. Exclude
+   them; intentional migration is handled by the in-app encrypted backup/restore.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="sharedpref" path="secret_shared_prefs.xml"/>
+    <exclude domain="database" path="taskmind_db"/>
 </full-backup-content>

@@ -1,19 +1,17 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Backup / device-transfer rules (API 31+). The EncryptedSharedPreferences store and the SQLCipher
+   database are protected by a device-bound Keystore key that is NOT transferred — restoring them
+   onto a device with a different key makes them undecryptable and crashes the app at startup.
+   Exclude them; intentional migration is handled by the in-app encrypted backup/restore.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="sharedpref" path="secret_shared_prefs.xml"/>
+        <exclude domain="database" path="taskmind_db"/>
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="sharedpref" path="secret_shared_prefs.xml"/>
+        <exclude domain="database" path="taskmind_db"/>
     </device-transfer>
-    -->
 </data-extraction-rules>
