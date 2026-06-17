@@ -46,10 +46,31 @@ class NoteDetailViewModel @Inject constructor(
         }
     }
 
-    /** Persists a toggled checklist (encoded by [Checklist.encode]). */
+    /** Persists a toggled/reordered checklist (encoded by [Checklist.encode]). */
     fun updateChecklist(encoded: String) {
         val current = note.value ?: return
         viewModelScope.launch { dao.updateNoteChecklist(current.id, encoded) }
+    }
+
+    /** Inline-edit the title; reschedules a timed reminder's alarm so its notification stays in sync. */
+    fun updateTitle(newTitle: String) {
+        val current = note.value ?: return
+        val title = newTitle.trim()
+        if (title.isBlank() || title == current.title) return
+        viewModelScope.launch {
+            dao.updateNote(current.copy(title = title))
+            if (current.type == "reminder" && current.dueTime != null) {
+                alarmScheduler.schedule(current.id, title, current.dueDate, current.dueTime, current.recurrence)
+            }
+        }
+    }
+
+    /** Inline-edit the one-line summary. */
+    fun updateSummary(newSummary: String) {
+        val current = note.value ?: return
+        val summary = newSummary.trim()
+        if (summary == current.summary) return
+        viewModelScope.launch { dao.updateNote(current.copy(summary = summary)) }
     }
 
     /** Set/clear how a reminder repeats; reschedules the alarm so the next fire reflects it. */

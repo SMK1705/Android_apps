@@ -4,23 +4,36 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Directions
+import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -44,6 +57,7 @@ import com.rajasudhan.taskmind.ui.common.accent
 import com.rajasudhan.taskmind.ui.common.categoryFor
 import com.rajasudhan.taskmind.ui.common.dialNumber
 import com.rajasudhan.taskmind.ui.common.openDirections
+import sh.calvin.reorderable.ReorderableColumn
 
 /**
  * Full view of a single approved item: heading, summary, the complete body, and metadata.
@@ -109,10 +123,11 @@ fun NoteDetailScreen(
         }
 
         Spacer(Modifier.height(12.dp))
-        Text(
-            text = n.title,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
+        InlineEditableText(
+            value = n.title,
+            onSave = { viewModel.updateTitle(it) },
+            textStyle = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+            showEditHint = true
         )
         Spacer(Modifier.height(4.dp))
         Text(
@@ -157,10 +172,10 @@ fun NoteDetailScreen(
 
         if (n.summary.isNotBlank()) {
             Spacer(Modifier.height(16.dp))
-            Text(
-                text = n.summary,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
+            InlineEditableText(
+                value = n.summary,
+                onSave = { viewModel.updateSummary(it) },
+                textStyle = MaterialTheme.typography.bodyLarge
             )
         }
 
@@ -170,17 +185,34 @@ fun NoteDetailScreen(
         if (checklistItems.isNotEmpty()) {
             Spacer(Modifier.height(16.dp))
             Text("Checklist", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            checklistItems.forEachIndexed { i, item ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = item.checked,
-                        onCheckedChange = { viewModel.updateChecklist(Checklist.toggleEncoded(checklistItems, i)) }
-                    )
-                    Text(
-                        text = item.text,
-                        style = MaterialTheme.typography.bodyMedium,
-                        textDecoration = if (item.checked) TextDecoration.LineThrough else null
-                    )
+            // Drag the handle to reorder; ticks and order both persist to the note.
+            var items by remember(n.checklist, n.summary) { mutableStateOf(checklistItems) }
+            ReorderableColumn(
+                list = items,
+                onSettle = { from, to ->
+                    items = items.toMutableList().apply { add(to, removeAt(from)) }
+                    viewModel.updateChecklist(Checklist.encode(items))
+                }
+            ) { index, item, _ ->
+                key(item.text) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = item.checked,
+                            onCheckedChange = {
+                                items = items.toMutableList().also { it[index] = it[index].copy(checked = !it[index].checked) }
+                                viewModel.updateChecklist(Checklist.encode(items))
+                            }
+                        )
+                        Text(
+                            text = item.text,
+                            style = MaterialTheme.typography.bodyMedium,
+                            textDecoration = if (item.checked) TextDecoration.LineThrough else null,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(modifier = Modifier.draggableHandle(), onClick = {}) {
+                            Icon(Icons.Default.DragHandle, contentDescription = "Reorder", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                 }
             }
         }
@@ -356,5 +388,61 @@ private fun LocationMapCard(lat: Double, lng: Double, radiusMeters: Double, acce
             strokeWidth = 4f,
             fillColor = accent.copy(alpha = 0.18f)
         )
+    }
+}
+
+/**
+ * A text block you tap to edit in place: shows [value] (optionally with an edit hint), and on tap
+ * swaps to a borderless editor; the IME "Done" action saves via [onSave].
+ */
+@Composable
+private fun InlineEditableText(
+    value: String,
+    onSave: (String) -> Unit,
+    textStyle: TextStyle,
+    modifier: Modifier = Modifier,
+    showEditHint: Boolean = false
+) {
+    var editing by remember(value) { mutableStateOf(false) }
+    if (editing) {
+        var draft by remember { mutableStateOf(value) }
+        var hasFocused by remember { mutableStateOf(false) }
+        val focusRequester = remember { FocusRequester() }
+        BasicTextField(
+            value = draft,
+            onValueChange = { draft = it },
+            textStyle = textStyle.copy(color = MaterialTheme.colorScheme.onSurface),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Sentences,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(onDone = { editing = false; onSave(draft) }),
+            modifier = modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester)
+                // Save when focus leaves (tapped away / keyboard dismissed), as well as on "Done".
+                .onFocusChanged { state ->
+                    if (state.isFocused) hasFocused = true
+                    else if (hasFocused) { editing = false; onSave(draft) }
+                }
+        )
+        LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    } else {
+        Row(
+            modifier = modifier.fillMaxWidth().clickable { editing = true },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = value, style = textStyle, modifier = Modifier.weight(1f))
+            if (showEditHint) {
+                Spacer(Modifier.width(6.dp))
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = "Edit",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
     }
 }
