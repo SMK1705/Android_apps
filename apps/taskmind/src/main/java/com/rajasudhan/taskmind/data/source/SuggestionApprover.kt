@@ -31,6 +31,8 @@ class SuggestionApprover @Inject constructor(
     private val dao: TaskMindDao,
     private val settingsManager: SettingsManager,
     private val alarmScheduler: AlarmScheduler,
+    private val placeGeocoder: PlaceGeocoder,
+    private val geofenceManager: GeofenceManager,
     @ApplicationContext private val context: Context
 ) {
     /**
@@ -54,6 +56,25 @@ class SuggestionApprover @Inject constructor(
             type = noteType
         )
         val noteId = dao.insertNote(note)
+
+        // If the model named a place, geocode it so the note's map + Get directions point at the
+        // actual venue (not wherever the user happened to be). Best-effort: directions still resolve
+        // from the place name even when geocoding returns nothing. A geofence is registered only when
+        // background location is granted.
+        val place = suggestion.location?.trim()?.ifBlank { null }
+        if (place != null) {
+            val coords = placeGeocoder.geocode(place)
+            dao.updateNoteLocation(
+                noteId.toInt(),
+                coords?.first,
+                coords?.second,
+                if (coords != null) LOCATION_RADIUS_METERS else null,
+                place
+            )
+            if (coords != null && hasBackgroundLocation()) {
+                geofenceManager.add(noteId.toInt(), coords.first, coords.second, LOCATION_RADIUS_METERS.toFloat())
+            }
+        }
 
         if (isReminder) {
             alarmScheduler.schedule(noteId.toInt(), suggestion.extractedTitle, suggestion.dueDate, suggestion.dueTime, null)
@@ -158,5 +179,13 @@ class SuggestionApprover @Inject constructor(
             }
         }
         return fallback
+    }
+
+    private fun hasBackgroundLocation(): Boolean =
+        ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+
+    companion object {
+        const val LOCATION_RADIUS_METERS = 150.0
     }
 }

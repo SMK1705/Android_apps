@@ -16,5 +16,7 @@ data class LlmItem(
     val notes: String = "",
     @Json(name = "due_date") val dueDate: String? = null,
     @Json(name = "due_time") val dueTime: String? = null,
+    // A place/venue/address named in the text (e.g. "Panda Express, Dunwoody GA"), or null.
+    val location: String? = null,
     val confidence: Double = 0.7
 )

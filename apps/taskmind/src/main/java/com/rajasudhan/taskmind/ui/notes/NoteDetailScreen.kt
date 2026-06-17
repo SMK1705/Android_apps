@@ -195,10 +195,10 @@ fun NoteDetailScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Place, contentDescription = null, tint = category.accent())
                     Spacer(Modifier.width(4.dp))
-                    Text("Remind me at: ${n.locationLabel}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text(n.locationLabel!!, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     TextButton(onClick = { viewModel.clearLocationReminder() }) { Text("Remove") }
                 }
-                // Mini map of the saved place + a shortcut to navigate there in Google Maps.
+                // Mini map of the place (when it geocoded) + a shortcut to navigate there.
                 val lat = n.locationLat
                 val lng = n.locationLng
                 if (lat != null && lng != null) {
@@ -209,15 +209,17 @@ fun NoteDetailScreen(
                         radiusMeters = n.locationRadius ?: 150.0,
                         accent = category.accent()
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Button(
-                        onClick = { openDirections(context, lat, lng) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.Directions, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Get directions")
-                    }
+                }
+                // Directions resolve from the coordinates, or the place name itself, so they work
+                // (and point at the named venue) even when the embedded map couldn't render it.
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = { openDirections(context, n.locationLabel, lat, lng) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Directions, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Get directions")
                 }
             } else {
                 OutlinedButton(onClick = { locationLabel = ""; showLocationDialog = true }) {
@@ -331,9 +333,17 @@ private fun LocationMapCard(lat: Double, lng: Double, radiusMeters: Double, acce
     }
 }
 
-/** Open turn-by-turn directions to the saved place in Google Maps (origin = current location). */
-private fun openDirections(context: Context, lat: Double, lng: Double) {
-    val uri = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$lat,$lng")
+/**
+ * Open directions to the place in Google Maps (origin = current location). Prefers the geocoded
+ * coordinates; otherwise sends the place name as a destination query so Maps resolves the venue.
+ */
+private fun openDirections(context: Context, placeName: String?, lat: Double?, lng: Double?) {
+    val destination = when {
+        lat != null && lng != null -> "$lat,$lng"
+        !placeName.isNullOrBlank() -> Uri.encode(placeName)
+        else -> return
+    }
+    val uri = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$destination")
     val maps = Intent(Intent.ACTION_VIEW, uri).setPackage("com.google.android.apps.maps")
     try {
         context.startActivity(maps)

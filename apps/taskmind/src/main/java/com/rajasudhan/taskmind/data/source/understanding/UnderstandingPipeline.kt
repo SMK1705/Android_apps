@@ -68,7 +68,8 @@ class UnderstandingPipeline @Inject constructor(
                     dueTime = ExtractionHeuristics.sanitizeTime(item.dueTime),
                     type = item.type,
                     confidence = scored.confidence,
-                    status = "pending"
+                    status = "pending",
+                    location = item.location?.trim()?.ifBlank { null }
                 )
                 dao.insertSuggestion(suggestion)
                 insertedAny = true

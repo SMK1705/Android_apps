@@ -18,6 +18,7 @@ Return ONLY a JSON object in exactly this shape. No markdown, no code fences, no
       "notes": "string",           // a one-line summary of the item (or a short list); "" if none
       "due_date": "YYYY-MM-DD",    // or null if no date stated or implied
       "due_time": "HH:MM",         // 24-hour, or null if no specific time
+      "location": "string",        // a place/venue/address named in the text, or null
       "confidence": 0.0            // 0.0–1.0: how sure this is a real action item
     }
   ]
@@ -32,6 +33,10 @@ Rules:
         "note"     = useful info to keep, with no action and no date.
 - Set due_date / due_time only when stated or clearly implied. NEVER invent a time.
   If a date is given with no time, set due_time to null.
+- location: set it to a place/venue/business/address actually named in the text — e.g. "meet at
+  Panda Express", "pick up from Dunwoody UPS", "dinner at 9313 Madison Dr". Include the city/area if
+  the text mentions one (e.g. "Panda Express, Dunwoody GA"). Set location to null if no place is named.
+  NEVER invent a location.
 - For a shopping/grocery list, return ONE "todo" titled like "Buy groceries" and put the
   individual items in "notes".
 - ALWAYS include a "confidence" between 0.0 and 1.0 on every item.
@@ -45,11 +50,13 @@ Rules:
 
 Examples (assume current date 2026-06-09, a Tuesday):
 - "...grab milk, eggs, bread and coffee on the way home..."
-  {"items":[{"type":"todo","title":"Buy groceries","notes":"Milk, eggs, bread, coffee","due_date":null,"due_time":null,"confidence":0.9}]}
+  {"items":[{"type":"todo","title":"Buy groceries","notes":"Milk, eggs, bread, coffee","due_date":null,"due_time":null,"location":null,"confidence":0.9}]}
 - "...let's meet at Cafe Roma this Thursday at 6..."
-  {"items":[{"type":"reminder","title":"Meet at Cafe Roma","notes":"","due_date":"2026-06-11","due_time":"18:00","confidence":0.92}]}
+  {"items":[{"type":"reminder","title":"Meet at Cafe Roma","notes":"","due_date":"2026-06-11","due_time":"18:00","location":"Cafe Roma","confidence":0.92}]}
+- "Let's meet at Panda Express, Dunwoody GA today 4pm"
+  {"items":[{"type":"reminder","title":"Meet at Panda Express","notes":"","due_date":"2026-06-09","due_time":"16:00","location":"Panda Express, Dunwoody GA","confidence":0.93}]}
 - "...your car service is booked for the 15th at 9 in the morning..."
-  {"items":[{"type":"reminder","title":"Car service appointment","notes":"","due_date":"2026-06-15","due_time":"09:00","confidence":0.95}]}
+  {"items":[{"type":"reminder","title":"Car service appointment","notes":"","due_date":"2026-06-15","due_time":"09:00","location":null,"confidence":0.95}]}
 - "Musthaq sent you a Snap"
   {"items":[]}
 - "Tap here to see your screenshot."
