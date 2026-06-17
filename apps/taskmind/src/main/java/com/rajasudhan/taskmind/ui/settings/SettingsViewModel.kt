@@ -17,6 +17,7 @@ import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.source.BackupManager
 import com.rajasudhan.taskmind.data.source.EgressLogger
+import com.rajasudhan.taskmind.data.source.ModelDownloader
 import com.rajasudhan.taskmind.data.source.SettingsManager
 import com.rajasudhan.taskmind.data.source.dataStore
 import com.rajasudhan.taskmind.data.source.ocr.OcrEngine
@@ -34,6 +35,7 @@ import androidx.datastore.preferences.core.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.io.File
 import javax.inject.Inject
 
 /** A calendar the user can target for new events. */
@@ -48,6 +50,7 @@ class SettingsViewModel @Inject constructor(
     private val egressLogger: EgressLogger,
     private val voskTranscriber: VoskTranscriber,
     private val ocrEngine: OcrEngine,
+    private val modelDownloader: ModelDownloader,
     private val backupManager: BackupManager,
     private val moshi: Moshi,
     @ApplicationContext private val context: Context
@@ -74,6 +77,25 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /** Download + install the Vosk model from inside the app, then verify it loads. */
+    fun downloadTranscriptionModel() {
+        viewModelScope.launch {
+            _transcriptionStatus.value = "Downloading model… 0%"
+            val err = modelDownloader.download(
+                "https://alphacephei.com/vosk/models/vosk-model-small-en-in-0.4.zip",
+                File(context.filesDir, "vosk-model.zip")
+            ) { pct -> _transcriptionStatus.value = "Downloading model… $pct%" }
+            if (err != null) {
+                _transcriptionStatus.value = "Download failed: ${err.message ?: err::class.java.simpleName}"
+                return@launch
+            }
+            // Drop any previously-unpacked model so the freshly downloaded zip is the one that loads.
+            File(context.filesDir, "vosk-model").deleteRecursively()
+            _transcriptionStatus.value = "Installing…"
+            checkTranscriptionModel()
+        }
+    }
+
     // ---- OCR (on-device Tesseract) ----
     private val _ocrStatus = MutableStateFlow<String?>(null)
     val ocrStatus: StateFlow<String?> = _ocrStatus
@@ -88,6 +110,22 @@ class SettingsViewModel @Inject constructor(
             } else {
                 "Model not ready: ${err.message ?: err::class.java.simpleName}"
             }
+        }
+    }
+
+    /** Download + install the Tesseract English model from inside the app, then verify it loads. */
+    fun downloadOcrModel() {
+        viewModelScope.launch {
+            _ocrStatus.value = "Downloading model… 0%"
+            val err = modelDownloader.download(
+                "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata",
+                File(File(context.filesDir, "tessdata"), "eng.traineddata")
+            ) { pct -> _ocrStatus.value = "Downloading model… $pct%" }
+            if (err != null) {
+                _ocrStatus.value = "Download failed: ${err.message ?: err::class.java.simpleName}"
+                return@launch
+            }
+            checkOcrModel()
         }
     }
 
