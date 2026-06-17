@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Place
@@ -39,6 +40,7 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
+import com.rajasudhan.taskmind.data.source.PhoneUtil
 import com.rajasudhan.taskmind.data.source.RecurrenceUtil
 import com.rajasudhan.taskmind.ui.common.CategoryBadge
 import com.rajasudhan.taskmind.ui.common.accent
@@ -119,6 +121,31 @@ fun NoteDetailScreen(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        // Call shortcut for "call X / call me back" items: prefer a number named in the message,
+        // else fall back to the sender's number. Opens the dialer with it pre-filled.
+        val rawSnippet = remember(n.body) { n.body.substringAfter("\n\n", n.body) }
+        val callNumber = remember(n.id, n.body, n.title, n.summary, n.source) {
+            if (PhoneUtil.isCallIntent(n.title, n.summary, rawSnippet)) {
+                // Prefer a number stated in the item itself (a voice note spells digits out as
+                // words, so the real number survives only in the model's title/summary); fall back
+                // to the message body, then the sender's number for a "call me back".
+                PhoneUtil.extractFirst(n.title)
+                    ?: PhoneUtil.extractFirst(n.summary)
+                    ?: PhoneUtil.extractFirst(rawSnippet)
+                    ?: PhoneUtil.extractFirst(n.source)
+            } else null
+        }
+        if (callNumber != null) {
+            Spacer(Modifier.height(12.dp))
+            FilledTonalButton(
+                onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$callNumber"))) }
+            ) {
+                Icon(Icons.Default.Call, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Call $callNumber", maxLines = 1)
+            }
+        }
 
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
