@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -39,15 +38,13 @@ class InboxViewModel @Inject constructor(
         while (true) { emit(System.currentTimeMillis()); delay(30_000) }
     }
 
-    val pendingSuggestions = combine(dao.getPendingSuggestions(), nowTicker) { list, now ->
-        list.filter { it.snoozedUntil == null || it.snoozedUntil!! <= now }
-    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-
-    // True until the DB delivers its first result, so the Inbox can show a skeleton on first load
-    // rather than flashing the "all caught up" empty state.
-    val isLoading: StateFlow<Boolean> = dao.getPendingSuggestions()
-        .map { false }
-        .stateIn(viewModelScope, SharingStarted.Lazily, true)
+    // null = still loading the first result (UI shows a skeleton); an empty list = genuinely empty
+    // (UI shows the "all caught up" state). Both states come from this one DB subscription, so they
+    // can never disagree for a frame.
+    val pendingSuggestions: StateFlow<List<Suggestion>?> =
+        combine(dao.getPendingSuggestions(), nowTicker) { list, now ->
+            list.filter { it.snoozedUntil == null || it.snoozedUntil!! <= now }
+        }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing
@@ -67,14 +64,14 @@ class InboxViewModel @Inject constructor(
 
     fun approveAll() {
         viewModelScope.launch {
-            pendingSuggestions.value.forEach { approver.approve(it) }
+            pendingSuggestions.value.orEmpty().forEach { approver.approve(it) }
             lastUndo = null // bulk action isn't individually undoable
         }
     }
 
     fun rejectAll() {
         viewModelScope.launch {
-            pendingSuggestions.value.forEach {
+            pendingSuggestions.value.orEmpty().forEach {
                 dao.updateSuggestion(it.copy(status = "rejected"))
                 rejectionLearner.recordRejection(it)
             }
