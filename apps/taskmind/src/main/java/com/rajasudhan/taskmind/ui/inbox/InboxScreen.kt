@@ -79,6 +79,7 @@ fun InboxScreen(
 ) {
     val suggestions by viewModel.pendingSuggestions.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
     var showApproveAllDialog by remember { mutableStateOf(false) }
     var overflowMenu by remember { mutableStateOf(false) }
     var selectedFilter by remember { mutableStateOf("All") }
@@ -182,11 +183,15 @@ fun InboxScreen(
         }
     ) { paddingValues ->
         if (suggestions.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "No pending suggestions. All caught up!", style = MaterialTheme.typography.bodyLarge)
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (isLoading) {
+                SkeletonList(modifier = Modifier.padding(paddingValues))
+            } else {
+                EmptyState(
+                    modifier = Modifier.padding(paddingValues),
+                    icon = Icons.Default.Check,
+                    title = "All caught up",
+                    subtitle = "New suggestions show up here as they're captured. Pull in recent items or add one yourself.",
+                    actions = {
                         OutlinedButton(onClick = { viewModel.refreshRecentData() }, enabled = !isRefreshing) {
                             if (isRefreshing) {
                                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
@@ -202,7 +207,7 @@ fun InboxScreen(
                             Text("Add item")
                         }
                     }
-                }
+                )
             }
         } else {
             LazyColumn(
@@ -219,7 +224,8 @@ fun InboxScreen(
                     ) {
                         Text(
                             "${suggestions.size} pending",
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f)
                         )
                         IconButton(onClick = { viewModel.refreshRecentData() }, enabled = !isRefreshing) {
@@ -282,6 +288,7 @@ fun InboxScreen(
                     )
                     SwipeToDismissBox(
                         state = dismissState,
+                        modifier = Modifier.animateItem(),
                         backgroundContent = {
                             val dir = dismissState.dismissDirection
                             val bg = when (dir) {
@@ -465,15 +472,11 @@ fun SuggestionCard(
     }
     val place = suggestion.location?.trim()?.ifBlank { null }
 
-    Card(
+    TmCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = category.container()),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        accent = category.accent(),
+        verticalAlignment = Alignment.Top
     ) {
-        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
-            // Colored accent bar on the left edge.
-            Box(modifier = Modifier.width(6.dp).fillMaxHeight().background(category.accent()))
-
             Column(modifier = Modifier.weight(1f).padding(16.dp)) {
                 if (isEditing) {
                     Text(
@@ -669,6 +672,5 @@ fun SuggestionCard(
                     }
                 }
             }
-        }
     }
 }

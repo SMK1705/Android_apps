@@ -48,6 +48,12 @@ class NotesViewModel @Inject constructor(
             }
             .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    // True until the notes DB delivers its first result, so the list shows a skeleton on first load
+    // instead of momentarily flashing the empty state.
+    val isLoading: StateFlow<Boolean> = dao.getActiveNotes()
+        .map { false }
+        .stateIn(viewModelScope, SharingStarted.Lazily, true)
+
     fun setQuery(q: String) { _query.value = q }
     fun setShowCompleted(c: Boolean) { _showCompleted.value = c }
 

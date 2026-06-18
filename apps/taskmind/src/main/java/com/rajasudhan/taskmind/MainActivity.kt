@@ -254,61 +254,56 @@ fun TaskMindAppContent(onLock: () -> Unit) {
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    actionIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             )
         },
         bottomBar = {
-            NavigationBar {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                val navColors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                fun go(route: String) {
+                    navController.navigate(route) {
+                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.Inbox, contentDescription = "Inbox") },
                     label = { Text("Inbox") },
                     selected = currentRoute == "inbox",
-                    onClick = {
-                        navController.navigate("inbox") {
-                            popUpTo(navController.graph.startDestinationId) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
+                    colors = navColors,
+                    onClick = { go("inbox") }
                 )
                 NavigationBarItem(
                     icon = { Icon(Icons.AutoMirrored.Filled.Note, contentDescription = "Notes") },
                     label = { Text("Notes") },
                     selected = currentRoute == "notes",
-                    onClick = {
-                        navController.navigate("notes") {
-                            popUpTo(navController.graph.startDestinationId) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
+                    colors = navColors,
+                    onClick = { go("notes") }
                 )
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.Source, contentDescription = "Sources") },
                     label = { Text("Sources") },
                     selected = currentRoute == "sources",
-                    onClick = {
-                        navController.navigate("sources") {
-                            popUpTo(navController.graph.startDestinationId) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
+                    colors = navColors,
+                    onClick = { go("sources") }
                 )
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
                     label = { Text("Settings") },
                     selected = currentRoute == "settings",
-                    onClick = {
-                        navController.navigate("settings") {
-                            popUpTo(navController.graph.startDestinationId) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
+                    colors = navColors,
+                    onClick = { go("settings") }
                 )
             }
         }
