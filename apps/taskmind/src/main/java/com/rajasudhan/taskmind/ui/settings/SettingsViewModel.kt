@@ -60,6 +60,10 @@ class SettingsViewModel @Inject constructor(
     val dynamicColor: StateFlow<Boolean> = settingsManager.dynamicColorFlow
     fun updateDynamicColor(enabled: Boolean) { settingsManager.dynamicColor = enabled }
 
+    // ---- Security (app lock) ----
+    val appLockEnabled: StateFlow<Boolean> = settingsManager.appLockEnabledFlow
+    fun updateAppLockEnabled(enabled: Boolean) { settingsManager.appLockEnabled = enabled }
+
     // ---- Transcription (on-device Vosk) ----
     private val _transcriptionStatus = MutableStateFlow<String?>(null)
     val transcriptionStatus: StateFlow<String?> = _transcriptionStatus

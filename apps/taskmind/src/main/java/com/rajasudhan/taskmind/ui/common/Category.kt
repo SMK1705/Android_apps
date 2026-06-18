@@ -44,12 +44,8 @@ val NoteCategory = Category("NOTE", Color(0xFF1976D2), Color(0xFFE8F1FB), Color(
 @Composable
 fun Category.accent(dark: Boolean = isSystemInDarkTheme()): Color = if (dark) accentDark else accentLight
 
-// Cards are now neutral tonal surfaces; the category color reads only through the accent bar, badge,
-// and the colored due-date. So container/onCard fills resolve to the theme's standard surface roles.
-
-/** Card container fill — a neutral tonal surface (the accent bar/badge carry the category color). */
-@Composable
-fun Category.container(): Color = MaterialTheme.colorScheme.surfaceContainer
+// Cards are neutral tonal surfaces; the category color reads only through the accent bar, badge, and
+// the colored due-date. So the on-card text colors resolve to the theme's standard surface roles.
 
 /** Primary text/icon color on a card. */
 @Composable

@@ -24,6 +24,7 @@ class SettingsManager @Inject constructor(
         private const val KEY_SCAN_FREQUENCY_MINUTES = "scan_frequency_minutes"
         private const val KEY_LAST_SCAN_AT = "last_scan_at"
         private const val KEY_DYNAMIC_COLOR = "dynamic_color"
+        private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
 
         const val CALENDAR_ID_AUTO = -1L
         const val DEFAULT_EVENT_DURATION_MINUTES = 60
@@ -115,6 +116,19 @@ class SettingsManager @Inject constructor(
             _dynamicColor.value = value
         }
 
+    // ---- App lock (biometric) ----
+    // ON by default — this is a private assistant, so the secure default is to require auth. Exposed
+    // as a StateFlow so MainActivity reacts the moment the Settings toggle flips.
+    private val _appLockEnabled = MutableStateFlow(encryptedPrefs.getBoolean(KEY_APP_LOCK_ENABLED, true))
+    val appLockEnabledFlow: StateFlow<Boolean> = _appLockEnabled.asStateFlow()
+
+    var appLockEnabled: Boolean
+        get() = _appLockEnabled.value
+        set(value) {
+            encryptedPrefs.edit().putBoolean(KEY_APP_LOCK_ENABLED, value).apply()
+            _appLockEnabled.value = value
+        }
+
     /**
      * Clears all user-facing settings (API keys, provider choice, calendar prefs).
      * Deliberately leaves the DB encryption key intact so the (now-emptied) database stays readable.
@@ -132,7 +146,10 @@ class SettingsManager @Inject constructor(
             .remove(KEY_RETENTION_DAYS)
             .remove(KEY_SCAN_FREQUENCY_MINUTES)
             .remove(KEY_DYNAMIC_COLOR)
+            .remove(KEY_APP_LOCK_ENABLED)
             .apply()
         _dynamicColor.value = false
+        // Wiping data re-asserts the secure default: the lock comes back on.
+        _appLockEnabled.value = true
     }
 }

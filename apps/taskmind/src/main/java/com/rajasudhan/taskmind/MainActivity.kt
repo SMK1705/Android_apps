@@ -59,9 +59,24 @@ class MainActivity : AppCompatActivity() {
         setContent {
             val dynamicColor by settingsManager.dynamicColorFlow.collectAsState()
             TaskMindTheme(dynamicColor = dynamicColor) {
+                // The app lock is optional (Settings → Security). When off, the app opens straight to
+                // its content; the database stays encrypted at rest regardless.
+                val lockEnabled by settingsManager.appLockEnabledFlow.collectAsState()
                 var isAuthenticated by remember { mutableStateOf(false) }
 
+                // A lock is only enforceable if the device actually has a biometric or a device
+                // credential (PIN/pattern/password) enrolled. Without one, promptBiometric can never
+                // succeed — so we must NOT lock, or the user would be permanently shut out of their
+                // own data with the off-switch stuck behind the lock.
+                val canLock = remember {
+                    BiometricManager.from(this@MainActivity).canAuthenticate(
+                        BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                    ) == BiometricManager.BIOMETRIC_SUCCESS
+                }
+
                 // Re-lock whenever the app leaves the foreground, so auth is required on every return.
+                // Only while the lock is enabled (and enforceable) — otherwise leave the session
+                // authenticated so flipping the lock ON later doesn't instantly lock the current one.
                 // Exception: a deliberate SAF/document-picker round-trip (flagged via AppLock) also
                 // fires ON_STOP — re-locking there would tear down the picker's result callback and
                 // drop the write, so that one background is allowed to stay unlocked.
@@ -70,7 +85,7 @@ class MainActivity : AppCompatActivity() {
                     val observer = LifecycleEventObserver { _, event ->
                         when (event) {
                             Lifecycle.Event.ON_STOP ->
-                                if (!AppLock.shouldKeepUnlockedOnStop()) isAuthenticated = false
+                                if (lockEnabled && canLock && !AppLock.shouldKeepUnlockedOnStop()) isAuthenticated = false
                             Lifecycle.Event.ON_RESUME -> AppLock.reset()
                             else -> {}
                         }
@@ -79,31 +94,34 @@ class MainActivity : AppCompatActivity() {
                     onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
                 }
 
-                if (!isAuthenticated) {
-                    LockScreen(
-                        onUnlockClick = {
-                            promptBiometric {
-                                isAuthenticated = true
-                                ContextCompat.startForegroundService(
-                                    this@MainActivity,
-                                    android.content.Intent(this@MainActivity, com.rajasudhan.taskmind.data.source.TaskMindForegroundService::class.java)
-                                )
-                            }
-                        }
-                    )
-                    
-                    // Trigger authentication immediately on launch
-                    LaunchedEffect(Unit) {
-                        promptBiometric {
-                            isAuthenticated = true
-                            ContextCompat.startForegroundService(
-                                this@MainActivity,
-                                android.content.Intent(this@MainActivity, com.rajasudhan.taskmind.data.source.TaskMindForegroundService::class.java)
-                            )
-                        }
+                // "In" = authenticated, OR the lock is turned off, OR no authenticator exists to enforce it.
+                val unlocked = isAuthenticated || !lockEnabled || !canLock
+
+                // While we're in with the lock off, mark the session authenticated, so turning the
+                // lock ON from Settings doesn't instantly lock the current session — it takes effect
+                // on the next background/return instead.
+                LaunchedEffect(unlocked, lockEnabled) {
+                    if (unlocked && !lockEnabled) isAuthenticated = true
+                }
+
+                // Start the live-watcher foreground service once we're in, however we got there
+                // (biometric unlock or lock disabled). Re-starting an already-running service is safe.
+                LaunchedEffect(unlocked) {
+                    if (unlocked) {
+                        ContextCompat.startForegroundService(
+                            this@MainActivity,
+                            android.content.Intent(this@MainActivity, com.rajasudhan.taskmind.data.source.TaskMindForegroundService::class.java)
+                        )
                     }
+                }
+
+                if (!unlocked) {
+                    LockScreen(onUnlockClick = { promptBiometric { isAuthenticated = true } })
+                    // Trigger authentication immediately on launch.
+                    LaunchedEffect(Unit) { promptBiometric { isAuthenticated = true } }
                 } else {
-                    TaskMindAppContent(onLock = { isAuthenticated = false })
+                    // The manual-lock action only makes sense when the lock is on AND enforceable.
+                    TaskMindAppContent(onLock = if (lockEnabled && canLock) ({ isAuthenticated = false }) else null)
                 }
             }
         }
@@ -217,7 +235,7 @@ fun LockScreen(onUnlockClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TaskMindAppContent(onLock: () -> Unit) {
+fun TaskMindAppContent(onLock: (() -> Unit)?) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -249,8 +267,10 @@ fun TaskMindAppContent(onLock: () -> Unit) {
                     IconButton(onClick = { guideViewModel.open() }) {
                         Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = "How to use TaskMind")
                     }
-                    IconButton(onClick = onLock) {
-                        Icon(Icons.Default.Lock, contentDescription = "Lock app")
+                    if (onLock != null) {
+                        IconButton(onClick = onLock) {
+                            Icon(Icons.Default.Lock, contentDescription = "Lock app")
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
