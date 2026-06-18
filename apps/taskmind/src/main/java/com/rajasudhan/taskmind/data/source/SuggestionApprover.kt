@@ -53,7 +53,8 @@ class SuggestionApprover @Inject constructor(
             dueTime = suggestion.dueTime,
             source = suggestion.source,
             createdDate = System.currentTimeMillis(),
-            type = noteType
+            type = noteType,
+            recurrence = suggestion.recurrence
         )
         val noteId = dao.insertNote(note)
 
@@ -77,7 +78,7 @@ class SuggestionApprover @Inject constructor(
         }
 
         if (isReminder) {
-            alarmScheduler.schedule(noteId.toInt(), suggestion.extractedTitle, suggestion.dueDate, suggestion.dueTime, null)
+            alarmScheduler.schedule(noteId.toInt(), suggestion.extractedTitle, suggestion.dueDate, suggestion.dueTime, suggestion.recurrence)
             addToCalendar(suggestion.extractedTitle, note.body, suggestion.dueDate, suggestion.dueTime)
         } else if (suggestion.type == "todo" && suggestion.dueDate != null) {
             addToCalendar(suggestion.extractedTitle, note.body, suggestion.dueDate, null)

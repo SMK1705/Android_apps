@@ -20,5 +20,7 @@ data class Suggestion(
     // v3 (MIGRATION_2_3): when set, the item is hidden from the Inbox until this time (snooze).
     val snoozedUntil: Long? = null,
     // v4 (MIGRATION_3_4): a place named in the source text (geocoded into the note on approval).
-    val location: String? = null
+    val location: String? = null,
+    // v5 (MIGRATION_4_5): "daily" | "weekly" | "monthly" for a repeating reminder, else null.
+    val recurrence: String? = null
 )

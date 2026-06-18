@@ -10,7 +10,7 @@ import com.rajasudhan.taskmind.data.model.Suggestion
 
 @Database(
     entities = [Note::class, Suggestion::class, RejectedPattern::class],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class TaskMindDatabase : RoomDatabase() {
@@ -53,6 +53,13 @@ abstract class TaskMindDatabase : RoomDatabase() {
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE suggestions ADD COLUMN location TEXT")
+            }
+        }
+
+        /** v5 adds a nullable `recurrence` column to suggestions ("daily"/"weekly"/"monthly"). */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE suggestions ADD COLUMN recurrence TEXT")
             }
         }
     }

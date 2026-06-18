@@ -35,6 +35,12 @@ class UnderstandingPipeline @Inject constructor(
     // twin "Call back" cards.
     private val callbackMutex = Mutex()
 
+    private companion object {
+        // Truncate runaway inputs (a long email/transcript) so the prompt + JSON output stay under
+        // the on-device model's 2048-token KV-cache. ~4 chars/token leaves ample headroom.
+        const val MAX_INPUT_CHARS = 4000
+    }
+
     suspend fun processText(source: String, text: String) {
         // Cheap pre-filter: skip obvious non-actionable noise (OTPs, promos, opt-outs)
         // before spending battery/LLM cycles on it.
@@ -45,16 +51,21 @@ class UnderstandingPipeline @Inject constructor(
         val dayOfWeek = currentDateTime.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
         val dateTimeStr = "${currentDateTime.format(formatter)}. Today is a $dayOfWeek."
 
-        val prompt = SystemPrompt.INSTRUCTION
-            .replace("{{CURRENT_DATETIME}}", dateTimeStr)
-            .replace("{{SOURCE_TEXT}}", text)
+        // Static instruction (cacheable); the variable text + its origin go in the user message so
+        // the model has context ("Notification from Amma" vs "Voice note") and we don't send the
+        // body twice. Cap very long inputs so we stay under the on-device 2048-token KV-cache.
+        val systemInstruction = SystemPrompt.INSTRUCTION.replace("{{CURRENT_DATETIME}}", dateTimeStr)
+        val body = if (text.length > MAX_INPUT_CHARS) text.take(MAX_INPUT_CHARS) else text
+        val userMessage = "Source: $source\n\nText:\n$body"
 
-        var jsonResult = llmProvider.generate(prompt, text)
+        var jsonResult = llmProvider.generate(systemInstruction, userMessage)
         var parsedResult = tryParse(jsonResult)
 
         if (parsedResult == null) {
-            val retryPrompt = "your previous reply was not valid JSON, return only the JSON object\n$jsonResult"
-            jsonResult = llmProvider.generate(prompt, retryPrompt)
+            // The cloud path enforces a JSON schema, so this mainly catches the on-device model
+            // occasionally replying in prose. Re-ask with a stronger nudge (not the bad output).
+            val retryMessage = "$userMessage\n\nReturn ONLY the JSON object described above, nothing else."
+            jsonResult = llmProvider.generate(systemInstruction, retryMessage)
             parsedResult = tryParse(jsonResult)
         }
 
@@ -77,7 +88,8 @@ class UnderstandingPipeline @Inject constructor(
                     type = item.type,
                     confidence = scored.confidence,
                     status = "pending",
-                    location = item.location?.trim()?.ifBlank { null }
+                    location = item.location?.trim()?.ifBlank { null },
+                    recurrence = ExtractionHeuristics.sanitizeRecurrence(item.recurrence)
                 )
                 dao.insertSuggestion(suggestion)
                 insertedAny = true

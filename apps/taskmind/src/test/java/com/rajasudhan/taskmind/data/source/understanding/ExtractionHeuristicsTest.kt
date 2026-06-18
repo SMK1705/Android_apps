@@ -56,6 +56,17 @@ class ExtractionHeuristicsTest {
         assertNull(ExtractionHeuristics.sanitizeTime(null))
     }
 
+    @Test
+    fun sanitizeRecurrenceKeepsKnownRepeatsDropsRest() {
+        assertEquals("daily", ExtractionHeuristics.sanitizeRecurrence("daily"))
+        assertEquals("weekly", ExtractionHeuristics.sanitizeRecurrence("Weekly")) // case-insensitive
+        assertEquals("monthly", ExtractionHeuristics.sanitizeRecurrence("  MONTHLY  ")) // trimmed
+        assertNull(ExtractionHeuristics.sanitizeRecurrence("yearly")) // unsupported repeat
+        assertNull(ExtractionHeuristics.sanitizeRecurrence("none"))
+        assertNull(ExtractionHeuristics.sanitizeRecurrence(""))
+        assertNull(ExtractionHeuristics.sanitizeRecurrence(null))
+    }
+
     // ---------------- JSON fence stripping ----------------
 
     @Test
