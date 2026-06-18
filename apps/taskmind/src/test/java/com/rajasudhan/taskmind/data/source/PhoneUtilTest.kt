@@ -101,4 +101,12 @@ class PhoneUtilTest {
         // No caller name available → nothing to call back.
         assertNull(PhoneUtil.missedCallName("Missed voice call", ""))
     }
+
+    @Test
+    fun missedCallNameIgnoresEmailTitledNotifications() {
+        // Google services post missed-call notifications titled with the account email — there's no
+        // person to call back, so don't manufacture a "Call back you@gmail.com" item.
+        assertNull(PhoneUtil.missedCallName("you@gmail.com", "Missed voice call"))
+        assertNull(PhoneUtil.missedCallName("Missed call", "from you@gmail.com"))
+    }
 }

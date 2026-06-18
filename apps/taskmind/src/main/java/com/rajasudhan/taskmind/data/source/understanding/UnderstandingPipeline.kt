@@ -7,6 +7,8 @@ import com.rajasudhan.taskmind.data.source.RejectionLearner
 import com.rajasudhan.taskmind.data.source.SuggestionNotifier
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -28,6 +30,11 @@ class UnderstandingPipeline @Inject constructor(
     private val notifier: SuggestionNotifier,
     private val rejectionLearner: RejectionLearner
 ) {
+    // Serializes the check-then-insert in addCallback so two missed-call notifications arriving at
+    // once (a chat app re-posting its missed-call notification) can't both pass the dedup and create
+    // twin "Call back" cards.
+    private val callbackMutex = Mutex()
+
     suspend fun processText(source: String, text: String) {
         // Cheap pre-filter: skip obvious non-actionable noise (OTPs, promos, opt-outs)
         // before spending battery/LLM cycles on it.
@@ -97,34 +104,40 @@ class UnderstandingPipeline @Inject constructor(
      * the app keeps re-posting) doesn't pile up the same call-back.
      */
     suspend fun addCallback(displayName: String?, number: String?, source: String = "Missed call") {
-        val named = displayName?.trim()?.takeIf { it.isNotBlank() && PhoneUtil.extractFirst(it) == null }
+        // A name we can look up/show: not blank, not itself a number, not an email (some services
+        // post missed-call notifications titled with the account email — "Call back you@gmail.com"
+        // can't be dialed).
+        val named = displayName?.trim()
+            ?.takeIf { it.isNotBlank() && PhoneUtil.extractFirst(it) == null && !it.contains('@') }
         val dialable = number?.let(PhoneUtil::normalize)?.takeIf { it.count(Char::isDigit) >= 5 }
         if (named == null && dialable == null) return // nothing to call back
 
         val who = named ?: dialable!!
         val title = "Call back $who"
 
-        val pending = dao.getPendingSuggestions().first().map { it.extractedTitle to it.dueDate }
-        val notes = dao.getAllNotes().first().map { it.title to it.dueDate }
-        if (ExtractionHeuristics.isDuplicate(title, null, pending + notes)) return
+        callbackMutex.withLock {
+            val pending = dao.getPendingSuggestions().first().map { it.extractedTitle to it.dueDate }
+            val notes = dao.getAllNotes().first().map { it.title to it.dueDate }
+            if (ExtractionHeuristics.isDuplicate(title, null, pending + notes)) return
 
-        dao.insertSuggestion(
-            Suggestion(
-                source = source,
-                rawSnippet = buildString {
-                    append("Missed call")
-                    if (named != null) append(" from $named")
-                    if (dialable != null) append(" ($dialable)")
-                },
-                extractedTitle = title,
-                summary = if (dialable != null) "Missed call · $dialable" else "Missed call",
-                dueDate = null,
-                dueTime = null,
-                type = "todo",
-                confidence = 0.95,
-                status = "pending"
+            dao.insertSuggestion(
+                Suggestion(
+                    source = source,
+                    rawSnippet = buildString {
+                        append("Missed call")
+                        if (named != null) append(" from $named")
+                        if (dialable != null) append(" ($dialable)")
+                    },
+                    extractedTitle = title,
+                    summary = if (dialable != null) "Missed call · $dialable" else "Missed call",
+                    dueDate = null,
+                    dueTime = null,
+                    type = "todo",
+                    confidence = 0.95,
+                    status = "pending"
+                )
             )
-        )
+        }
         notifier.notifyPending()
     }
 

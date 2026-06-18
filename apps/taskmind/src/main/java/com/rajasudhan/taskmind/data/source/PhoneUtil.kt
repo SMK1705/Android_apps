@@ -65,7 +65,7 @@ object PhoneUtil {
         // Prefer an explicit "from <name>" in either field.
         for (field in listOf(x, t)) {
             FROM_NAME.find(field)?.groupValues?.getOrNull(1)?.trim()
-                ?.takeIf { it.isNotBlank() && extractFirst(it) == null }
+                ?.takeIf { isLookupableName(it) }
                 ?.let { return it }
         }
         // Otherwise the caller is whichever field isn't the "Missed … call" phrase.
@@ -74,8 +74,14 @@ object PhoneUtil {
             textIsPhrase && !titleIsPhrase -> t
             else -> ""
         }
-        return caller.takeIf { it.isNotBlank() && extractFirst(it) == null }
+        return caller.takeIf { isLookupableName(it) }
     }
+
+    // A caller we could actually dial back: a non-blank name that isn't itself a number or an email
+    // address. (Google services post "missed call" notifications titled with the account email —
+    // "Call back you@gmail.com" is useless, since an email can't be looked up or dialed.)
+    private fun isLookupableName(name: String): Boolean =
+        name.isNotBlank() && extractFirst(name) == null && !name.contains('@')
 
     /**
      * The first dialable phone number in [text], normalized for a `tel:` URI, or null. International
