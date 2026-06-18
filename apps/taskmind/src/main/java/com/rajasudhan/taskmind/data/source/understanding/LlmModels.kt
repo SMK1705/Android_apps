@@ -18,5 +18,7 @@ data class LlmItem(
     @Json(name = "due_time") val dueTime: String? = null,
     // A place/venue/address named in the text (e.g. "Panda Express, Dunwoody GA"), or null.
     val location: String? = null,
+    // "daily" | "weekly" | "monthly" for a repeating reminder ("every Monday"), else null.
+    val recurrence: String? = null,
     val confidence: Double = 0.7
 )

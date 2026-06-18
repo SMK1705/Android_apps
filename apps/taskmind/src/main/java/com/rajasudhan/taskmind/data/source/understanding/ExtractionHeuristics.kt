@@ -38,6 +38,13 @@ object ExtractionHeuristics {
     /** Returns the time only if it is a well-formed `H:mm`/`HH:mm`, else null. */
     fun sanitizeTime(raw: String?): String? = raw?.takeIf { it.matches(TIME_REGEX) }
 
+    /** The repeat values the app understands (must match [com.rajasudhan.taskmind.data.source.RecurrenceUtil]). */
+    private val RECURRENCE_VALUES = setOf("daily", "weekly", "monthly")
+
+    /** Normalizes a model-supplied recurrence to `daily`/`weekly`/`monthly`, else null (no repeat). */
+    fun sanitizeRecurrence(raw: String?): String? =
+        raw?.trim()?.lowercase()?.takeIf { it in RECURRENCE_VALUES }
+
     /** Strips markdown code fences the LLM sometimes wraps JSON in, despite instructions. */
     fun stripJsonFences(json: String): String =
         json.removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
