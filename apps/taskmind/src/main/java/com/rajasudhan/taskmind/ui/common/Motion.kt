@@ -1,6 +1,5 @@
 package com.rajasudhan.taskmind.ui.common
 
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
@@ -18,14 +17,6 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
-
-/** Shared motion timings so transitions across the app feel of a piece. */
-object Motion {
-    const val Quick = 140
-    const val Standard = 240
-    const val Emphasized = 360
-    val Easing = FastOutSlowInEasing
-}
 
 /**
  * Subtly scales a clickable down while pressed — the tactile "give" premium cards have. Pass the
@@ -71,5 +62,8 @@ fun Modifier.shimmer(base: androidx.compose.ui.graphics.Color, highlight: androi
             end = Offset(start + sweep, size.height)
         )
         drawRect(brush)
+        // Draw the node's own content over the sheen (skeleton boxes have none, so this is a no-op
+        // there) — without it, a `.shimmer()` on any composable with children would hide them.
+        drawContent()
     }
 }

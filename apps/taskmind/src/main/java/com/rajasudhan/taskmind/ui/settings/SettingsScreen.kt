@@ -53,6 +53,7 @@ fun SettingsScreen(
     val restartRequired by viewModel.restartRequired.collectAsState()
     val permissions by viewModel.permissions.collectAsState()
     val dynamicColor by viewModel.dynamicColor.collectAsState()
+    val appLockEnabled by viewModel.appLockEnabled.collectAsState()
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri -> uri?.let { viewModel.exportNotesToUri(it) } }
@@ -103,6 +104,25 @@ fun SettingsScreen(
                     )
                 }
                 Switch(checked = dynamicColor, onCheckedChange = { viewModel.updateDynamicColor(it) })
+            }
+        }
+
+        SettingsSectionCard(accent = Color(0xFF00796B), title = "Security") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("App lock (biometric)", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Require fingerprint / face / PIN on launch and on every return. Turn off to open " +
+                            "straight to your data — your notes stay encrypted at rest either way.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(checked = appLockEnabled, onCheckedChange = { viewModel.updateAppLockEnabled(it) })
             }
         }
 
