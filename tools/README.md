@@ -39,3 +39,18 @@ python tools/setup_tesseract_model.py --device <adb-serial> \
 
 Same requirements as above. After it finishes, open the app → **Settings → Check OCR model**, then
 enable **Sources → Screenshots (OCR)**.
+
+## `prompt_eval/`
+
+An accuracy harness for the extraction prompt. It reads the **live** system prompt out of
+`SystemPrompt.kt` (so it can't drift from the app) and replays a golden set of input→expected cases
+against Gemini with the same model and response schema the app uses, printing a pass/fail score.
+
+```bash
+cd tools/prompt_eval
+GEMINI_API_KEY=your_key python evaluate.py
+```
+
+Stdlib-only (no `pip install`), makes **real API calls**, and is **manual — not wired into CI**. Use
+it to check a prompt change before shipping. Full details and how to add a case are in
+[`prompt_eval/README.md`](prompt_eval/README.md).

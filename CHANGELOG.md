@@ -3,6 +3,61 @@
 All notable changes to **TaskMind** — the private, 100% on-device assistant — are documented here.
 Versions follow the in-app `versionName`; release tags use `taskmind-v<update>`.
 
+## [4.0] — Update 4 (`taskmind-v4`)
+
+Calls, places, and a sharper extraction engine. TaskMind can now actually *make the call* it
+suggests, turns missed calls — including chat-app ones — into call-backs, routes you to places named
+in your messages, and understands what you say a lot more accurately (including "every Monday").
+
+### Added
+- **Call actions** — a one-tap **Call** button on call reminders, plus **Call / Directions** quick
+  actions right on Inbox cards.
+- **Contacts-aware calling** — when a message names someone but gives no number (a WhatsApp "call
+  me", a missed call from a saved contact), TaskMind resolves the name to a number via your
+  **Contacts** so the Call button actually dials. New optional permission: `READ_CONTACTS`.
+- **Missed-call capture** — missed calls become "Call back" suggestions: **cellular** calls from the
+  call log, and **chat-app (WhatsApp / Telegram) missed calls** from their notifications (which never
+  reach the call log). Private/unknown callers and email-titled service notifications are skipped.
+- **Smart location** — the LLM pulls a place named in a message; a note then shows an **embedded
+  geofence map** and a **Get directions** button (opens Google Maps).
+- **Recurrence from text** — "every Monday", "monthly rent", "daily standup" are extracted as
+  **recurring reminders** (daily / weekly / monthly), not just set by hand.
+- **In-app model downloads** — fetch and install the Vosk (speech) and Tesseract (OCR) models from
+  inside the app, no `adb` needed.
+- **UI overhaul** — theme-aware category colors + a Material You toggle, source icons and confidence
+  pills, haptic swipe, a Sources "cockpit", inline note editing, and checklist drag-to-reorder.
+- **Over-the-air installs** — a *Publish debug APK* workflow keeps a rolling `debug-latest` release so
+  you can install a fresh build straight from the phone.
+
+### Changed
+- **Incremental scans** — manual refresh and the periodic worker now scan **since the last scan**
+  (a shared watermark, capped at 24h) instead of a fixed 10-minute window, so an item that arrived
+  just before a refresh is no longer missed.
+- **More accurate, more reliable extraction** — the prompt was rewritten for the real edge cases
+  (phone numbers and call-back titles, named times like noon/EOD, ambiguous weekdays → the next
+  future date, cancellations → nothing, no past-dated items, concrete-only locations, confidence
+  calibration). The cloud path now uses Gemini **structured output** (an enforced JSON schema), and
+  the source label ("Notification from Amma", "Voice note", …) is given to the model as context.
+
+### Fixed
+- Startup crash from an undecryptable EncryptedSharedPreferences store (device keystore key
+  invalidation) — the store now self-heals on launch and is excluded from cloud/transfer backup.
+- A **deleted reminder's alarm** could fire a phantom reminder and reschedule itself every week
+  forever; the receiver now no-ops and cancels the alarm when the note is gone.
+- No more useless "Call back &lt;email&gt;" or duplicate call-back suggestions.
+- The app-lock no longer drops Storage Access Framework document-picker results.
+
+### Internal
+- Native libraries aligned for **16 KB page size** (Android 15+/16 devices).
+- Database schema **v3 → v5** via in-place migrations (a `location`, then a `recurrence` column on
+  suggestions).
+- **`tools/prompt_eval/`** — a dependency-free Python harness that reads the live prompt and replays
+  a golden set against the model to measure extraction accuracy (manual; not in CI).
+
+### Privacy
+- Contacts are read **on-device only** to turn a name into a number for the Call button — nothing
+  leaves the phone. The cloud LLM stays opt-in and every call is still logged in **Data Egress**.
+
 ## [3.0] — Update 3 (`taskmind-v3`)
 
 The capture-to-action release. TaskMind now pulls content in from anywhere, turns approved
