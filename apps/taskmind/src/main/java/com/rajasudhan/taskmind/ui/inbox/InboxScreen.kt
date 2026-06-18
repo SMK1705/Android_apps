@@ -77,9 +77,9 @@ private fun snoozeOptions(): List<Pair<String, Long>> {
 fun InboxScreen(
     viewModel: InboxViewModel = hiltViewModel()
 ) {
+    // null = first load not finished yet (skeleton); empty list = caught up (empty state).
     val suggestions by viewModel.pendingSuggestions.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
     var showApproveAllDialog by remember { mutableStateOf(false) }
     var overflowMenu by remember { mutableStateOf(false) }
     var selectedFilter by remember { mutableStateOf("All") }
@@ -158,11 +158,12 @@ fun InboxScreen(
     }
 
     val shown = remember(suggestions, selectedFilter) {
+        val list = suggestions.orEmpty()
         when (selectedFilter) {
-            "Reminders" -> suggestions.filter { it.type == "reminder" }
-            "To-dos" -> suggestions.filter { it.type == "todo" }
-            "Notes" -> suggestions.filter { it.type == "note" }
-            else -> suggestions
+            "Reminders" -> list.filter { it.type == "reminder" }
+            "To-dos" -> list.filter { it.type == "todo" }
+            "Notes" -> list.filter { it.type == "note" }
+            else -> list
         }
     }
 
@@ -182,34 +183,32 @@ fun InboxScreen(
             }
         }
     ) { paddingValues ->
-        if (suggestions.isEmpty()) {
-            if (isLoading) {
-                SkeletonList(modifier = Modifier.padding(paddingValues))
-            } else {
-                EmptyState(
-                    modifier = Modifier.padding(paddingValues),
-                    icon = Icons.Default.Check,
-                    title = "All caught up",
-                    subtitle = "New suggestions show up here as they're captured. Pull in recent items or add one yourself.",
-                    actions = {
-                        OutlinedButton(onClick = { viewModel.refreshRecentData() }, enabled = !isRefreshing) {
-                            if (isRefreshing) {
-                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                            } else {
-                                Icon(Icons.Default.Refresh, contentDescription = null)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Refresh")
-                            }
-                        }
-                        OutlinedButton(onClick = { showManualDialog = true }) {
-                            Icon(Icons.Default.Add, contentDescription = null)
+        val current = suggestions
+        when {
+            current == null -> SkeletonList(modifier = Modifier.padding(paddingValues))
+            current.isEmpty() -> EmptyState(
+                modifier = Modifier.padding(paddingValues),
+                icon = Icons.Default.Check,
+                title = "All caught up",
+                subtitle = "New suggestions show up here as they're captured. Pull in recent items or add one yourself.",
+                actions = {
+                    OutlinedButton(onClick = { viewModel.refreshRecentData() }, enabled = !isRefreshing) {
+                        if (isRefreshing) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Default.Refresh, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text("Add item")
+                            Text("Refresh")
                         }
                     }
-                )
-            }
-        } else {
+                    OutlinedButton(onClick = { showManualDialog = true }) {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Add item")
+                    }
+                }
+            )
+            else -> {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(paddingValues),
                 // Extra bottom inset so the last card's actions always clear the floating mic button.
@@ -223,7 +222,7 @@ fun InboxScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "${suggestions.size} pending",
+                            "${current.size} pending",
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f)
@@ -322,12 +321,13 @@ fun InboxScreen(
                     }
                 }
             }
+            }
         }
 
         if (showApproveAllDialog) {
             AlertDialog(
                 onDismissRequest = { showApproveAllDialog = false },
-                title = { Text("Approve all ${suggestions.size}?") },
+                title = { Text("Approve all ${suggestions.orEmpty().size}?") },
                 text = { Text("This saves every pending suggestion and schedules any reminders/calendar events.") },
                 confirmButton = {
                     TextButton(onClick = {

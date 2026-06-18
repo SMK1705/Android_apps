@@ -25,10 +25,10 @@ fun NotesScreen(
     onNoteClick: (Int) -> Unit = {},
     viewModel: NotesViewModel = hiltViewModel()
 ) {
+    // null = first load not finished (skeleton); empty list = nothing matches (empty state).
     val notes by viewModel.notes.collectAsState()
     val query by viewModel.query.collectAsState()
     val showCompleted by viewModel.showCompleted.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
@@ -42,43 +42,40 @@ fun NotesScreen(
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = !showCompleted,
-                        onClick = { viewModel.setShowCompleted(false) },
-                        label = { Text("Active") }
-                    )
-                    FilterChip(
-                        selected = showCompleted,
-                        onClick = { viewModel.setShowCompleted(true) },
-                        label = { Text("Completed") }
-                    )
-                }
-                CategoryLegend()
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = !showCompleted,
+                    onClick = { viewModel.setShowCompleted(false) },
+                    label = { Text("Active") }
+                )
+                FilterChip(
+                    selected = showCompleted,
+                    onClick = { viewModel.setShowCompleted(true) },
+                    label = { Text("Completed") }
+                )
             }
+            Spacer(Modifier.height(12.dp))
+            CategoryLegend()
             Spacer(Modifier.height(8.dp))
         }
 
+        val current = notes
         when {
-            isLoading && notes.isEmpty() -> SkeletonList()
-            notes.isEmpty() -> {
+            current == null -> SkeletonList(modifier = Modifier.weight(1f))
+            current.isEmpty() -> {
                 val (icon, title, subtitle) = when {
                     query.isNotBlank() -> Triple(Icons.Default.SearchOff, "No matches", "Nothing matches “$query”.")
                     showCompleted -> Triple(Icons.Default.DoneAll, "Nothing completed yet", "Items you tick off will collect here.")
                     else -> Triple(Icons.Default.Description, "No items yet", "Approve suggestions in the Inbox and they'll land here.")
                 }
-                EmptyState(icon = icon, title = title, subtitle = subtitle)
+                EmptyState(modifier = Modifier.weight(1f), icon = icon, title = title, subtitle = subtitle)
             }
             else -> LazyColumn(
+                modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(notes, key = { it.id }) { note ->
+                items(current, key = { it.id }) { note ->
                     NoteRow(
                         modifier = Modifier.animateItem(),
                         note = note,

@@ -103,8 +103,8 @@ fun CategoryBadge(category: Category) {
 }
 
 @Composable
-fun CategoryLegend() {
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+fun CategoryLegend(modifier: Modifier = Modifier) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         LegendDot("Reminder", ReminderCategory.accent())
         LegendDot("To-do", TodoCategory.accent())
         LegendDot("Note", NoteCategory.accent())
@@ -114,8 +114,15 @@ fun CategoryLegend() {
 @Composable
 private fun LegendDot(label: String, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(50)).background(color))
-        Spacer(Modifier.width(4.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall)
+        Box(modifier = Modifier.size(9.dp).clip(RoundedCornerShape(50)).background(color))
+        Spacer(Modifier.width(5.dp))
+        // Single line, no wrap — a cramped legend must never break a word into "N\not\ne".
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            softWrap = false
+        )
     }
 }

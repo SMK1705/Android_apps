@@ -36,7 +36,10 @@ class NotesViewModel @Inject constructor(
      *  - Active: open items, "important first" (reminders → todos → notes, soonest due first);
      *  - Completed: done items, most-recently-completed first.
      */
-    val notes: StateFlow<List<Note>> =
+    // null = the active query hasn't delivered its first result yet (UI shows a skeleton); an empty
+    // list = loaded but nothing matches (UI shows the empty state). Both come from this one flow, so
+    // the loading and empty states are always derived from the *displayed* query — never a stale one.
+    val notes: StateFlow<List<Note>?> =
         combine(_query, _showCompleted) { q, c -> q to c }
             .flatMapLatest { (q, completed) ->
                 when {
@@ -46,13 +49,7 @@ class NotesViewModel @Inject constructor(
                     else -> dao.getActiveNotes().map { prioritise(it) }
                 }
             }
-            .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-
-    // True until the notes DB delivers its first result, so the list shows a skeleton on first load
-    // instead of momentarily flashing the empty state.
-    val isLoading: StateFlow<Boolean> = dao.getActiveNotes()
-        .map { false }
-        .stateIn(viewModelScope, SharingStarted.Lazily, true)
+            .stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     fun setQuery(q: String) { _query.value = q }
     fun setShowCompleted(c: Boolean) { _showCompleted.value = c }
