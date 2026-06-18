@@ -122,8 +122,9 @@ class InboxViewModel @Inject constructor(
     fun refreshRecentData() {
         viewModelScope.launch {
             _isRefreshing.value = true
-            // Manual refresh scans the last 10 minutes; the periodic worker covers longer gaps.
-            scanner.scanSince(System.currentTimeMillis() - 600_000)
+            // Scan everything since the last scan (manual or periodic) so nothing in the gap is
+            // missed — a fixed window used to drop anything older than it.
+            scanner.scanIncremental()
             _isRefreshing.value = false
         }
     }

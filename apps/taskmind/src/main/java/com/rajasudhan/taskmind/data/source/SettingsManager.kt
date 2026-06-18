@@ -22,6 +22,7 @@ class SettingsManager @Inject constructor(
         private const val KEY_GMAIL_ACCOUNTS = "gmail_accounts"
         private const val KEY_RETENTION_DAYS = "retention_days"
         private const val KEY_SCAN_FREQUENCY_MINUTES = "scan_frequency_minutes"
+        private const val KEY_LAST_SCAN_AT = "last_scan_at"
         private const val KEY_DYNAMIC_COLOR = "dynamic_color"
 
         const val CALENDAR_ID_AUTO = -1L
@@ -92,6 +93,14 @@ class SettingsManager @Inject constructor(
     var scanFrequencyMinutes: Int
         get() = encryptedPrefs.getInt(KEY_SCAN_FREQUENCY_MINUTES, DEFAULT_SCAN_FREQUENCY_MINUTES)
         set(value) = encryptedPrefs.edit().putInt(KEY_SCAN_FREQUENCY_MINUTES, value).apply()
+
+    /**
+     * Watermark (epoch ms) of the last successful recent-data scan, so each scan only covers what
+     * arrived since — nothing in the gap between refreshes is missed. 0 = never scanned.
+     */
+    var lastScanAt: Long
+        get() = encryptedPrefs.getLong(KEY_LAST_SCAN_AT, 0L)
+        set(value) = encryptedPrefs.edit().putLong(KEY_LAST_SCAN_AT, value).apply()
 
     // ---- Material You (dynamic color) ----
     // Off by default to keep the brand violet identity; exposed as a StateFlow so the theme in
