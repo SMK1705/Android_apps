@@ -69,20 +69,30 @@ class RecentDataScanner @Inject constructor(
     private suspend fun scanCalls(since: Long) {
         context.contentResolver.query(
             CallLog.Calls.CONTENT_URI,
-            arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DURATION),
+            arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DURATION, CallLog.Calls.CACHED_NAME),
             "${CallLog.Calls.DATE} >= ?",
             arrayOf(since.toString()),
             "${CallLog.Calls.DATE} DESC"
         )?.use { cursor ->
             while (cursor.moveToNext()) {
                 val number = cursor.getString(0)
-                val typeStr = when (cursor.getInt(1)) {
+                val type = cursor.getInt(1)
+                val duration = cursor.getString(2)
+                val cachedName = cursor.getString(3)
+                if (type == CallLog.Calls.MISSED_TYPE) {
+                    // A missed call is a concrete "call back" task, but the LLM tends to drop it as
+                    // non-actionable — so build the suggestion straight from the log, which already
+                    // has the number (and often the contact name). Skip private/unknown callers we
+                    // couldn't dial back anyway.
+                    val dialable = number?.let(PhoneUtil::normalize)?.takeIf { it.count(Char::isDigit) >= 5 }
+                    if (dialable != null) pipeline.addCallback(cachedName, dialable)
+                    continue
+                }
+                val typeStr = when (type) {
                     CallLog.Calls.INCOMING_TYPE -> "Incoming"
                     CallLog.Calls.OUTGOING_TYPE -> "Outgoing"
-                    CallLog.Calls.MISSED_TYPE -> "Missed"
                     else -> "Unknown"
                 }
-                val duration = cursor.getString(2)
                 pipeline.processText("Call Log", "$typeStr call with $number lasting $duration seconds.")
             }
         }

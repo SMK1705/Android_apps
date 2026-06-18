@@ -50,4 +50,34 @@ class PhoneUtilTest {
         // "recalled" must not count as a call intent.
         assertFalse(PhoneUtil.isCallIntent("Recalled product notice"))
     }
+
+    @Test
+    fun personNameFromNotificationSender() {
+        // A WhatsApp "call me" — the number is never in the text, only the sender's name.
+        assertEquals("John", PhoneUtil.personName("Notification from John", "wants you to call"))
+        // Prefix match is case-insensitive.
+        assertEquals("Mom", PhoneUtil.personName("notification from Mom", null))
+    }
+
+    @Test
+    fun personNameFromCallIntentTitle() {
+        assertEquals("Sarah", PhoneUtil.personName(null, "Call Sarah"))
+        assertEquals("the dentist", PhoneUtil.personName(null, "Ring the dentist"))
+        assertEquals("Dad", PhoneUtil.personName("SMS from +123456", "Call back Dad"))
+    }
+
+    @Test
+    fun personNamePrefersNotificationSenderOverTitle() {
+        assertEquals("John", PhoneUtil.personName("Notification from John", "Call Sarah"))
+    }
+
+    @Test
+    fun personNameNullWhenNoNameToLookUp() {
+        // No call verb in the title, and the source isn't a named notification.
+        assertNull(PhoneUtil.personName("SMS from +123456", "Meeting at 4pm"))
+        // A number after the verb is dialable directly — not a contact to look up.
+        assertNull(PhoneUtil.personName(null, "Call +31644016988"))
+        // A plain SMS sender (a number) is not a contact name.
+        assertNull(PhoneUtil.personName("SMS from 4079017892", null))
+    }
 }

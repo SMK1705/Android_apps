@@ -11,10 +11,35 @@ object PhoneUtil {
     private val DATE_LIKE = Regex("""\d{4}-\d{1,2}-\d{1,2}""")
     private val CALL_INTENT = Regex("""\b(call|calling|ring|dial)\b""", RegexOption.IGNORE_CASE)
 
+    private val CALL_VERB_PREFIX = Regex("""^(call back|call|calling|ring|dial)\s+""", RegexOption.IGNORE_CASE)
+
     /** True when the text is about phoning someone/a number, so a Call button is appropriate. */
     fun isCallIntent(vararg texts: String?): Boolean {
         val joined = texts.filterNotNull().joinToString(" ")
         return CALL_INTENT.containsMatchIn(joined)
+    }
+
+    /**
+     * A person name to look up in contacts when no number is in the text — e.g. a WhatsApp "call me"
+     * whose notification only carries the sender name. Prefers the notification sender
+     * ("Notification from John" → "John"); falls back to a call-intent title ("Call John" → "John").
+     * Returns null when no plausible name is present (or it's actually a number).
+     */
+    fun personName(source: String?, title: String?): String? {
+        source?.trim()?.let { s ->
+            val prefix = "notification from "
+            if (s.length > prefix.length && s.lowercase().startsWith(prefix)) {
+                val name = s.substring(prefix.length).trim()
+                if (name.isNotBlank() && extractFirst(name) == null) return name
+            }
+        }
+        title?.trim()?.let { t ->
+            val stripped = t.replaceFirst(CALL_VERB_PREFIX, "").trim()
+            if (stripped.isNotBlank() && !stripped.equals(t, ignoreCase = true) && extractFirst(stripped) == null) {
+                return stripped
+            }
+        }
+        return null
     }
 
     /**

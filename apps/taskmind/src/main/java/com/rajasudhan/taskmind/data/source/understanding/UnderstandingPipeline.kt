@@ -82,6 +82,39 @@ class UnderstandingPipeline @Inject constructor(
         }
     }
 
+    /**
+     * Creates a "call back" suggestion for a missed call directly, bypassing the LLM. The call log
+     * already carries the number (and often the contact name), so there's nothing to extract — and
+     * the model tends to drop a bare missed call as non-actionable, which is why these never showed
+     * up. [number] is required so the Call button can dial; [displayName] is the cached contact name
+     * when the caller is known. Deduped by title so a re-scan doesn't pile up the same call-back.
+     */
+    suspend fun addCallback(displayName: String?, number: String) {
+        if (number.isBlank()) return
+        val named = displayName?.trim()?.takeIf { it.isNotBlank() }
+        val who = named ?: number
+        val title = "Call back $who"
+
+        val pending = dao.getPendingSuggestions().first().map { it.extractedTitle to it.dueDate }
+        val notes = dao.getAllNotes().first().map { it.title to it.dueDate }
+        if (ExtractionHeuristics.isDuplicate(title, null, pending + notes)) return
+
+        dao.insertSuggestion(
+            Suggestion(
+                source = "Missed call",
+                rawSnippet = if (named != null) "Missed call from $named ($number)" else "Missed call from $number",
+                extractedTitle = title,
+                summary = "Missed call · $number",
+                dueDate = null,
+                dueTime = null,
+                type = "todo",
+                confidence = 0.95,
+                status = "pending"
+            )
+        )
+        notifier.notifyPending()
+    }
+
     private fun tryParse(json: String): LlmResponse? {
         val cleanedJson = ExtractionHeuristics.stripJsonFences(json)
         return try {

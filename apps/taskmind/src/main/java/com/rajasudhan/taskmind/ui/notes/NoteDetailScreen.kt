@@ -50,8 +50,8 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
-import com.rajasudhan.taskmind.data.source.PhoneUtil
 import com.rajasudhan.taskmind.data.source.RecurrenceUtil
+import com.rajasudhan.taskmind.data.source.resolveCallNumber
 import com.rajasudhan.taskmind.ui.common.CategoryBadge
 import com.rajasudhan.taskmind.ui.common.accent
 import com.rajasudhan.taskmind.ui.common.categoryFor
@@ -137,27 +137,20 @@ fun NoteDetailScreen(
         )
 
         // Call shortcut for "call X / call me back" items: prefer a number named in the message,
-        // else fall back to the sender's number. Opens the dialer with it pre-filled.
+        // else resolve the named contact's number from the device. Opens the dialer pre-filled.
+        // Resolution can touch contacts, so it runs off the main thread via produceState.
         val rawSnippet = remember(n.body) { n.body.substringAfter("\n\n", n.body) }
-        val callNumber = remember(n.id, n.body, n.title, n.summary, n.source) {
-            if (PhoneUtil.isCallIntent(n.title, n.summary, rawSnippet)) {
-                // Prefer a number stated in the item itself (a voice note spells digits out as
-                // words, so the real number survives only in the model's title/summary); fall back
-                // to the message body, then the sender's number for a "call me back".
-                PhoneUtil.extractFirst(n.title)
-                    ?: PhoneUtil.extractFirst(n.summary)
-                    ?: PhoneUtil.extractFirst(rawSnippet)
-                    ?: PhoneUtil.extractFirst(n.source)
-            } else null
+        val callNumber by produceState<String?>(null, n.id, n.body, n.title, n.summary, n.source) {
+            value = resolveCallNumber(context, n.title, n.summary, rawSnippet, n.source)
         }
-        if (callNumber != null) {
+        callNumber?.let { number ->
             Spacer(Modifier.height(12.dp))
             FilledTonalButton(
-                onClick = { dialNumber(context, callNumber) }
+                onClick = { dialNumber(context, number) }
             ) {
                 Icon(Icons.Default.Call, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Call $callNumber", maxLines = 1)
+                Text("Call $number", maxLines = 1)
             }
         }
 
