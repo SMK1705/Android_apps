@@ -71,6 +71,7 @@ fun SourcesScreen(
     // Permissions State
     val smsPermissionState = rememberPermissionState(Manifest.permission.READ_SMS)
     val callLogPermissionState = rememberPermissionState(Manifest.permission.READ_CALL_LOG)
+    val contactsPermissionState = rememberPermissionState(Manifest.permission.READ_CONTACTS)
     val audioPermissionState = rememberPermissionState(Manifest.permission.READ_MEDIA_AUDIO)
     val imagesPermissionState = rememberPermissionState(Manifest.permission.READ_MEDIA_IMAGES)
     val calendarPermissionState = rememberMultiplePermissionsState(
@@ -205,6 +206,22 @@ fun SourcesScreen(
                     } else {
                         viewModel.toggleCallLog(it)
                     }
+                }
+            )
+        }
+
+        item {
+            // Not an ingestion source — an enrichment so the Call button can dial. When a message
+            // names someone with no number (a WhatsApp "call me", a missed call from a saved
+            // contact), we look the name up in Contacts. Reflects/requests READ_CONTACTS only.
+            val contactsGranted = contactsPermissionState.status.isGranted
+            SourceToggle(
+                title = "Contacts",
+                subtitle = "Match a name in a message to a number so \"Call\" can dial",
+                isChecked = contactsGranted,
+                status = statusFor(contactsGranted, ready = contactsGranted),
+                onCheckedChange = {
+                    if (it && !contactsGranted) contactsPermissionState.launchPermissionRequest()
                 }
             )
         }

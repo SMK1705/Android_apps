@@ -47,7 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.rajasudhan.taskmind.data.model.Suggestion
-import com.rajasudhan.taskmind.data.source.PhoneUtil
+import com.rajasudhan.taskmind.data.source.resolveCallNumber
 import com.rajasudhan.taskmind.data.source.transcription.AudioRecorder
 import com.rajasudhan.taskmind.ui.common.*
 import kotlinx.coroutines.launch
@@ -458,13 +458,10 @@ fun SuggestionCard(
 
     // Quick actions: a number to call (for "call …" items) and a place to navigate to.
     val context = LocalContext.current
-    val callNumber = remember(suggestion) {
-        if (PhoneUtil.isCallIntent(suggestion.extractedTitle, suggestion.summary, suggestion.rawSnippet)) {
-            PhoneUtil.extractFirst(suggestion.extractedTitle)
-                ?: PhoneUtil.extractFirst(suggestion.summary)
-                ?: PhoneUtil.extractFirst(suggestion.rawSnippet)
-                ?: PhoneUtil.extractFirst(suggestion.source)
-        } else null
+    val callNumber by produceState<String?>(null, suggestion) {
+        value = resolveCallNumber(
+            context, suggestion.extractedTitle, suggestion.summary, suggestion.rawSnippet, suggestion.source
+        )
     }
     val place = suggestion.location?.trim()?.ifBlank { null }
 
@@ -611,14 +608,15 @@ fun SuggestionCard(
                     }
 
                     // Quick actions before approving: call the number / get directions to the place.
-                    if (callNumber != null || place != null) {
+                    val number = callNumber
+                    if (number != null || place != null) {
                         Row(
                             modifier = Modifier.padding(top = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            if (callNumber != null) {
+                            if (number != null) {
                                 TextButton(
-                                    onClick = { dialNumber(context, callNumber) },
+                                    onClick = { dialNumber(context, number) },
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                                 ) {
                                     Icon(Icons.Default.Call, contentDescription = null, tint = category.accent(), modifier = Modifier.size(18.dp))
