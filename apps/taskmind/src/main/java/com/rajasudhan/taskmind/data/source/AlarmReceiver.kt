@@ -23,7 +23,36 @@ class AlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val title = intent.getStringExtra("title") ?: "TaskMind Reminder"
+        val noteId = intent.getIntExtra("noteId", -1)
+        val recurrence = intent.getStringExtra("recurrence")
+        val dueDate = intent.getStringExtra("dueDate")
+        val dueTime = intent.getStringExtra("dueTime")
 
+        val pending = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                // If the note was deleted, this alarm is stale: don't notify, and cancel it so a
+                // recurring reminder can't keep rescheduling itself for a note that no longer exists.
+                if (noteId >= 0 && dao.getNoteByIdNow(noteId) == null) {
+                    alarmScheduler.cancel(noteId)
+                    return@launch
+                }
+
+                notifyReminder(context, title)
+
+                // Repeating reminder: advance the note's due date and schedule the next occurrence.
+                if (noteId >= 0 && !recurrence.isNullOrBlank() && dueDate != null) {
+                    val next = RecurrenceUtil.next(dueDate, recurrence) ?: return@launch
+                    dao.updateNoteDueDate(noteId, next)
+                    alarmScheduler.schedule(noteId, title, next, dueTime, recurrence)
+                }
+            } finally {
+                pending.finish()
+            }
+        }
+    }
+
+    private fun notifyReminder(context: Context, title: String) {
         val pendingIntent = PendingIntent.getActivity(
             context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
         )
@@ -37,23 +66,5 @@ class AlarmReceiver : BroadcastReceiver() {
             .build()
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .notify(System.currentTimeMillis().toInt(), notification)
-
-        // Repeating reminder: advance the note's due date and schedule the next occurrence.
-        val noteId = intent.getIntExtra("noteId", -1)
-        val recurrence = intent.getStringExtra("recurrence")
-        val dueDate = intent.getStringExtra("dueDate")
-        val dueTime = intent.getStringExtra("dueTime")
-        if (noteId >= 0 && !recurrence.isNullOrBlank() && dueDate != null) {
-            val next = RecurrenceUtil.next(dueDate, recurrence) ?: return
-            val pending = goAsync()
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    dao.updateNoteDueDate(noteId, next)
-                    alarmScheduler.schedule(noteId, title, next, dueTime, recurrence)
-                } finally {
-                    pending.finish()
-                }
-            }
-        }
     }
 }
