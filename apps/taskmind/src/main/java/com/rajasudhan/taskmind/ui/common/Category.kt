@@ -44,23 +44,20 @@ val NoteCategory = Category("NOTE", Color(0xFF1976D2), Color(0xFFE8F1FB), Color(
 @Composable
 fun Category.accent(dark: Boolean = isSystemInDarkTheme()): Color = if (dark) accentDark else accentLight
 
-/** Card container fill for the active theme. */
-@Composable
-fun Category.container(dark: Boolean = isSystemInDarkTheme()): Color = if (dark) containerDark else containerLight
+// Cards are now neutral tonal surfaces; the category color reads only through the accent bar, badge,
+// and the colored due-date. So container/onCard fills resolve to the theme's standard surface roles.
 
-// Text colors that sit on a category container. Dark in light mode, light in dark mode.
-val OnLightCard = Color(0xFF1B1B1B)
-val OnLightCardMuted = Color(0xFF5F5F5F)
-private val OnDarkCard = Color(0xFFEDEDED)
-private val OnDarkCardMuted = Color(0xFFB0AAB8)
-
-/** Primary text/icon color on a category container, theme-aware. */
+/** Card container fill — a neutral tonal surface (the accent bar/badge carry the category color). */
 @Composable
-fun onCard(dark: Boolean = isSystemInDarkTheme()): Color = if (dark) OnDarkCard else OnLightCard
+fun Category.container(): Color = MaterialTheme.colorScheme.surfaceContainer
 
-/** Muted/secondary text/icon color on a category container, theme-aware. */
+/** Primary text/icon color on a card. */
 @Composable
-fun onCardMuted(dark: Boolean = isSystemInDarkTheme()): Color = if (dark) OnDarkCardMuted else OnLightCardMuted
+fun onCard(): Color = MaterialTheme.colorScheme.onSurface
+
+/** Muted/secondary text/icon color on a card. */
+@Composable
+fun onCardMuted(): Color = MaterialTheme.colorScheme.onSurfaceVariant
 
 fun isOverdue(dueDate: String?, dueTime: String?): Boolean {
     val date = dueDate ?: return false

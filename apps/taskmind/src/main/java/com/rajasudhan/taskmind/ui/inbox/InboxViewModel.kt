@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -41,6 +42,12 @@ class InboxViewModel @Inject constructor(
     val pendingSuggestions = combine(dao.getPendingSuggestions(), nowTicker) { list, now ->
         list.filter { it.snoozedUntil == null || it.snoozedUntil!! <= now }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    // True until the DB delivers its first result, so the Inbox can show a skeleton on first load
+    // rather than flashing the "all caught up" empty state.
+    val isLoading: StateFlow<Boolean> = dao.getPendingSuggestions()
+        .map { false }
+        .stateIn(viewModelScope, SharingStarted.Lazily, true)
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing
