@@ -8,7 +8,7 @@ them as notes / to-dos or schedules reminders (one-off, recurring, or location-b
 It is a personal app you sideload on your own device (not for the Play Store). All understanding
 runs on-device by default; nothing leaves the phone unless you explicitly enable a cloud provider.
 
-- **Version:** Update 3 — latest release (tag `taskmind-v3`, `versionName` 3.0)
+- **Version:** Update 4 — latest release (tag `taskmind-v4`, `versionName` 4.0)
 - **Target device:** Samsung Galaxy S25 Ultra, One UI, Android 16
 - **Package:** `com.rajasudhan.taskmind`
 - **Stack:** Kotlin, Jetpack Compose (Material 3), Hilt, Room + SQLCipher (`net.zetetic:sqlcipher-android`,
@@ -118,8 +118,8 @@ code — not unpushed local work.
    Notifications, Gmail, Call Logs, App Usage, Voice/Call Recordings). Grant each permission when
    prompted. Email and voice transcription need a little one-time setup (sections below).
 3. **Get understanding working** — set up the on-device model (below) so extraction is free and
-   offline. Items then arrive on their own; tap **↻** in the Inbox header to scan the last 10 minutes
-   right now.
+   offline. Items then arrive on their own; tap **↻** in the Inbox header to scan **everything since
+   the last scan** right now (so nothing that arrived in the gap is missed).
 4. **Review the Inbox** — every suggestion is a card with a short **summary + source**; tap it to
    expand the full original text. **Approve** (✓), **Edit** (✎), or **Reject** (✗) each — or
    **Approve all** / **Reject all**. Approving a dated item with no time asks you to pick one (or keep
@@ -170,8 +170,8 @@ You can override it in **Settings → Understanding Engine → Model .task path*
 ## Cloud LLM (optional fallback)
 
 Settings → Understanding Engine → **Cloud LLM** → paste an API key. Uses Google Gemini
-(`gemini-2.5-flash`). Every call is recorded in the Data Egress panel. Leave on **On-Device** to
-keep everything local.
+(`gemini-2.5-flash`) with **structured output** — an enforced JSON schema, so responses are always
+valid. Every call is recorded in the Data Egress panel. Leave on **On-Device** to keep everything local.
 
 ---
 
@@ -183,7 +183,8 @@ Toggle sources in the **Sources** tab; each requests its permission when enabled
 |---|---|---|
 | Notifications | Notification access (system settings) | **Per-app picker** below the toggle — check specific apps (Messages, WhatsApp, Gmail…) to cut noise; leave all unchecked = monitor every app |
 | SMS | `READ_SMS` | Live + periodic; takes effect immediately |
-| Call Logs | `READ_CALL_LOG` | Scanned on refresh / periodically |
+| Call Logs | `READ_CALL_LOG` | Scanned on refresh / periodically. **Missed calls become "Call back" suggestions** (with the number, so the Call button dials) |
+| Contacts | `READ_CONTACTS` | An *enrichment*, not an ingestion source: when a message names someone with **no number** ("call Amma", a WhatsApp/chat missed call), the name is matched to a number in your Contacts so the **Call** button can dial. Lookup runs on-device |
 | Calendar | `READ_CALENDAR` + `WRITE_CALENDAR` | Read to dedup; writes events on approval (no duplicates) |
 | App Usage | Usage access (system settings) | **Daily screen-time digest** (total + top apps) → a note you can approve. Once per day, on-device |
 | Email (Gmail) | Google OAuth (`gmail.readonly`) | Reads **unread Primary** emails. Connect **multiple accounts** via the system account chooser; each gets its own row with a per-account **Disconnect**. Needs a one-time Google Cloud setup (below). Understanding stays on-device — email content never leaves the phone |
@@ -285,8 +286,13 @@ Screenshot OCR runs **fully on-device** via [Tesseract](https://github.com/tesse
   **Active / Completed** split. Tick items complete; list-like to-dos get a **checklist**. **Tap a
   note** for its detail (summary, body, source, due date, recurrence, location); **deep links** (phone,
   URL, email, address) in the text are tappable. Delete from the list or the detail screen.
-- **Reminders** — one-off, **recurring** (daily / weekly / monthly, rescheduled when they fire), or
-  **location** (a geofence triggers when you arrive at a saved place).
+- **Call & directions** — call-related items show a **Call** button; if the message named a person
+  with no number, it's resolved against your **Contacts** so it still dials. Items with a place show
+  **Get directions** (opens Google Maps). **Missed calls** — cellular and chat-app (WhatsApp/Telegram)
+  — arrive as "Call back" suggestions.
+- **Reminders** — one-off, **recurring** (daily / weekly / monthly — extracted from phrases like
+  "every Monday" or set by hand, rescheduled when they fire), or **location** (a geofence triggers
+  when you arrive at a saved place).
 - **Capture from anywhere** — share text/images to TaskMind, the **Quick Settings tile**, or the
   **home-screen widget**; captured content feeds the pipeline without being shown (the biometric gate
   on *viewing* stays intact).
@@ -296,7 +302,8 @@ Screenshot OCR runs **fully on-device** via [Tesseract](https://github.com/tesse
   Restore**, Data Egress audit, Test Extraction box, a permissions panel, and **Delete All Private Data**.
 
 Passive behavior: a foreground service keeps the live watchers alive; a WorkManager job scans on your
-chosen interval (default 30 min); new items raise a single "N suggestions to review" notification.
+chosen interval (default 30 min) — both it and the manual **↻** scan *since the last scan* (capped at
+24h) so nothing in the gap is missed; new items raise a single "N suggestions to review" notification.
 
 ---
 

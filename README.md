@@ -36,17 +36,20 @@ uses an on-device LLM to extract action items. Nothing is saved or scheduled unt
   it, undo the last action, and filter by type or source. Approving a dated item schedules a reminder
   and a calendar event, prompting for a time when none was detected. You can approve or reject straight
   from the notification, and repeatedly rejecting a sender down-ranks similar future suggestions.
+- **Act** — call or get directions in one tap: a **Call** button that resolves a named contact ("call
+  Amma") to a number via your Contacts, and **Get directions** to a place named in the message. Missed
+  calls — cellular *and* chat-app (WhatsApp/Telegram) — become "Call back" suggestions automatically.
 - **Keep** — approved items live in Notes with completion checkboxes (Active/Completed split), tickable
   checklists, tappable deep links (phone, URL, email, address), full-text search, and a detail view.
-- **Schedule** — reminders can recur (daily / weekly / monthly) or trigger by **location** (a geofence
-  fires when you arrive at a saved place).
+- **Schedule** — reminders can recur (daily / weekly / monthly — extracted from "every Monday" or set
+  by hand) or trigger by **location** (a geofence fires when you arrive at a saved place).
 - **Private by design** — understanding runs locally by default; data is encrypted at rest (SQLCipher),
   the app is locked behind biometrics, and every network egress is auditable in-app. A cloud LLM is
   available but strictly opt-in. Carry your data to a new device with an **encrypted, passphrase-sealed
   backup** (AES-256-GCM).
 - **Guided** — a first-run in-app walkthrough, re-openable from the help button, introduces the flow.
 
-Current release: **Update 3** (`taskmind-v3`). Full setup, permissions, and model instructions are in
+Current release: **Update 4** (`taskmind-v4`). Full setup, permissions, and model instructions are in
 [`apps/taskmind/README.md`](apps/taskmind/README.md); per-release history is in
 [`CHANGELOG.md`](CHANGELOG.md).
 
