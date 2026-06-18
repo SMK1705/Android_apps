@@ -32,6 +32,32 @@ class RecentDataScanner @Inject constructor(
     private val voskTranscriber: VoskTranscriber,
     private val ocrEngine: OcrEngine
 ) {
+    private companion object {
+        const val MAX_LOOKBACK_MS = 24 * 60 * 60 * 1000L      // cap a since-last-scan window at 24h
+        const val FIRST_RUN_LOOKBACK_MS = 15 * 60 * 1000L     // first ever scan: just the last 15 min
+    }
+
+    /**
+     * Scans everything that arrived since the last successful scan, so nothing in the gap between
+     * refreshes is missed (the old fixed 10-minute window silently dropped anything older). Shared by
+     * the manual Inbox refresh and the periodic worker, which both advance the same watermark.
+     *
+     * The window is capped at [MAX_LOOKBACK_MS] so a long-dormant app doesn't re-scan months of
+     * history; the very first run only looks back [FIRST_RUN_LOOKBACK_MS] to avoid an initial flood.
+     */
+    suspend fun scanIncremental() {
+        val now = System.currentTimeMillis()
+        val last = settingsManager.lastScanAt
+        val since = when {
+            last <= 0L -> now - FIRST_RUN_LOOKBACK_MS
+            else -> maxOf(last, now - MAX_LOOKBACK_MS)
+        }
+        scanSince(since)
+        // Advance the watermark only after the scan; each source swallows its own errors, so this
+        // is reached even if one source failed (we accept re-scanning rather than dropping data).
+        settingsManager.lastScanAt = now
+    }
+
     suspend fun scanSince(sinceMillis: Long) {
         if (sourceManager.isSmsEnabled.first()) runCatching { scanSms(sinceMillis) }
         if (sourceManager.isCallLogEnabled.first()) runCatching { scanCalls(sinceMillis) }
@@ -82,10 +108,9 @@ class RecentDataScanner @Inject constructor(
                 if (type == CallLog.Calls.MISSED_TYPE) {
                     // A missed call is a concrete "call back" task, but the LLM tends to drop it as
                     // non-actionable — so build the suggestion straight from the log, which already
-                    // has the number (and often the contact name). Skip private/unknown callers we
-                    // couldn't dial back anyway.
-                    val dialable = number?.let(PhoneUtil::normalize)?.takeIf { it.count(Char::isDigit) >= 5 }
-                    if (dialable != null) pipeline.addCallback(cachedName, dialable)
+                    // has the number (and often the contact name). addCallback normalizes the number
+                    // and skips private/unknown callers we couldn't dial back anyway.
+                    pipeline.addCallback(cachedName, number)
                     continue
                 }
                 val typeStr = when (type) {

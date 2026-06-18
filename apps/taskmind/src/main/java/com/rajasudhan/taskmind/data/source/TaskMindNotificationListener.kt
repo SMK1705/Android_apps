@@ -1,6 +1,7 @@
 package com.rajasudhan.taskmind.data.source
 
 import android.app.Notification
+import android.content.ComponentName
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
@@ -34,19 +35,40 @@ class TaskMindNotificationListener : NotificationListenerService() {
             "com.sec.android.app.launcher",
             "com.google.android.apps.nexuslauncher"
         )
+
+        // Phone/dialer apps: their missed calls are captured from the call log (with the real
+        // number), so we skip their notifications here to avoid a duplicate that has only the name.
+        private val PHONE_PACKAGES = setOf(
+            "com.samsung.android.dialer",
+            "com.samsung.android.incallui",
+            "com.android.dialer",
+            "com.google.android.dialer",
+            "com.android.phone",
+            "com.android.server.telecom"
+        )
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         super.onNotificationPosted(sbn)
 
-        // Never process our own notifications, system/UI noise, or filtered categories.
+        // Never process our own notifications or system/UI noise.
         if (sbn.packageName == applicationContext.packageName) return
         if (sbn.packageName in IGNORED_PACKAGES) return
-        if (!isRelevant(sbn)) return
 
         val notification = sbn.notification
-        val title = notification.extras.getString(Notification.EXTRA_TITLE) ?: return
-        val text = notification.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: return
+        val title = notification.extras.getString(Notification.EXTRA_TITLE)
+        val text = notification.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
+
+        // A chat-app missed call (WhatsApp, Telegram, …) is only ever a notification — it never hits
+        // the call log. It's also CATEGORY_CALL, which isRelevant() drops, so detect it up front and
+        // let it through. Dialer apps are handled by the call-log scan instead (see PHONE_PACKAGES).
+        val missedCaller =
+            if (sbn.packageName in PHONE_PACKAGES) null else PhoneUtil.missedCallName(title, text)
+
+        if (missedCaller == null) {
+            if (!isRelevant(sbn)) return
+            if (title == null || text == null) return
+        }
 
         scope.launch {
             if (!sourceManager.isNotificationsEnabled.first()) return@launch
@@ -54,7 +76,21 @@ class TaskMindNotificationListener : NotificationListenerService() {
             val allowlist = sourceManager.notificationAllowlist.first()
             if (allowlist.isNotEmpty() && sbn.packageName !in allowlist) return@launch
             // NOTE: do not log notification content — it is sensitive user data.
-            understandingPipeline.processText("Notification from $title", text)
+            if (missedCaller != null) {
+                // No number in the notification; the Call button resolves the name via Contacts.
+                understandingPipeline.addCallback(displayName = missedCaller, number = null)
+            } else {
+                understandingPipeline.processText("Notification from ${title!!}", text!!)
+            }
+        }
+    }
+
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        // Aggressive battery management (esp. on Samsung) can kill the listener; ask the system to
+        // rebind so we keep seeing notifications — otherwise WhatsApp calls/messages slip past.
+        runCatching {
+            requestRebind(ComponentName(this, TaskMindNotificationListener::class.java))
         }
     }
 

@@ -23,10 +23,10 @@ class DataCollectionWorker @AssistedInject constructor(
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
-        // Window slightly larger than the run interval so nothing slips through the gaps.
-        val since = System.currentTimeMillis() - 45 * 60 * 1000L
         return try {
-            scanner.scanSince(since)
+            // Scan since the last scan (shared watermark with the manual refresh), so a deferred or
+            // skipped run doesn't leave a gap — it just covers more ground next time.
+            scanner.scanIncremental()
             runRetentionCleanup()
             Result.success()
         } catch (e: Exception) {

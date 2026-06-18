@@ -13,6 +13,14 @@ object PhoneUtil {
 
     private val CALL_VERB_PREFIX = Regex("""^(call back|call|calling|ring|dial)\s+""", RegexOption.IGNORE_CASE)
 
+    // A missed-call notification line ("Missed voice call", "Missed group video call", "Missed call").
+    // Anchored at the start so a chat message like "Sorry I missed your call" doesn't match.
+    private val MISSED_CALL = Regex(
+        """^\s*\W*missed\s+((voice|video|group|audio)\s+){0,2}calls?\b""",
+        RegexOption.IGNORE_CASE
+    )
+    private val FROM_NAME = Regex("""\bfrom\s+(.+)$""", RegexOption.IGNORE_CASE)
+
     /** True when the text is about phoning someone/a number, so a Call button is appropriate. */
     fun isCallIntent(vararg texts: String?): Boolean {
         val joined = texts.filterNotNull().joinToString(" ")
@@ -41,6 +49,39 @@ object PhoneUtil {
         }
         return null
     }
+
+    /**
+     * When [title]/[text] are a missed-call notification (a WhatsApp/Telegram "Missed voice call",
+     * etc.), the person to call back — the "from <name>" in the body, else whichever field isn't the
+     * "Missed … call" phrase (usually the sender's name in the title). Null when it isn't a missed
+     * call, or when the caller is itself a number (then it's dialed directly, not looked up).
+     */
+    fun missedCallName(title: String?, text: String?): String? {
+        val t = title?.trim().orEmpty()
+        val x = text?.trim().orEmpty()
+        val titleIsPhrase = MISSED_CALL.containsMatchIn(t)
+        val textIsPhrase = MISSED_CALL.containsMatchIn(x)
+        if (!titleIsPhrase && !textIsPhrase) return null
+        // Prefer an explicit "from <name>" in either field.
+        for (field in listOf(x, t)) {
+            FROM_NAME.find(field)?.groupValues?.getOrNull(1)?.trim()
+                ?.takeIf { isLookupableName(it) }
+                ?.let { return it }
+        }
+        // Otherwise the caller is whichever field isn't the "Missed … call" phrase.
+        val caller = when {
+            titleIsPhrase && !textIsPhrase -> x
+            textIsPhrase && !titleIsPhrase -> t
+            else -> ""
+        }
+        return caller.takeIf { isLookupableName(it) }
+    }
+
+    // A caller we could actually dial back: a non-blank name that isn't itself a number or an email
+    // address. (Google services post "missed call" notifications titled with the account email —
+    // "Call back you@gmail.com" is useless, since an email can't be looked up or dialed.)
+    private fun isLookupableName(name: String): Boolean =
+        name.isNotBlank() && extractFirst(name) == null && !name.contains('@')
 
     /**
      * The first dialable phone number in [text], normalized for a `tel:` URI, or null. International

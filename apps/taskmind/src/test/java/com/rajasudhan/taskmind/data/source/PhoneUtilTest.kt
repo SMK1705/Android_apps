@@ -80,4 +80,33 @@ class PhoneUtilTest {
         // A plain SMS sender (a number) is not a contact name.
         assertNull(PhoneUtil.personName("SMS from 4079017892", null))
     }
+
+    @Test
+    fun missedCallNameFromChatAppNotification() {
+        // WhatsApp: title is the caller, text is the phrase.
+        assertEquals("Amma", PhoneUtil.missedCallName("Amma", "Missed voice call"))
+        assertEquals("Amma", PhoneUtil.missedCallName("Amma", "Missed video call"))
+        assertEquals("Mom", PhoneUtil.missedCallName("Mom", "Missed group voice call"))
+        // App name in the title, caller in the body's "from".
+        assertEquals("Amma", PhoneUtil.missedCallName("WhatsApp", "Missed voice call from Amma"))
+        // Some apps invert it: phrase in the title, caller in the text.
+        assertEquals("Amma", PhoneUtil.missedCallName("Missed call", "Amma"))
+    }
+
+    @Test
+    fun missedCallNameIgnoresOrdinaryMessages() {
+        // A normal chat message that merely mentions a missed call must not be treated as one.
+        assertNull(PhoneUtil.missedCallName("Amma", "Sorry I missed your call earlier"))
+        assertNull(PhoneUtil.missedCallName("Bank", "Your OTP is 481920"))
+        // No caller name available → nothing to call back.
+        assertNull(PhoneUtil.missedCallName("Missed voice call", ""))
+    }
+
+    @Test
+    fun missedCallNameIgnoresEmailTitledNotifications() {
+        // Google services post missed-call notifications titled with the account email — there's no
+        // person to call back, so don't manufacture a "Call back you@gmail.com" item.
+        assertNull(PhoneUtil.missedCallName("you@gmail.com", "Missed voice call"))
+        assertNull(PhoneUtil.missedCallName("Missed call", "from you@gmail.com"))
+    }
 }

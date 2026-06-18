@@ -31,3 +31,7 @@ keystore.properties
 
 # ---- Claude Code local config ----
 .claude/
+
+# ---- On-device QA scratch (screenshots / UI dumps / DataStore pulls) ----
+_qa_*
+_ds*.pb

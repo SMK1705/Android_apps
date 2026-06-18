@@ -2,10 +2,13 @@ package com.rajasudhan.taskmind.data.source.understanding
 
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Suggestion
+import com.rajasudhan.taskmind.data.source.PhoneUtil
 import com.rajasudhan.taskmind.data.source.RejectionLearner
 import com.rajasudhan.taskmind.data.source.SuggestionNotifier
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -27,6 +30,11 @@ class UnderstandingPipeline @Inject constructor(
     private val notifier: SuggestionNotifier,
     private val rejectionLearner: RejectionLearner
 ) {
+    // Serializes the check-then-insert in addCallback so two missed-call notifications arriving at
+    // once (a chat app re-posting its missed-call notification) can't both pass the dedup and create
+    // twin "Call back" cards.
+    private val callbackMutex = Mutex()
+
     suspend fun processText(source: String, text: String) {
         // Cheap pre-filter: skip obvious non-actionable noise (OTPs, promos, opt-outs)
         // before spending battery/LLM cycles on it.
@@ -83,35 +91,53 @@ class UnderstandingPipeline @Inject constructor(
     }
 
     /**
-     * Creates a "call back" suggestion for a missed call directly, bypassing the LLM. The call log
-     * already carries the number (and often the contact name), so there's nothing to extract — and
-     * the model tends to drop a bare missed call as non-actionable, which is why these never showed
-     * up. [number] is required so the Call button can dial; [displayName] is the cached contact name
-     * when the caller is known. Deduped by title so a re-scan doesn't pile up the same call-back.
+     * Creates a "call back" suggestion for a missed call directly, bypassing the LLM — the model
+     * tends to drop a bare missed call as non-actionable, which is why these never showed up.
+     *
+     * Two callers feed this:
+     *  - the cellular call log, which has the real [number] (and often a cached contact name); the
+     *    Call button dials that number.
+     *  - a missed-call notification from a chat app (WhatsApp, Telegram, …), which carries only the
+     *    caller's [displayName] and no [number]; the Call button resolves the name via Contacts.
+     *
+     * Needs at least a dialable number or a name; deduped by title so a re-scan (or a notification
+     * the app keeps re-posting) doesn't pile up the same call-back.
      */
-    suspend fun addCallback(displayName: String?, number: String) {
-        if (number.isBlank()) return
-        val named = displayName?.trim()?.takeIf { it.isNotBlank() }
-        val who = named ?: number
+    suspend fun addCallback(displayName: String?, number: String?, source: String = "Missed call") {
+        // A name we can look up/show: not blank, not itself a number, not an email (some services
+        // post missed-call notifications titled with the account email — "Call back you@gmail.com"
+        // can't be dialed).
+        val named = displayName?.trim()
+            ?.takeIf { it.isNotBlank() && PhoneUtil.extractFirst(it) == null && !it.contains('@') }
+        val dialable = number?.let(PhoneUtil::normalize)?.takeIf { it.count(Char::isDigit) >= 5 }
+        if (named == null && dialable == null) return // nothing to call back
+
+        val who = named ?: dialable!!
         val title = "Call back $who"
 
-        val pending = dao.getPendingSuggestions().first().map { it.extractedTitle to it.dueDate }
-        val notes = dao.getAllNotes().first().map { it.title to it.dueDate }
-        if (ExtractionHeuristics.isDuplicate(title, null, pending + notes)) return
+        callbackMutex.withLock {
+            val pending = dao.getPendingSuggestions().first().map { it.extractedTitle to it.dueDate }
+            val notes = dao.getAllNotes().first().map { it.title to it.dueDate }
+            if (ExtractionHeuristics.isDuplicate(title, null, pending + notes)) return
 
-        dao.insertSuggestion(
-            Suggestion(
-                source = "Missed call",
-                rawSnippet = if (named != null) "Missed call from $named ($number)" else "Missed call from $number",
-                extractedTitle = title,
-                summary = "Missed call · $number",
-                dueDate = null,
-                dueTime = null,
-                type = "todo",
-                confidence = 0.95,
-                status = "pending"
+            dao.insertSuggestion(
+                Suggestion(
+                    source = source,
+                    rawSnippet = buildString {
+                        append("Missed call")
+                        if (named != null) append(" from $named")
+                        if (dialable != null) append(" ($dialable)")
+                    },
+                    extractedTitle = title,
+                    summary = if (dialable != null) "Missed call · $dialable" else "Missed call",
+                    dueDate = null,
+                    dueTime = null,
+                    type = "todo",
+                    confidence = 0.95,
+                    status = "pending"
+                )
             )
-        )
+        }
         notifier.notifyPending()
     }
 
