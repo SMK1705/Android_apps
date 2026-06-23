@@ -24,6 +24,7 @@ import com.rajasudhan.taskmind.data.source.ocr.OcrEngine
 import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
 import com.rajasudhan.taskmind.data.source.understanding.OnDeviceLlmProvider
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
+import com.rajasudhan.taskmind.ui.theme.ThemeMode
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import kotlinx.coroutines.Dispatchers
@@ -56,7 +57,10 @@ class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    // ---- Appearance (Material You / dynamic color) ----
+    // ---- Appearance (theme + Material You / dynamic color) ----
+    val themeMode: StateFlow<ThemeMode> = settingsManager.themeModeFlow
+    fun updateThemeMode(mode: ThemeMode) { settingsManager.themeMode = mode }
+
     val dynamicColor: StateFlow<Boolean> = settingsManager.dynamicColorFlow
     fun updateDynamicColor(enabled: Boolean) { settingsManager.dynamicColor = enabled }
 

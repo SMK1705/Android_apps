@@ -1,6 +1,7 @@
 package com.rajasudhan.taskmind.data.source
 
 import android.content.SharedPreferences
+import com.rajasudhan.taskmind.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,6 +26,7 @@ class SettingsManager @Inject constructor(
         private const val KEY_LAST_SCAN_AT = "last_scan_at"
         private const val KEY_DYNAMIC_COLOR = "dynamic_color"
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
+        private const val KEY_THEME_MODE = "theme_mode"
 
         const val CALENDAR_ID_AUTO = -1L
         const val DEFAULT_EVENT_DURATION_MINUTES = 60
@@ -116,6 +118,22 @@ class SettingsManager @Inject constructor(
             _dynamicColor.value = value
         }
 
+    // ---- Theme (follow system / light / dark) ----
+    // SYSTEM by default so we follow the OS day-night setting until the user chooses otherwise.
+    // Exposed as a StateFlow so MainActivity re-themes live the moment the choice changes.
+    private val _themeMode = MutableStateFlow(
+        runCatching { ThemeMode.valueOf(encryptedPrefs.getString(KEY_THEME_MODE, null) ?: ThemeMode.SYSTEM.name) }
+            .getOrDefault(ThemeMode.SYSTEM)
+    )
+    val themeModeFlow: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
+    var themeMode: ThemeMode
+        get() = _themeMode.value
+        set(value) {
+            encryptedPrefs.edit().putString(KEY_THEME_MODE, value.name).apply()
+            _themeMode.value = value
+        }
+
     // ---- App lock (biometric) ----
     // ON by default — this is a private assistant, so the secure default is to require auth. Exposed
     // as a StateFlow so MainActivity reacts the moment the Settings toggle flips.
@@ -147,9 +165,11 @@ class SettingsManager @Inject constructor(
             .remove(KEY_SCAN_FREQUENCY_MINUTES)
             .remove(KEY_DYNAMIC_COLOR)
             .remove(KEY_APP_LOCK_ENABLED)
+            .remove(KEY_THEME_MODE)
             .apply()
         _dynamicColor.value = false
         // Wiping data re-asserts the secure default: the lock comes back on.
         _appLockEnabled.value = true
+        _themeMode.value = ThemeMode.SYSTEM
     }
 }

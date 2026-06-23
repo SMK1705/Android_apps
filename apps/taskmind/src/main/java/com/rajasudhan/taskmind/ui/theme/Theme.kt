@@ -1,101 +1,83 @@
 package com.rajasudhan.taskmind.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 
-private val DarkColorScheme = darkColorScheme(
-    primary = BrandVioletLight,
-    onPrimary = Color(0xFF2A1466),
-    primaryContainer = BrandVioletContainer,
-    onPrimaryContainer = BrandViol_OnContainer,
-    secondary = Color(0xFFCDC2DB),
-    onSecondary = Color(0xFF332D41),
-    secondaryContainer = Color(0xFF2C2836),
-    onSecondaryContainer = Color(0xFFE9DEF8),
-    tertiary = Color(0xFFEFB8C8),
-    background = DarkBg,
-    onBackground = DarkOnSurface,
-    surface = DarkSurface,
-    onSurface = DarkOnSurface,
-    surfaceVariant = DarkSurfaceVariant,
-    onSurfaceVariant = DarkOnSurfaceVariant,
-    surfaceDim = DarkSurfaceDim,
-    surfaceBright = DarkSurfaceBright,
-    surfaceContainerLowest = DarkContainerLowest,
-    surfaceContainerLow = DarkContainerLow,
-    surfaceContainer = DarkContainer,
-    surfaceContainerHigh = DarkContainerHigh,
-    surfaceContainerHighest = DarkContainerHighest,
-    outline = DarkOutline,
-    outlineVariant = DarkOutlineVariant,
-    error = ErrorDark,
-    onError = Color(0xFF690005),
-    errorContainer = ErrorContainerDark,
-    onErrorContainer = OnErrorContainerDark,
-    surfaceTint = BrandVioletLight
-)
+/** The user's theme choice. [SYSTEM] follows the OS day/night setting; the others force it. */
+enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
-private val LightColorScheme = lightColorScheme(
-    primary = BrandViolet,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFE7DEFF),
-    onPrimaryContainer = Color(0xFF21005D),
-    secondary = Color(0xFF615B71),
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFFE8DEF8),
-    onSecondaryContainer = Color(0xFF1D192B),
-    tertiary = Color(0xFF7D5260),
-    background = LightBg,
-    onBackground = LightOnSurface,
-    surface = LightSurface,
-    onSurface = LightOnSurface,
-    surfaceVariant = LightSurfaceVariant,
-    onSurfaceVariant = LightOnSurfaceVariant,
-    surfaceDim = LightSurfaceDim,
-    surfaceBright = LightSurfaceBright,
-    surfaceContainerLowest = LightContainerLowest,
-    surfaceContainerLow = LightContainerLow,
-    surfaceContainer = LightContainer,
-    surfaceContainerHigh = LightContainerHigh,
-    surfaceContainerHighest = LightContainerHighest,
-    outline = LightOutline,
-    outlineVariant = LightOutlineVariant,
-    error = ErrorLight,
-    onError = Color.White,
-    errorContainer = ErrorContainerLight,
-    onErrorContainer = OnErrorContainerLight,
-    surfaceTint = BrandViolet
-)
+// Builds a Material3 ColorScheme from a Bold palette so built-in widgets (switches, fields, dialogs,
+// system bars) match the editorial look; the richer Bold tokens ride alongside via LocalBoldColors.
+private fun boldColorScheme(c: BoldColors): ColorScheme {
+    val onErr = if (c.isDark) Color(0xFF0A0A0C) else Color.White
+    return if (c.isDark) {
+        darkColorScheme(
+            primary = c.accent, onPrimary = BoldOnAccent,
+            primaryContainer = c.surface2, onPrimaryContainer = c.ink,
+            secondary = c.ink2, onSecondary = c.screen,
+            secondaryContainer = c.surface2, onSecondaryContainer = c.ink,
+            tertiary = c.accent, onTertiary = BoldOnAccent,
+            tertiaryContainer = c.surface2, onTertiaryContainer = c.ink,
+            background = c.screen, onBackground = c.ink,
+            surface = c.screen, onSurface = c.ink,
+            surfaceVariant = c.surface2, onSurfaceVariant = c.ink2,
+            surfaceTint = c.accent,
+            inverseSurface = c.ink, inverseOnSurface = c.screen,
+            error = c.skip, onError = onErr,
+            errorContainer = c.skipBg, onErrorContainer = c.skip,
+            outline = c.ink3, outlineVariant = c.line,
+            scrim = Color(0xCC000000),
+            surfaceBright = c.surface2, surfaceDim = c.screen,
+            surfaceContainerLowest = c.appBg, surfaceContainerLow = c.surface,
+            surfaceContainer = c.surface, surfaceContainerHigh = c.surface2,
+            surfaceContainerHighest = c.surface2,
+        )
+    } else {
+        lightColorScheme(
+            primary = c.accent, onPrimary = BoldOnAccent,
+            primaryContainer = c.surface2, onPrimaryContainer = c.ink,
+            secondary = c.ink2, onSecondary = c.screen,
+            secondaryContainer = c.surface2, onSecondaryContainer = c.ink,
+            tertiary = c.accent, onTertiary = BoldOnAccent,
+            tertiaryContainer = c.surface2, onTertiaryContainer = c.ink,
+            background = c.screen, onBackground = c.ink,
+            surface = c.screen, onSurface = c.ink,
+            surfaceVariant = c.surface2, onSurfaceVariant = c.ink2,
+            surfaceTint = c.accent,
+            inverseSurface = c.ink, inverseOnSurface = c.screen,
+            error = c.skip, onError = onErr,
+            errorContainer = c.skipBg, onErrorContainer = c.skip,
+            outline = c.ink3, outlineVariant = c.line,
+            scrim = Color(0xCC000000),
+            surfaceBright = c.surface2, surfaceDim = c.screen,
+            surfaceContainerLowest = c.appBg, surfaceContainerLow = c.surface,
+            surfaceContainer = c.surface, surfaceContainerHigh = c.surface2,
+            surfaceContainerHighest = c.surface2,
+        )
+    }
+}
 
 @Composable
 fun TaskMindTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Off by default so the app keeps a consistent brand identity instead of wallpaper colors.
-    dynamicColor: Boolean = false,
+    // The Bold direction is a fixed brand identity, so wallpaper-based dynamic color is intentionally
+    // not applied. The parameter is kept so existing call sites compile unchanged.
+    @Suppress("UNUSED_PARAMETER") dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+    val bold = if (darkTheme) BoldDarkColors else BoldLightColors
+    CompositionLocalProvider(LocalBoldColors provides bold) {
+        MaterialTheme(
+            colorScheme = boldColorScheme(bold),
+            typography = BoldTypography,
+            shapes = Shapes,
+            content = content
+        )
     }
-
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        shapes = Shapes,
-        content = content
-    )
 }

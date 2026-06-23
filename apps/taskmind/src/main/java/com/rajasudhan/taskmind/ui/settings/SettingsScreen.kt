@@ -2,6 +2,7 @@ package com.rajasudhan.taskmind.ui.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.biometric.BiometricManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -11,18 +12,29 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.rajasudhan.taskmind.AppLock
 import com.rajasudhan.taskmind.data.source.SettingsManager
+import com.rajasudhan.taskmind.ui.theme.ThemeMode
 
 private val EngineAccent = Color(0xFF7C4DFF)
 private val TranscriptionAccent = Color(0xFF00897B)
 private val OcrAccent = Color(0xFF5E35B1)
 private val CalendarAccent = Color(0xFF2E7D32)
+
+/** True only when the device has a biometric or device credential enrolled to authenticate against. */
+private fun deviceCanEnforceLock(context: android.content.Context): Boolean =
+    BiometricManager.from(context).canAuthenticate(
+        BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+    ) == BiometricManager.BIOMETRIC_SUCCESS
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,6 +64,7 @@ fun SettingsScreen(
     val backupStatus by viewModel.backupStatus.collectAsState()
     val restartRequired by viewModel.restartRequired.collectAsState()
     val permissions by viewModel.permissions.collectAsState()
+    val themeMode by viewModel.themeMode.collectAsState()
     val dynamicColor by viewModel.dynamicColor.collectAsState()
     val appLockEnabled by viewModel.appLockEnabled.collectAsState()
     val exportLauncher = rememberLauncherForActivityResult(
@@ -90,6 +103,29 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         SettingsSectionCard(accent = Color(0xFF5C6BC0), title = "Appearance") {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text("Theme", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "Follow the system day-night setting, or force light or dark regardless of the device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ThemeMode.values().forEach { mode ->
+                        val label = when (mode) {
+                            ThemeMode.SYSTEM -> "System"
+                            ThemeMode.LIGHT -> "Light"
+                            ThemeMode.DARK -> "Dark"
+                        }
+                        FilterChip(
+                            selected = themeMode == mode,
+                            onClick = { viewModel.updateThemeMode(mode) },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -108,6 +144,20 @@ fun SettingsScreen(
         }
 
         SettingsSectionCard(accent = Color(0xFF00796B), title = "Security") {
+            // Whether the device can actually enforce a lock right now (a biometric or device
+            // credential is enrolled). Re-queried on ON_RESUME so leaving to set up a screen lock
+            // and returning refreshes the warning below — and memoized otherwise, so we don't pay a
+            // binder IPC on every recomposition.
+            val context = LocalContext.current
+            val lifecycleOwner = LocalLifecycleOwner.current
+            var canEnforceLock by remember { mutableStateOf(deviceCanEnforceLock(context)) }
+            DisposableEffect(lifecycleOwner) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME) canEnforceLock = deviceCanEnforceLock(context)
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -123,6 +173,17 @@ fun SettingsScreen(
                     )
                 }
                 Switch(checked = appLockEnabled, onCheckedChange = { viewModel.updateAppLockEnabled(it) })
+            }
+            // The toggle can read ON while there's no screen lock to enforce it — the app still opens
+            // straight to the data in that case. Say so plainly instead of showing a checked switch
+            // that silently does nothing.
+            if (appLockEnabled && !canEnforceLock) {
+                Text(
+                    "No screen lock is set up on this device, so the app can't lock yet. Add a " +
+                        "fingerprint, face unlock, or PIN in your device's security settings.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
             }
         }
 

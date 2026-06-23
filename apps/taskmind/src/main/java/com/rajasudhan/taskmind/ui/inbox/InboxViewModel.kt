@@ -79,6 +79,19 @@ class InboxViewModel @Inject constructor(
         }
     }
 
+    /** Bulk-dismiss every "likely noise" suggestion (confidence below [noiseThreshold]); undoable. */
+    fun sweepNoise(noiseThreshold: Double = 0.5) {
+        viewModelScope.launch {
+            val noise = pendingSuggestions.value.orEmpty().filter { it.confidence < noiseThreshold }
+            if (noise.isEmpty()) return@launch
+            noise.forEach {
+                dao.updateSuggestion(it.copy(status = "rejected"))
+                rejectionLearner.recordRejection(it)
+            }
+            lastUndo = { noise.forEach { dao.updateSuggestion(it.copy(status = "pending", snoozedUntil = null)) } }
+        }
+    }
+
     fun rejectSuggestion(suggestion: Suggestion) {
         viewModelScope.launch {
             dao.updateSuggestion(suggestion.copy(status = "rejected"))
