@@ -10,6 +10,7 @@ import androidx.biometric.BiometricPrompt
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
@@ -19,9 +20,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -32,9 +35,11 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.rajasudhan.taskmind.ui.bold.BoldBottomNav
 import com.rajasudhan.taskmind.ui.guide.GuideOverlay
 import com.rajasudhan.taskmind.ui.guide.GuideViewModel
 import com.rajasudhan.taskmind.ui.theme.TaskMindTheme
+import com.rajasudhan.taskmind.ui.theme.ThemeMode
 import dagger.hilt.android.AndroidEntryPoint
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Inbox
@@ -58,7 +63,24 @@ class MainActivity : AppCompatActivity() {
 
         setContent {
             val dynamicColor by settingsManager.dynamicColorFlow.collectAsState()
-            TaskMindTheme(dynamicColor = dynamicColor) {
+            val themeMode by settingsManager.themeModeFlow.collectAsState()
+            val darkTheme = when (themeMode) {
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+            }
+
+            // Keep the system-bar icons legible against the chosen theme, even when it differs from
+            // the OS setting (e.g. forced dark while the device itself is in light mode).
+            val view = LocalView.current
+            LaunchedEffect(darkTheme) {
+                WindowCompat.getInsetsController(window, view).apply {
+                    isAppearanceLightStatusBars = !darkTheme
+                    isAppearanceLightNavigationBars = !darkTheme
+                }
+            }
+
+            TaskMindTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
                 // The app lock is optional (Settings → Security). When off, the app opens straight to
                 // its content; the database stays encrypted at rest regardless.
                 val lockEnabled by settingsManager.appLockEnabledFlow.collectAsState()
@@ -68,11 +90,13 @@ class MainActivity : AppCompatActivity() {
                 // credential (PIN/pattern/password) enrolled. Without one, promptBiometric can never
                 // succeed — so we must NOT lock, or the user would be permanently shut out of their
                 // own data with the off-switch stuck behind the lock.
-                val canLock = remember {
-                    BiometricManager.from(this@MainActivity).canAuthenticate(
-                        BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
-                    ) == BiometricManager.BIOMETRIC_SUCCESS
-                }
+                //
+                // Re-checked on every ON_RESUME (see the observer below) rather than frozen at launch:
+                // the user can enroll or remove a credential in system settings while we're
+                // backgrounded. A stale value would either leave the lock silently unenforceable
+                // (credential added after launch) or strand the user on a lock screen that can never
+                // succeed (credential removed after launch).
+                var canLock by remember { mutableStateOf(canEnforceLock()) }
 
                 // Re-lock whenever the app leaves the foreground, so auth is required on every return.
                 // Only while the lock is enabled (and enforceable) — otherwise leave the session
@@ -86,7 +110,11 @@ class MainActivity : AppCompatActivity() {
                         when (event) {
                             Lifecycle.Event.ON_STOP ->
                                 if (lockEnabled && canLock && !AppLock.shouldKeepUnlockedOnStop()) isAuthenticated = false
-                            Lifecycle.Event.ON_RESUME -> AppLock.reset()
+                            Lifecycle.Event.ON_RESUME -> {
+                                AppLock.reset()
+                                // Pick up any credential the user enrolled or removed while away.
+                                canLock = canEnforceLock()
+                            }
                             else -> {}
                         }
                     }
@@ -108,10 +136,17 @@ class MainActivity : AppCompatActivity() {
                 // (biometric unlock or lock disabled). Re-starting an already-running service is safe.
                 LaunchedEffect(unlocked) {
                     if (unlocked) {
-                        ContextCompat.startForegroundService(
-                            this@MainActivity,
-                            android.content.Intent(this@MainActivity, com.rajasudhan.taskmind.data.source.TaskMindForegroundService::class.java)
-                        )
+                        // startForegroundService throws ForegroundServiceStartNotAllowedException on
+                        // Android 12+ if it lands while the app isn't in a valid foreground state.
+                        // Both ways we reach this — a cold launch and a biometric unlock — are valid
+                        // foreground moments, so this guard is belt-and-suspenders against a crash
+                        // rather than something expected to fire.
+                        runCatching {
+                            ContextCompat.startForegroundService(
+                                this@MainActivity,
+                                android.content.Intent(this@MainActivity, com.rajasudhan.taskmind.data.source.TaskMindForegroundService::class.java)
+                            )
+                        }
                     }
                 }
 
@@ -126,6 +161,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
+    /** True only when the device has a biometric or device credential enrolled to authenticate against. */
+    private fun canEnforceLock(): Boolean =
+        BiometricManager.from(this).canAuthenticate(
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        ) == BiometricManager.BIOMETRIC_SUCCESS
 
     private fun promptBiometric(onSuccess: () -> Unit) {
         val executor = ContextCompat.getMainExecutor(this)
@@ -255,7 +296,8 @@ fun TaskMindAppContent(onLock: (() -> Unit)?) {
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(screenTitle) },
+                // Inbox renders its own editorial serif header, so the bar title is blanked there.
+                title = { Text(if (currentRoute == "inbox") "" else screenTitle) },
                 navigationIcon = {
                     if (isNoteDetail) {
                         IconButton(onClick = { navController.popBackStack() }) {
@@ -282,50 +324,16 @@ fun TaskMindAppContent(onLock: (() -> Unit)?) {
             )
         },
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                val navColors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                fun go(route: String) {
+            BoldBottomNav(
+                currentRoute = currentRoute,
+                onSelect = { route ->
                     navController.navigate(route) {
                         popUpTo(navController.graph.startDestinationId) { saveState = true }
                         launchSingleTop = true
                         restoreState = true
                     }
                 }
-                NavigationBarItem(
-                    icon = { Icon(Icons.Default.Inbox, contentDescription = "Inbox") },
-                    label = { Text("Inbox") },
-                    selected = currentRoute == "inbox",
-                    colors = navColors,
-                    onClick = { go("inbox") }
-                )
-                NavigationBarItem(
-                    icon = { Icon(Icons.AutoMirrored.Filled.Note, contentDescription = "Notes") },
-                    label = { Text("Notes") },
-                    selected = currentRoute == "notes",
-                    colors = navColors,
-                    onClick = { go("notes") }
-                )
-                NavigationBarItem(
-                    icon = { Icon(Icons.Default.Source, contentDescription = "Sources") },
-                    label = { Text("Sources") },
-                    selected = currentRoute == "sources",
-                    colors = navColors,
-                    onClick = { go("sources") }
-                )
-                NavigationBarItem(
-                    icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
-                    label = { Text("Settings") },
-                    selected = currentRoute == "settings",
-                    colors = navColors,
-                    onClick = { go("settings") }
-                )
-            }
+            )
         }
     ) { innerPadding ->
         NavHost(

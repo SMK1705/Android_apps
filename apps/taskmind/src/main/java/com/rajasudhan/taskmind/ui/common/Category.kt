@@ -1,7 +1,6 @@
 package com.rajasudhan.taskmind.ui.common
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -40,9 +39,13 @@ val ReminderCategory = Category("REMINDER", Color(0xFFD32F2F), Color(0xFFFDECEA)
 val TodoCategory = Category("TO-DO", Color(0xFFF57C00), Color(0xFFFFF4E5), Color(0xFFFFB74D), Color(0xFF3A2A12))
 val NoteCategory = Category("NOTE", Color(0xFF1976D2), Color(0xFFE8F1FB), Color(0xFF82B1FF), Color(0xFF132A3F))
 
-/** Accent (left bar, badge background, colored date) for the active theme. */
+/**
+ * Accent (left bar, badge background, colored date) for the active theme. Defaults to the *applied*
+ * theme rather than the system setting, so a user-forced light/dark theme keeps accents in step.
+ */
 @Composable
-fun Category.accent(dark: Boolean = isSystemInDarkTheme()): Color = if (dark) accentDark else accentLight
+fun Category.accent(dark: Boolean = MaterialTheme.colorScheme.surface.luminance() < 0.5f): Color =
+    if (dark) accentDark else accentLight
 
 // Cards are neutral tonal surfaces; the category color reads only through the accent bar, badge, and
 // the colored due-date. So the on-card text colors resolve to the theme's standard surface roles.
