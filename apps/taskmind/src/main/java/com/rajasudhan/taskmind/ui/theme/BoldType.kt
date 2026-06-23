@@ -15,8 +15,10 @@ object BoldType {
     val screenTitle = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 40.sp, lineHeight = 40.sp, letterSpacing = 0.3.sp)
     val deckCount = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 34.sp, lineHeight = 34.sp)
     val deckCountLabel = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Normal, fontSize = 9.sp, letterSpacing = 0.5.sp)
-    val cardTitle = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 21.sp, lineHeight = 27.sp, letterSpacing = 0.2.sp)
-    val noteTitle = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 19.sp, lineHeight = 25.sp)
+    // Item titles use the legible sans (not the editorial serif) so cards stay easy to read/scan;
+    // the big screen headers above keep the serif.
+    val cardTitle = TextStyle(fontFamily = PlusJakarta, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, lineHeight = 23.sp, letterSpacing = (-0.1).sp)
+    val noteTitle = TextStyle(fontFamily = PlusJakarta, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp, lineHeight = 21.sp)
     val emptyTitle = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 30.sp, lineHeight = 34.sp)
     val heroTitle = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 20.sp, lineHeight = 24.sp)
     val privacyBig = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 64.sp, lineHeight = 58.sp, letterSpacing = 0.5.sp)
