@@ -12,15 +12,15 @@ import androidx.compose.ui.unit.sp
 
 object BoldType {
     val eyebrow = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Normal, fontSize = 10.sp, letterSpacing = 1.5.sp)
-    val screenTitle = TextStyle(fontFamily = TimesSerif, fontWeight = FontWeight.Normal, fontSize = 40.sp, lineHeight = 40.sp, letterSpacing = 0.3.sp)
-    val deckCount = TextStyle(fontFamily = TimesSerif, fontWeight = FontWeight.Normal, fontSize = 34.sp, lineHeight = 34.sp)
+    val screenTitle = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 40.sp, lineHeight = 40.sp, letterSpacing = 0.3.sp)
+    val deckCount = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 34.sp, lineHeight = 34.sp)
     val deckCountLabel = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Normal, fontSize = 9.sp, letterSpacing = 0.5.sp)
-    // Item titles use Times New Roman (Tinos), Bold + a touch larger so they stay readable on cards.
+    // ONLY the card/item titles use Times New Roman (Tinos); everything else keeps Instrument Serif.
     val cardTitle = TextStyle(fontFamily = TimesSerif, fontWeight = FontWeight.Bold, fontSize = 20.sp, lineHeight = 25.sp)
     val noteTitle = TextStyle(fontFamily = TimesSerif, fontWeight = FontWeight.Bold, fontSize = 18.sp, lineHeight = 23.sp)
-    val emptyTitle = TextStyle(fontFamily = TimesSerif, fontWeight = FontWeight.Normal, fontSize = 30.sp, lineHeight = 34.sp)
-    val heroTitle = TextStyle(fontFamily = TimesSerif, fontWeight = FontWeight.Normal, fontSize = 20.sp, lineHeight = 24.sp)
-    val privacyBig = TextStyle(fontFamily = TimesSerif, fontWeight = FontWeight.Normal, fontSize = 64.sp, lineHeight = 58.sp, letterSpacing = 0.5.sp)
+    val emptyTitle = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 30.sp, lineHeight = 34.sp)
+    val heroTitle = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 20.sp, lineHeight = 24.sp)
+    val privacyBig = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 64.sp, lineHeight = 58.sp, letterSpacing = 0.5.sp)
 
     val srcLabel = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 10.5.sp, letterSpacing = 0.2.sp)
     val noteSrcMeta = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Normal, fontSize = 9.5.sp, letterSpacing = 0.2.sp)
@@ -45,12 +45,12 @@ object BoldType {
 // Material3 typography so built-in widgets inherit the Bold families. Serif for display/headline,
 // Jakarta for titles/body/labels, mono for the smallest label.
 val BoldTypography = Typography(
-    displayLarge = TextStyle(fontFamily = TimesSerif, fontWeight = FontWeight.Normal, fontSize = 52.sp, lineHeight = 56.sp),
-    displayMedium = TextStyle(fontFamily = TimesSerif, fontWeight = FontWeight.Normal, fontSize = 42.sp, lineHeight = 46.sp),
-    displaySmall = TextStyle(fontFamily = TimesSerif, fontWeight = FontWeight.Normal, fontSize = 34.sp, lineHeight = 40.sp),
-    headlineLarge = TextStyle(fontFamily = TimesSerif, fontWeight = FontWeight.Normal, fontSize = 32.sp, lineHeight = 38.sp),
-    headlineMedium = TextStyle(fontFamily = TimesSerif, fontWeight = FontWeight.Normal, fontSize = 28.sp, lineHeight = 34.sp),
-    headlineSmall = TextStyle(fontFamily = TimesSerif, fontWeight = FontWeight.Normal, fontSize = 24.sp, lineHeight = 30.sp),
+    displayLarge = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 52.sp, lineHeight = 56.sp),
+    displayMedium = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 42.sp, lineHeight = 46.sp),
+    displaySmall = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 34.sp, lineHeight = 40.sp),
+    headlineLarge = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 32.sp, lineHeight = 38.sp),
+    headlineMedium = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 28.sp, lineHeight = 34.sp),
+    headlineSmall = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 24.sp, lineHeight = 30.sp),
     titleLarge = TextStyle(fontFamily = PlusJakarta, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, lineHeight = 26.sp, letterSpacing = (-0.2).sp),
     titleMedium = TextStyle(fontFamily = PlusJakarta, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 22.sp),
     titleSmall = TextStyle(fontFamily = PlusJakarta, fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.1.sp),
