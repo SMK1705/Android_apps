@@ -11,27 +11,38 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.accompanist.permissions.*
-
-/** Health of an observation stream, shown as a colored badge on each source. */
-enum class ObserverStatus { ACTIVE, ATTENTION, OFF }
-
-private fun statusFor(enabled: Boolean, ready: Boolean): ObserverStatus = when {
-    !enabled -> ObserverStatus.OFF
-    ready -> ObserverStatus.ACTIVE
-    else -> ObserverStatus.ATTENTION
-}
+import com.rajasudhan.taskmind.ui.bold.BoldCard
+import com.rajasudhan.taskmind.ui.bold.BoldEyebrow
+import com.rajasudhan.taskmind.ui.theme.BoldOnAccent
+import com.rajasudhan.taskmind.ui.theme.BoldTheme
+import com.rajasudhan.taskmind.ui.theme.BoldType
+import com.rajasudhan.taskmind.ui.theme.ShapeHero
+import com.rajasudhan.taskmind.ui.theme.ShapePanel
+import com.rajasudhan.taskmind.ui.theme.ShapeWell
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -39,6 +50,7 @@ fun SourcesScreen(
     viewModel: SourcesViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val c = BoldTheme.colors
 
     val notificationsEnabled by viewModel.isNotificationsEnabled.collectAsState()
     val smsEnabled by viewModel.isSmsEnabled.collectAsState()
@@ -68,7 +80,6 @@ fun SourcesScreen(
         }
     }
 
-    // Permissions State
     val smsPermissionState = rememberPermissionState(Manifest.permission.READ_SMS)
     val callLogPermissionState = rememberPermissionState(Manifest.permission.READ_CALL_LOG)
     val contactsPermissionState = rememberPermissionState(Manifest.permission.READ_CONTACTS)
@@ -78,7 +89,6 @@ fun SourcesScreen(
         listOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
     )
 
-    // Gmail OAuth consent: the ViewModel emits an IntentSender, we launch it and report the result.
     val gmailLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
     ) { result -> viewModel.onConsentResult(result.data) }
@@ -88,7 +98,6 @@ fun SourcesScreen(
         }
     }
 
-    // Google account chooser: pick which account to connect, then the ViewModel authorizes it.
     val accountChooserLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result -> viewModel.onAccountChosen(result.data) }
@@ -98,79 +107,71 @@ fun SourcesScreen(
         }
     }
 
-    // Honest, derivable telemetry only (no fabricated "scanned this week" counts).
     val activeCount = listOf(
         notificationsEnabled, smsEnabled, callLogEnabled, appUsageEnabled,
         emailEnabled, calendarEnabled, audioEnabled, imagesEnabled
     ).count { it }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = Modifier.fillMaxSize().background(c.screen),
+        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 6.dp, bottom = 96.dp),
+        verticalArrangement = Arrangement.spacedBy(11.dp)
     ) {
         item {
-            IngestionSummary(activeCount = activeCount, totalCount = 8, gmailAccounts = gmailAccounts.size)
+            Column {
+                BoldEyebrow("What it may read")
+                Text("Sources", style = BoldType.screenTitle, color = c.ink)
+                Spacer(Modifier.height(14.dp))
+                SourcesHero(activeCount = activeCount, totalCount = 8)
+            }
         }
 
-        item { SectionHeader("Passive observers") }
+        item { SectionLabel("Passive observers") }
 
         item {
-            SourceToggle(
-                title = "Notifications",
-                subtitle = "Read incoming notification text",
-                isChecked = notificationsEnabled,
-                status = statusFor(notificationsEnabled, ready = true),
+            BoldSourceRow(
+                icon = Icons.Default.Notifications,
+                name = "Notifications",
+                meta = "Read incoming notification text",
+                checked = notificationsEnabled,
                 onCheckedChange = {
-                    if (it) {
-                        context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                    }
+                    if (it) context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                     viewModel.toggleNotifications(it)
                 }
             )
         }
 
-        // Per-app picker: only show when notifications are enabled. Height-capped (its own scroll)
-        // so a long app list doesn't push the other sources (SMS, Email, …) off the screen.
         if (notificationsEnabled) {
             item {
-                Column {
-                    Text(
-                        "Monitored apps — leave all unchecked to watch every app, or check specific " +
-                            "apps (e.g. Messages, WhatsApp, Gmail) to cut out noise.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    OutlinedTextField(
-                        value = appSearch,
-                        onValueChange = { appSearch = it },
-                        label = { Text("Search apps") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                    )
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp).padding(top = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(filteredApps, key = { it.packageName }) { app ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                                    Text(app.label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(
-                                        app.packageName,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                BoldCard(Modifier.fillMaxWidth(), shape = ShapePanel) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            "Leave all unchecked to watch every app, or pick specific apps (e.g. Messages, " +
+                                "WhatsApp, Gmail) to cut noise.",
+                            style = BoldType.body, color = c.ink2
+                        )
+                        OutlinedTextField(
+                            value = appSearch,
+                            onValueChange = { appSearch = it },
+                            label = { Text("Search apps") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+                        )
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp).padding(top = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            items(filteredApps, key = { it.packageName }) { app ->
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                                        Text(app.label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(app.packageName, style = BoldType.noteSrcMeta, color = c.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    Checkbox(
+                                        checked = app.packageName in allowlist,
+                                        onCheckedChange = { viewModel.setAppMonitored(app.packageName, it) }
                                     )
                                 }
-                                Checkbox(
-                                    checked = app.packageName in allowlist,
-                                    onCheckedChange = { viewModel.setAppMonitored(app.packageName, it) }
-                                )
                             }
                         }
                     }
@@ -179,256 +180,206 @@ fun SourcesScreen(
         }
 
         item {
-            SourceToggle(
-                title = "SMS Messages",
-                subtitle = "Read incoming and recent text messages",
-                isChecked = smsEnabled,
-                status = statusFor(smsEnabled, ready = smsPermissionState.status.isGranted),
+            BoldSourceRow(
+                icon = Icons.Default.Sms,
+                name = "SMS Messages",
+                meta = "Read incoming and recent text messages",
+                checked = smsEnabled,
                 onCheckedChange = {
-                    if (it && !smsPermissionState.status.isGranted) {
-                        smsPermissionState.launchPermissionRequest()
-                    } else {
-                        viewModel.toggleSms(it)
-                    }
+                    if (it && !smsPermissionState.status.isGranted) smsPermissionState.launchPermissionRequest()
+                    else viewModel.toggleSms(it)
                 }
             )
         }
 
         item {
-            SourceToggle(
-                title = "Call Logs",
-                subtitle = "Read recent call history context",
-                isChecked = callLogEnabled,
-                status = statusFor(callLogEnabled, ready = callLogPermissionState.status.isGranted),
+            BoldSourceRow(
+                icon = Icons.Default.Call,
+                name = "Call Logs",
+                meta = "Read recent call history context",
+                checked = callLogEnabled,
                 onCheckedChange = {
-                    if (it && !callLogPermissionState.status.isGranted) {
-                        callLogPermissionState.launchPermissionRequest()
-                    } else {
-                        viewModel.toggleCallLog(it)
-                    }
+                    if (it && !callLogPermissionState.status.isGranted) callLogPermissionState.launchPermissionRequest()
+                    else viewModel.toggleCallLog(it)
                 }
             )
         }
 
         item {
-            // Not an ingestion source — an enrichment so the Call button can dial. When a message
-            // names someone with no number (a WhatsApp "call me", a missed call from a saved
-            // contact), we look the name up in Contacts. Reflects/requests READ_CONTACTS only.
             val contactsGranted = contactsPermissionState.status.isGranted
-            SourceToggle(
-                title = "Contacts",
-                subtitle = "Match a name in a message to a number so \"Call\" can dial",
-                isChecked = contactsGranted,
-                status = statusFor(contactsGranted, ready = contactsGranted),
-                onCheckedChange = {
-                    if (it && !contactsGranted) contactsPermissionState.launchPermissionRequest()
-                }
+            BoldSourceRow(
+                icon = Icons.Default.Person,
+                name = "Contacts",
+                meta = "Match a name in a message to a number so \"Call\" can dial",
+                checked = contactsGranted,
+                onCheckedChange = { if (it && !contactsGranted) contactsPermissionState.launchPermissionRequest() }
             )
         }
 
         item {
-            SourceToggle(
-                title = "App Usage",
-                subtitle = "Track which apps you use and when",
-                isChecked = appUsageEnabled,
-                status = statusFor(appUsageEnabled, ready = true),
+            BoldSourceRow(
+                icon = Icons.Default.BarChart,
+                name = "App Usage",
+                meta = "Track which apps you use and when",
+                checked = appUsageEnabled,
                 onCheckedChange = {
-                    if (it) {
-                        context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-                    }
+                    if (it) context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
                     viewModel.toggleAppUsage(it)
                 }
             )
         }
 
-        item { SectionHeader("Connected accounts") }
+        item { SectionLabel("Connected accounts") }
 
         item {
-            SourceToggle(
-                title = "Email (Gmail)",
-                subtitle = if (gmailAccounts.isEmpty()) "Read unread Primary emails (read-only)"
+            BoldSourceRow(
+                icon = Icons.Default.Email,
+                name = "Email (Gmail)",
+                meta = if (gmailAccounts.isEmpty()) "Read unread Primary emails (read-only)"
                     else "${gmailAccounts.size} account${if (gmailAccounts.size == 1) "" else "s"} connected",
-                isChecked = emailEnabled,
-                status = statusFor(emailEnabled, ready = gmailAccounts.isNotEmpty()),
+                checked = emailEnabled,
                 onCheckedChange = { viewModel.onEmailToggle(it) }
             )
             gmailStatus?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, top = 4.dp)
-                )
+                Text(it, style = BoldType.body, color = c.ink2, modifier = Modifier.padding(start = 6.dp, top = 6.dp))
             }
             if (emailEnabled) {
-                // One row per connected mailbox, each with its own Disconnect.
                 gmailAccounts.forEach { account ->
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp),
+                        Modifier.fillMaxWidth().padding(start = 6.dp, top = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            account,
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        TextButton(onClick = { viewModel.disconnectGmailAccount(account) }) {
-                            Text("Disconnect")
-                        }
+                        Text(account, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { viewModel.disconnectGmailAccount(account) }) { Text("Disconnect") }
                     }
                 }
-                TextButton(onClick = { viewModel.addGmailAccount() }) {
+                TextButton(onClick = { viewModel.addGmailAccount() }, modifier = Modifier.padding(start = 6.dp)) {
                     Text(if (gmailAccounts.isEmpty()) "Connect Gmail" else "Add another account")
                 }
             }
         }
 
         item {
-            SourceToggle(
-                title = "Calendar",
-                subtitle = "Read to prevent duplicates; write to add events on approve",
-                isChecked = calendarEnabled,
-                status = statusFor(calendarEnabled, ready = calendarPermissionState.allPermissionsGranted),
+            BoldSourceRow(
+                icon = Icons.Default.Event,
+                name = "Calendar",
+                meta = "Read to prevent duplicates; write to add events on approve",
+                checked = calendarEnabled,
                 onCheckedChange = {
-                    if (it && !calendarPermissionState.allPermissionsGranted) {
-                        calendarPermissionState.launchMultiplePermissionRequest()
-                    } else {
-                        viewModel.toggleCalendar(it)
-                    }
+                    if (it && !calendarPermissionState.allPermissionsGranted) calendarPermissionState.launchMultiplePermissionRequest()
+                    else viewModel.toggleCalendar(it)
                 }
             )
         }
 
-        item { SectionHeader("Reactive sensors") }
+        item { SectionLabel("Reactive sensors") }
 
         item {
-            SourceToggle(
-                title = "Voice/Call Recordings",
-                subtitle = "Watch folders for new audio to transcribe",
-                isChecked = audioEnabled,
-                status = statusFor(audioEnabled, ready = audioPermissionState.status.isGranted),
+            BoldSourceRow(
+                icon = Icons.Default.Mic,
+                name = "Voice / Call recordings",
+                meta = "Watch folders for new audio to transcribe",
+                checked = audioEnabled,
                 onCheckedChange = {
-                    if (it && !audioPermissionState.status.isGranted) {
-                        audioPermissionState.launchPermissionRequest()
-                    } else {
-                        viewModel.toggleAudio(it)
-                    }
+                    if (it && !audioPermissionState.status.isGranted) audioPermissionState.launchPermissionRequest()
+                    else viewModel.toggleAudio(it)
                 }
             )
             if (audioEnabled) {
                 OutlinedTextField(
                     value = callPath,
                     onValueChange = { viewModel.updateCallRecordingPath(it) },
-                    label = { Text("Call Recording Path") },
+                    label = { Text("Call recording path") },
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                 )
                 OutlinedTextField(
                     value = voicePath,
                     onValueChange = { viewModel.updateVoiceRecordingPath(it) },
-                    label = { Text("Voice Memo Path") },
+                    label = { Text("Voice memo path") },
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                 )
             }
         }
 
         item {
-            SourceToggle(
-                title = "Screenshots (OCR)",
-                subtitle = "Read text from new screenshots on-device. Needs a Tesseract model (Settings).",
-                isChecked = imagesEnabled,
-                status = statusFor(imagesEnabled, ready = imagesPermissionState.status.isGranted),
+            BoldSourceRow(
+                icon = Icons.Default.Image,
+                name = "Screenshots (OCR)",
+                meta = "Read text from new screenshots on-device. Needs a Tesseract model (Settings).",
+                checked = imagesEnabled,
                 onCheckedChange = {
-                    if (it && !imagesPermissionState.status.isGranted) {
-                        imagesPermissionState.launchPermissionRequest()
-                    } else {
-                        viewModel.toggleImages(it)
-                    }
+                    if (it && !imagesPermissionState.status.isGranted) imagesPermissionState.launchPermissionRequest()
+                    else viewModel.toggleImages(it)
                 }
             )
         }
     }
 }
 
-/** Top-of-screen "cockpit" summary — only facts we can actually derive. */
 @Composable
-private fun IngestionSummary(activeCount: Int, totalCount: Int, gmailAccounts: Int) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                "$activeCount of $totalCount sources active",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            Text(
-                if (gmailAccounts > 0) "$gmailAccounts Gmail account${if (gmailAccounts == 1) "" else "s"} connected · understanding runs on-device"
-                else "Understanding runs on-device by default",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-            )
+private fun SourcesHero(activeCount: Int, totalCount: Int) {
+    Box(Modifier.fillMaxWidth().clip(ShapeHero).background(BoldTheme.colors.accent).padding(18.dp)) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(Color.Black.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) { Icon(Icons.Default.Memory, contentDescription = null, tint = BoldOnAccent, modifier = Modifier.size(22.dp)) }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("On-device intelligence", style = BoldType.heroTitle, color = BoldOnAccent)
+                    Text("$activeCount of $totalCount sources active", style = BoldType.detailMeta, color = BoldOnAccent.copy(alpha = 0.7f))
+                }
+                Row(
+                    Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.12f)).padding(horizontal = 9.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Box(Modifier.size(6.dp).clip(CircleShape).background(BoldOnAccent))
+                    Text("ACTIVE", style = BoldType.deckCountLabel, color = BoldOnAccent)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Text("Read and understood on this phone. Nothing is uploaded.", style = BoldType.body, color = BoldOnAccent.copy(alpha = 0.85f))
         }
     }
 }
 
 @Composable
-private fun SectionHeader(text: String) {
+private fun SectionLabel(text: String) {
     Text(
-        text = text.uppercase(),
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+        text.uppercase(),
+        style = BoldType.sectionMono,
+        color = BoldTheme.colors.ink3,
+        modifier = Modifier.padding(start = 4.dp, top = 6.dp)
     )
 }
 
 @Composable
-private fun StatusPill(status: ObserverStatus) {
-    val (color, label) = when (status) {
-        ObserverStatus.ACTIVE -> Color(0xFF2E9E4F) to "Active"
-        ObserverStatus.ATTENTION -> Color(0xFFE0A100) to "Needs setup"
-        ObserverStatus.OFF -> Color(0xFF9E9E9E) to "Off"
-    }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
-        Spacer(Modifier.width(4.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall, color = color, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
-fun SourceToggle(
-    title: String,
-    subtitle: String,
-    isChecked: Boolean,
-    status: ObserverStatus,
-    onCheckedChange: (Boolean) -> Unit
+private fun BoldSourceRow(
+    icon: ImageVector,
+    name: String,
+    meta: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-    ) {
+    val c = BoldTheme.colors
+    BoldCard(modifier.fillMaxWidth(), shape = ShapePanel) {
         Row(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(13.dp)
         ) {
-            Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = title, style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.width(8.dp))
-                    StatusPill(status)
-                }
-                Text(text = subtitle, style = MaterialTheme.typography.bodySmall)
+            Box(
+                Modifier.size(40.dp).clip(ShapeWell).background(c.surface2),
+                contentAlignment = Alignment.Center
+            ) { Icon(icon, contentDescription = null, tint = if (checked) c.accent else c.ink3, modifier = Modifier.size(19.dp)) }
+            Column(Modifier.weight(1f)) {
+                Text(name, style = BoldType.sourceName, color = c.ink)
+                Text(meta, style = BoldType.sourceMeta, color = c.ink2)
             }
-            Switch(
-                checked = isChecked,
-                onCheckedChange = onCheckedChange
-            )
+            Switch(checked = checked, onCheckedChange = onCheckedChange)
         }
     }
 }

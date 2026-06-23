@@ -44,6 +44,7 @@ import com.rajasudhan.taskmind.ui.theme.BoldOnAccent
 import com.rajasudhan.taskmind.ui.theme.BoldTheme
 import com.rajasudhan.taskmind.ui.theme.BoldType
 import com.rajasudhan.taskmind.ui.theme.ShapeCard
+import com.rajasudhan.taskmind.ui.theme.ShapeChip
 import com.rajasudhan.taskmind.ui.theme.ShapePill
 import kotlin.math.roundToInt
 
@@ -155,6 +156,25 @@ fun BoldSourcePill(source: String, modifier: Modifier = Modifier) {
             contentAlignment = Alignment.Center,
         ) { Icon(v.icon, contentDescription = null, tint = c.ink2, modifier = Modifier.size(13.dp)) }
         Text(source, style = BoldType.srcLabel, color = c.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** Segment/filter chip with an optional count, used by the Notes filters. */
+@Composable
+fun BoldFilterChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, count: Int? = null) {
+    val c = BoldTheme.colors
+    val fg = if (selected) BoldOnAccent else c.ink2
+    Row(
+        modifier
+            .clip(ShapeChip)
+            .background(if (selected) c.accent else c.surface2)
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(label, style = BoldType.filterChip, color = fg)
+        if (count != null) Text("$count", style = BoldType.detailMeta, color = fg.copy(alpha = 0.6f))
     }
 }
 

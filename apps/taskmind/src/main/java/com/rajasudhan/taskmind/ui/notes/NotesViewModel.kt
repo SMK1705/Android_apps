@@ -30,6 +30,23 @@ class NotesViewModel @Inject constructor(
     private val _showCompleted = MutableStateFlow(false)
     val showCompleted: StateFlow<Boolean> = _showCompleted
 
+    // null = all kinds; otherwise "todo" | "reminder" | "note". Mutually exclusive with the Done view.
+    private val _kindFilter = MutableStateFlow<String?>(null)
+    val kindFilter: StateFlow<String?> = _kindFilter
+
+    /** Per-kind counts of the *active* notes, for the filter-chip badges. Key "all" = total. */
+    val kindCounts: StateFlow<Map<String, Int>> =
+        dao.getActiveNotes()
+            .map { list ->
+                mapOf(
+                    "all" to list.size,
+                    "todo" to list.count { it.type == "todo" },
+                    "reminder" to list.count { it.type == "reminder" },
+                    "note" to list.count { it.type == "note" }
+                )
+            }
+            .stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
+
     /**
      * The list to display, driven by the search box and the Active/Completed segment:
      *  - searching: matches within the current segment;
@@ -40,19 +57,33 @@ class NotesViewModel @Inject constructor(
     // list = loaded but nothing matches (UI shows the empty state). Both come from this one flow, so
     // the loading and empty states are always derived from the *displayed* query — never a stale one.
     val notes: StateFlow<List<Note>?> =
-        combine(_query, _showCompleted) { q, c -> q to c }
-            .flatMapLatest { (q, completed) ->
+        combine(_query, _showCompleted, _kindFilter) { q, c, k -> Triple(q, c, k) }
+            .flatMapLatest { (q, completed, kind) ->
+                fun keep(n: Note) = kind == null || n.type == kind
                 when {
                     q.isNotBlank() ->
-                        dao.searchNotes("%$q%").map { list -> prioritise(list.filter { it.completed == completed }) }
-                    completed -> dao.getCompletedNotes()
-                    else -> dao.getActiveNotes().map { prioritise(it) }
+                        dao.searchNotes("%$q%").map { list ->
+                            val f = list.filter { it.completed == completed && keep(it) }
+                            if (completed) f else prioritise(f)
+                        }
+                    completed -> dao.getCompletedNotes().map { list -> list.filter { keep(it) } }
+                    else -> dao.getActiveNotes().map { list -> prioritise(list.filter { keep(it) }) }
                 }
             }
             .stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     fun setQuery(q: String) { _query.value = q }
-    fun setShowCompleted(c: Boolean) { _showCompleted.value = c }
+    fun setShowCompleted(c: Boolean) { _showCompleted.value = c; if (c) _kindFilter.value = null }
+
+    /** Filter the active list by kind (null = all); leaves the Done view. */
+    fun setKindFilter(kind: String?) { _kindFilter.value = kind; _showCompleted.value = false }
+
+    /** Toggle a single inline checklist item and persist the new encoded block. */
+    fun toggleChecklistItem(note: Note, index: Int) {
+        val items = note.checklist?.let { Checklist.decode(it) } ?: return
+        if (index !in items.indices) return
+        viewModelScope.launch { dao.updateNoteChecklist(note.id, Checklist.toggleEncoded(items, index)) }
+    }
 
     fun setCompleted(note: Note, completed: Boolean) {
         viewModelScope.launch {
