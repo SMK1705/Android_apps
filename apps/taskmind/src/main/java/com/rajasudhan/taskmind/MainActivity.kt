@@ -285,19 +285,13 @@ fun TaskMindAppContent(onLock: (() -> Unit)?) {
     val showGuide by guideViewModel.showGuide.collectAsState()
 
     val isNoteDetail = currentRoute?.startsWith("notes/") == true
-    val screenTitle = when {
-        isNoteDetail -> "Note"
-        currentRoute == "notes" -> "Notes"
-        currentRoute == "sources" -> "Sources"
-        currentRoute == "settings" -> "Settings"
-        else -> "Inbox"
-    }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                // Inbox renders its own editorial serif header, so the bar title is blanked there.
-                title = { Text(if (currentRoute == "inbox") "" else screenTitle) },
+                // Every main tab renders its own in-screen serif header now, so the top bar carries no
+                // title there (only the note-detail sub-screen keeps a bar title alongside its back arrow).
+                title = { if (isNoteDetail) Text("Note") },
                 navigationIcon = {
                     if (isNoteDetail) {
                         IconButton(onClick = { navController.popBackStack() }) {
