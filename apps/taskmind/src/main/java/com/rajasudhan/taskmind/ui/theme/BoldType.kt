@@ -16,8 +16,8 @@ object BoldType {
     val deckCount = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 34.sp, lineHeight = 34.sp)
     val deckCountLabel = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Normal, fontSize = 9.sp, letterSpacing = 0.5.sp)
     // ONLY the card/item titles use Times New Roman (Tinos); everything else keeps Instrument Serif.
-    val cardTitle = TextStyle(fontFamily = TimesSerif, fontWeight = FontWeight.Bold, fontSize = 20.sp, lineHeight = 25.sp)
-    val noteTitle = TextStyle(fontFamily = TimesSerif, fontWeight = FontWeight.Bold, fontSize = 18.sp, lineHeight = 23.sp)
+    val cardTitle = TextStyle(fontFamily = TimesSerif, fontWeight = FontWeight.Normal, fontSize = 20.sp, lineHeight = 25.sp)
+    val noteTitle = TextStyle(fontFamily = TimesSerif, fontWeight = FontWeight.Normal, fontSize = 18.sp, lineHeight = 23.sp)
     val emptyTitle = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 30.sp, lineHeight = 34.sp)
     val heroTitle = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 20.sp, lineHeight = 24.sp)
     val privacyBig = TextStyle(fontFamily = InstrumentSerif, fontWeight = FontWeight.Normal, fontSize = 64.sp, lineHeight = 58.sp, letterSpacing = 0.5.sp)
