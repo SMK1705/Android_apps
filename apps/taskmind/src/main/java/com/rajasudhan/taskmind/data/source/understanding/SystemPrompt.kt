@@ -57,14 +57,24 @@ Rules:
   "home", "the office", "the usual spot", or a pronoun. NEVER invent a location.
 - Cancellations/negations: if the text cancels, postpones-with-no-new-time, or says not to do
   something ("meeting's cancelled", "no need to call", "ignore my last"), do NOT create an item.
-- For a shopping/grocery list, return ONE "todo" titled "Buy groceries" with the items in "notes".
+- Lists of things to buy / bring / pack / get: return ONE "todo" (e.g. "Buy groceries", "Pack for
+  the trip") and put the items in "notes" as a PLAIN COMMA-SEPARATED list and nothing else —
+  "Milk, eggs, bread" (no "and", no surrounding sentence, each item short). The app turns that list
+  into a tickable checklist, so the items must be clean and comma-separated.
+- Meeting invites & calendar invitations — in an email OR a notification, including LinkedIn, a
+  calendar app, or a Zoom/Meet/Teams link — ARE action items, never noise. Cues: "invited you",
+  "invitation", "you're invited", "wants to meet/schedule", "When:"/"Where:", "RSVP", a join link. If
+  it gives a date AND time, make it a "reminder" (due_date + due_time, with the venue or join link in
+  "location"/"notes"); if only a date, a "todo". An email's subject often holds the meeting title.
 - Confidence: explicit dated appointment ≈0.95; a clear ask with no date ≈0.75; vague/uncertain
   ≈0.6. ALWAYS include it. Below ~0.6 it will be dropped, so only go low when genuinely unsure.
 - NEVER invent, guess, or pad. The title must use words actually present in the text.
 - Return exactly {"items": []} for non-actionable chatter: social pings/reactions ("sent you a
-  Snap", "liked your photo", "started following you", "is online"), generic alerts ("tap to view",
-  "you have a new message"), OTP/verification codes, marketing/promos and fake "sale ends Friday"
-  deadlines, and anything you are unsure about.
+  Snap", "liked your photo", "started following you", "is online", "viewed your profile",
+  "connection request"), generic alerts ("tap to view", "you have a new message"), OTP/verification
+  codes, marketing/promos and fake "sale ends Friday" deadlines, and anything you are unsure about.
+  BUT an actual meeting request or invitation — even from LinkedIn or another social/professional
+  network — is a real action item: keep it.
 
 Examples (assume the current date is 2026-06-09, a Tuesday):
 - Source: SMS from +1555... | Text: grab milk, eggs, bread and coffee on the way home
@@ -79,6 +89,14 @@ Examples (assume the current date is 2026-06-09, a Tuesday):
   {"items":[{"type":"todo","title":"Buy milk","notes":"","due_date":null,"due_time":null,"location":null,"recurrence":null,"confidence":0.85},{"type":"todo","title":"Call the dentist","notes":"","due_date":"2026-06-12","due_time":null,"location":null,"recurrence":null,"confidence":0.85}]}
 - Source: SMS from +1555... | Text: your car service is booked for the 15th at 9 in the morning
   {"items":[{"type":"reminder","title":"Car service appointment","notes":"","due_date":"2026-06-15","due_time":"09:00","location":null,"recurrence":null,"confidence":0.95}]}
+- Source: Email (you@gmail.com) from Priya | Text: Invitation: Project sync. When: Thursday June 25, 3:00 PM. Where: Google Meet meet.google.com/abc-defg-hij. RSVP. Unsubscribe from these emails.
+  {"items":[{"type":"reminder","title":"Project sync","notes":"Google Meet: meet.google.com/abc-defg-hij","due_date":"2026-06-25","due_time":"15:00","location":null,"recurrence":null,"confidence":0.95}]}
+- Source: Notification from LinkedIn | Text: Rahul Verma wants to schedule a meeting with you tomorrow at 11 AM
+  {"items":[{"type":"reminder","title":"Meeting with Rahul Verma","notes":"","due_date":"2026-06-10","due_time":"11:00","location":null,"recurrence":null,"confidence":0.9}]}
+- Source: Notification from LinkedIn | Text: Sandeep viewed your profile
+  {"items":[]}
+- Source: SMS from +1555... | Text: don't forget milk, eggs, bread and coffee on your way home
+  {"items":[{"type":"todo","title":"Buy groceries","notes":"Milk, eggs, bread, coffee","due_date":null,"due_time":null,"location":null,"recurrence":null,"confidence":0.9}]}
 - Source: Notification from Alex | Text: actually the meeting tomorrow is cancelled, ignore my last
   {"items":[]}
 - Source: SMS from +1555... | Text: thanks for coming to dinner yesterday, it was great

@@ -11,6 +11,7 @@ import androidx.core.content.ContextCompat
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.model.Suggestion
+import com.rajasudhan.taskmind.ui.notes.Checklist
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -45,6 +46,13 @@ class SuggestionApprover @Inject constructor(
         val isReminder = suggestion.type == "reminder" && suggestion.dueTime != null
         val noteType = if (isReminder) "reminder" else suggestion.type
 
+        // A list-like to-do (e.g. a shopping list whose items the model collected into the summary)
+        // becomes a tickable checklist, so the items render as checkboxes and ticks persist — instead
+        // of one run-on line. Mirrors how NoteDetail derives a checklist for to-dos.
+        val checklist = if (suggestion.type == "todo") {
+            Checklist.derive(suggestion.summary).takeIf { it.size >= 2 }?.let { Checklist.encode(it) }
+        } else null
+
         val note = Note(
             title = suggestion.extractedTitle,
             summary = suggestion.summary,
@@ -54,7 +62,8 @@ class SuggestionApprover @Inject constructor(
             source = suggestion.source,
             createdDate = System.currentTimeMillis(),
             type = noteType,
-            recurrence = suggestion.recurrence
+            recurrence = suggestion.recurrence,
+            checklist = checklist
         )
         val noteId = dao.insertNote(note)
 

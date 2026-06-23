@@ -35,6 +35,22 @@ class ExtractionHeuristicsTest {
         assertFalse(ExtractionHeuristics.isLikelyNoise("Don't forget to call the plumber"))
     }
 
+    @Test
+    fun meetingInvitesSurviveTheirUnsubscribeFooter() {
+        // Invites & LinkedIn-style mail/notifications carry an opt-out footer; they must still pass.
+        assertFalse(ExtractionHeuristics.isLikelyNoise(
+            "Alex invited you to a meeting on Friday at 3pm. Manage preferences or unsubscribe here."
+        ))
+        assertFalse(ExtractionHeuristics.isLikelyNoise(
+            "LinkedIn: Priya wants to schedule a call. To stop these emails, unsubscribe."
+        ))
+        assertFalse(ExtractionHeuristics.isLikelyNoise(
+            "Invitation: Q3 planning. When: Mon 10:00. Where: Zoom. Reply STOP to opt out."
+        ))
+        // A pure promo with no scheduling cue is still noise.
+        assertTrue(ExtractionHeuristics.isLikelyNoise("50% off everything — unsubscribe to stop deals"))
+    }
+
     // ---------------- date / time sanitization ----------------
 
     @Test
