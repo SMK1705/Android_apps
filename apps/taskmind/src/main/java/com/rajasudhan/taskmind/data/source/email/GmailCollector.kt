@@ -46,7 +46,11 @@ class GmailCollector @Inject constructor(
             val sender = GmailTextExtractor.header(headers, "From") ?: "unknown sender"
             val subject = GmailTextExtractor.header(headers, "Subject") ?: "(no subject)"
             val body = GmailTextExtractor.extractBodyText(msg.payload) ?: msg.snippet
-            emails.add(Email(ref.id, sender, subject, body))
+            // A calendar invite often ships its real details only in the .ics part; lead with a parsed
+            // summary so the model reliably sees the meeting's title/time/place.
+            val invite = GmailTextExtractor.extractCalendarText(msg.payload)
+            val finalBody = if (invite != null) "$invite\n\n$body" else body
+            emails.add(Email(ref.id, sender, subject, finalBody))
         }
         emails
     }

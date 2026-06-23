@@ -47,6 +47,50 @@ object GmailTextExtractor {
         return null
     }
 
+    /**
+     * If the message carries a calendar invitation (a `text/calendar` part — i.e. an .ics), pull its
+     * key fields into one readable line the model can turn into an event. Many invites ship the human
+     * text only inside the .ics, so without this an invite-only email yields nothing. Null when there
+     * is no invite or no usable fields.
+     */
+    fun extractCalendarText(payload: GmailPayload?): String? {
+        if (payload == null) return null
+        val ics = firstPartText(payload, "text/calendar") ?: return null
+        // ICS folds long lines with a CRLF followed by a space/tab; unfold before reading fields.
+        val unfolded = ics.replace(Regex("\\r?\\n[ \\t]"), "")
+        fun field(name: String): String? =
+            Regex("(?im)^$name(?:;[^:\\r\\n]*)?:(.*)$").find(unfolded)?.groupValues?.get(1)
+                ?.trim()?.replace("\\,", ",")?.replace("\\n", " ")?.takeIf { it.isNotBlank() }
+        val summary = field("SUMMARY")
+        val start = field("DTSTART")?.let { formatIcsDateTime(it) }
+        val location = field("LOCATION")
+        if (summary == null && start == null) return null
+        return buildString {
+            append("Calendar invitation.")
+            if (summary != null) append(" Title: $summary.")
+            if (start != null) append(" When: $start.")
+            if (location != null) append(" Where: $location.")
+        }
+    }
+
+    /** Turns an ICS DTSTART value (e.g. `20260625T150000Z`) into `2026-06-25 15:00`, UTC→local. */
+    private fun formatIcsDateTime(raw: String): String = try {
+        val core = raw.trim()
+        if (core.endsWith("Z")) {
+            java.time.LocalDateTime
+                .parse(core.removeSuffix("Z"), java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss"))
+                .atZone(java.time.ZoneOffset.UTC)
+                .withZoneSameInstant(java.time.ZoneId.systemDefault())
+                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        } else {
+            val m = Regex("(\\d{4})(\\d{2})(\\d{2})(?:T(\\d{2})(\\d{2}))?").find(core) ?: return core
+            val (y, mo, d, h, mi) = m.destructured
+            if (h.isNotEmpty()) "$y-$mo-$d $h:$mi" else "$y-$mo-$d"
+        }
+    } catch (e: Exception) {
+        raw
+    }
+
     /** Very small HTML→text: drop tags, collapse whitespace, unescape a few common entities. */
     fun stripHtml(html: String): String =
         html
