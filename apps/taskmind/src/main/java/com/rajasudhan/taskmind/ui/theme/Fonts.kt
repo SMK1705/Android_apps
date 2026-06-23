@@ -16,6 +16,17 @@ val InstrumentSerif = FontFamily(
     Font(R.font.instrument_serif_italic, FontWeight.Normal, FontStyle.Italic),
 )
 
+/**
+ * Times New Roman look-alike — Tinos is OFL-licensed and metrically identical to Times New Roman
+ * (the real one is proprietary and can't be bundled). Used for the serif/headline roles.
+ */
+val TimesSerif = FontFamily(
+    Font(R.font.tinos_regular, FontWeight.Normal),
+    Font(R.font.tinos_bold, FontWeight.Bold),
+    Font(R.font.tinos_italic, FontWeight.Normal, FontStyle.Italic),
+    Font(R.font.tinos_bold_italic, FontWeight.Bold, FontStyle.Italic),
+)
+
 /** Body / UI sans, weights 400–700. */
 val PlusJakarta = FontFamily(
     Font(R.font.plus_jakarta_sans_regular, FontWeight.Normal),
