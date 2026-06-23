@@ -4,15 +4,24 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.biometric.BiometricManager
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -23,6 +32,13 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.rajasudhan.taskmind.AppLock
 import com.rajasudhan.taskmind.data.source.SettingsManager
+import com.rajasudhan.taskmind.ui.bold.BoldEyebrow
+import com.rajasudhan.taskmind.ui.bold.BoldFilterChip
+import com.rajasudhan.taskmind.ui.theme.BoldOnAccent
+import com.rajasudhan.taskmind.ui.theme.BoldTheme
+import com.rajasudhan.taskmind.ui.theme.BoldType
+import com.rajasudhan.taskmind.ui.theme.ShapeHeroBig
+import com.rajasudhan.taskmind.ui.theme.ShapePanel
 import com.rajasudhan.taskmind.ui.theme.ThemeMode
 
 private val EngineAccent = Color(0xFF7C4DFF)
@@ -65,7 +81,6 @@ fun SettingsScreen(
     val restartRequired by viewModel.restartRequired.collectAsState()
     val permissions by viewModel.permissions.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
-    val dynamicColor by viewModel.dynamicColor.collectAsState()
     val appLockEnabled by viewModel.appLockEnabled.collectAsState()
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
@@ -95,51 +110,45 @@ fun SettingsScreen(
         viewModel.loadPermissionStatuses()
     }
 
+    val c = BoldTheme.colors
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(c.screen)
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(start = 18.dp, end = 18.dp, top = 6.dp, bottom = 96.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        Column {
+            BoldEyebrow("Proof, not promises")
+            Text("Privacy", style = BoldType.screenTitle, color = c.ink, modifier = Modifier.semantics { heading() })
+        }
+        // "today" = since local midnight, so the hero stat matches its label.
+        val startOfToday = remember {
+            java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+            }.timeInMillis
+        }
+        val todayOutbound = remember(egressEvents, startOfToday) { egressEvents.count { it.timestamp >= startOfToday } }
+        PrivacyHero(outbound = todayOutbound)
+
         SettingsSectionCard(accent = Color(0xFF5C6BC0), title = "Appearance") {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text("Theme", style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    "Follow the system day-night setting, or force light or dark regardless of the device.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ThemeMode.values().forEach { mode ->
-                        val label = when (mode) {
-                            ThemeMode.SYSTEM -> "System"
-                            ThemeMode.LIGHT -> "Light"
-                            ThemeMode.DARK -> "Dark"
-                        }
-                        FilterChip(
-                            selected = themeMode == mode,
-                            onClick = { viewModel.updateThemeMode(mode) },
-                            label = { Text(label) }
-                        )
+            Text("Theme", style = MaterialTheme.typography.bodyMedium, color = c.ink)
+            Text(
+                "Follow the system day-night setting, or force light or dark.",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.ink2
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ThemeMode.values().forEach { mode ->
+                    val label = when (mode) {
+                        ThemeMode.SYSTEM -> "System"
+                        ThemeMode.LIGHT -> "Light"
+                        ThemeMode.DARK -> "Dark"
                     }
+                    BoldFilterChip(label, themeMode == mode, { viewModel.updateThemeMode(mode) })
                 }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Material You (dynamic color)", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        "Tint the app from your wallpaper (Android 12+). Off keeps the TaskMind violet identity.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Switch(checked = dynamicColor, onCheckedChange = { viewModel.updateDynamicColor(it) })
             }
         }
 
@@ -644,27 +653,51 @@ fun SettingsScreen(
     }
 }
 
+/** The "0 B left your device today" privacy stat card. [outbound] = recorded egress events. */
+@Composable
+private fun PrivacyHero(outbound: Int) {
+    val c = BoldTheme.colors
+    Box(Modifier.fillMaxWidth().clip(ShapeHeroBig).background(c.surface).border(1.dp, c.line, ShapeHeroBig)) {
+        Box(
+            Modifier.align(Alignment.TopCenter).fillMaxWidth().height(140.dp)
+                .background(Brush.verticalGradient(listOf(c.accentGlow, Color.Transparent)))
+        )
+        Column(
+            Modifier.fillMaxWidth().padding(vertical = 26.dp, horizontal = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                Modifier.size(56.dp).clip(RoundedCornerShape(18.dp)).background(c.accent),
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.Outlined.Shield, contentDescription = null, tint = BoldOnAccent, modifier = Modifier.size(26.dp)) }
+            Spacer(Modifier.height(16.dp))
+            Text("$outbound", style = BoldType.privacyBig, color = if (outbound == 0) c.accent else c.ink)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                if (outbound == 0) "Nothing left your device today" else "left your device today",
+                style = MaterialTheme.typography.bodyMedium, color = c.ink, fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(3.dp))
+            Text("$outbound outbound · 0 trackers", style = BoldType.detailMeta, color = c.ink2)
+        }
+    }
+}
+
 @Composable
 private fun SettingsSectionCard(
     accent: Color,
     title: String,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
-            Box(modifier = Modifier.width(6.dp).fillMaxHeight().background(accent))
-            Column(
-                modifier = Modifier.weight(1f).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = accent,
-                    fontWeight = FontWeight.Bold
-                )
-                content()
-            }
+    val c = BoldTheme.colors
+    Column(
+        Modifier.fillMaxWidth().clip(ShapePanel).background(c.surface).border(1.dp, c.line, ShapePanel).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(accent))
+            Text(title, style = MaterialTheme.typography.titleMedium, color = c.ink, fontWeight = FontWeight.SemiBold)
         }
+        content()
     }
 }

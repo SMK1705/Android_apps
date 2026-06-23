@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -54,7 +56,7 @@ fun NotesScreen(
     Column(Modifier.fillMaxSize().background(c.screen)) {
         Column(Modifier.padding(start = 18.dp, end = 18.dp, top = 6.dp)) {
             BoldEyebrow("${counts["all"] ?: 0} kept items")
-            Text("Notes", style = BoldType.screenTitle, color = c.ink)
+            Text("Notes", style = BoldType.screenTitle, color = c.ink, modifier = Modifier.semantics { heading() })
             Spacer(Modifier.height(14.dp))
             BoldSearchField(query, viewModel::setQuery)
             Spacer(Modifier.height(12.dp))

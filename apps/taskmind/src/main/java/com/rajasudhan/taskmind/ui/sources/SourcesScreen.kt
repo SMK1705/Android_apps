@@ -31,6 +31,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -120,7 +122,7 @@ fun SourcesScreen(
         item {
             Column {
                 BoldEyebrow("What it may read")
-                Text("Sources", style = BoldType.screenTitle, color = c.ink)
+                Text("Sources", style = BoldType.screenTitle, color = c.ink, modifier = Modifier.semantics { heading() })
                 Spacer(Modifier.height(14.dp))
                 SourcesHero(activeCount = activeCount, totalCount = 8)
             }
