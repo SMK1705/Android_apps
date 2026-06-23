@@ -4,6 +4,7 @@ import android.app.Notification
 import android.content.ComponentName
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import androidx.core.app.NotificationCompat
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -57,7 +58,7 @@ class TaskMindNotificationListener : NotificationListenerService() {
 
         val notification = sbn.notification
         val title = notification.extras.getString(Notification.EXTRA_TITLE)
-        val text = notification.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
+        val text = bestNotificationText(notification)
 
         // A chat-app missed call (WhatsApp, Telegram, …) is only ever a notification — it never hits
         // the call log. It's also CATEGORY_CALL, which isRelevant() drops, so detect it up front and
@@ -92,6 +93,44 @@ class TaskMindNotificationListener : NotificationListenerService() {
         runCatching {
             requestRebind(ComponentName(this, TaskMindNotificationListener::class.java))
         }
+    }
+
+    /**
+     * The richest readable text in a notification. Messaging apps (LinkedIn, WhatsApp, …) put the
+     * actual message(s) in a MessagingStyle payload, while EXTRA_TEXT is often only a "2 new messages"
+     * summary — which then reads as non-actionable noise and a real DM ("can we meet at 3?") is lost.
+     * So prefer the MessagingStyle messages, then the expanded big-text / inbox lines, then EXTRA_TEXT.
+     */
+    private fun bestNotificationText(n: Notification): String? {
+        val messages = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)?.messages
+        if (!messages.isNullOrEmpty()) {
+            val joined = messages.takeLast(6).mapNotNull { m ->
+                val body = m.text?.toString()?.trim()
+                if (body.isNullOrBlank()) {
+                    null
+                } else {
+                    val who = m.person?.name?.toString()?.trim()
+                    if (!who.isNullOrBlank()) "$who: $body" else body
+                }
+            }.joinToString("\n").trim()
+            if (joined.isNotBlank()) return joined
+        }
+
+        val extras = n.extras
+        val big = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()?.trim()
+        if (!big.isNullOrBlank()) return big
+
+        val lines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
+        if (lines != null) {
+            val joined = lines.mapNotNull { cs ->
+                val s = cs?.toString()?.trim()
+                if (s.isNullOrBlank()) null else s
+            }.joinToString("\n").trim()
+            if (joined.isNotBlank()) return joined
+        }
+
+        val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.trim()
+        return if (text.isNullOrBlank()) null else text
     }
 
     /**
