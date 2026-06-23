@@ -29,8 +29,21 @@ object ExtractionHeuristics {
         Regex("% off|\\bsale\\b|\\bdeal(s)?\\b|coupon|promo|cashback", RegexOption.IGNORE_CASE)
     )
 
+    /**
+     * Scheduling / invite cues. A meeting invite or calendar invitation — in an email or a
+     * LinkedIn-style notification — routinely carries an "unsubscribe"/opt-out footer, which the
+     * marketing patterns above would otherwise treat as noise and drop before the model ever sees it.
+     * When one of these is present we let the text through to the LLM, which makes the real call.
+     */
+    val ACTIONABLE_HINTS = Regex(
+        "\\b(invit\\w+|meeting|calendar|rsvp|appointment|interview|webinar|schedul\\w+)\\b|" +
+            "when\\s*:|where\\s*:|zoom\\.us|meet\\.google|teams\\.microsoft",
+        RegexOption.IGNORE_CASE
+    )
+
     /** True if the raw text is obvious non-actionable noise and should skip the LLM entirely. */
-    fun isLikelyNoise(text: String): Boolean = NOISE_PATTERNS.any { it.containsMatchIn(text) }
+    fun isLikelyNoise(text: String): Boolean =
+        !ACTIONABLE_HINTS.containsMatchIn(text) && NOISE_PATTERNS.any { it.containsMatchIn(text) }
 
     /** Returns the date only if it is a well-formed `yyyy-MM-dd`, else null. */
     fun sanitizeDate(raw: String?): String? = raw?.takeIf { it.matches(DATE_REGEX) }
