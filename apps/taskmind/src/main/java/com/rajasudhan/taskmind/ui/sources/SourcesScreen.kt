@@ -10,45 +10,36 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.Event
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Sms
-import androidx.compose.material3.*
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.accompanist.permissions.*
 import com.rajasudhan.taskmind.ui.bold.BoldCard
-import com.rajasudhan.taskmind.ui.bold.BoldEyebrow
-import com.rajasudhan.taskmind.ui.theme.BoldOnAccent
+import com.rajasudhan.taskmind.ui.bold.BoldPageHeader
+import com.rajasudhan.taskmind.ui.bold.BoldSwitch
 import com.rajasudhan.taskmind.ui.theme.BoldTheme
 import com.rajasudhan.taskmind.ui.theme.BoldType
-import com.rajasudhan.taskmind.ui.theme.ShapeHero
+import com.rajasudhan.taskmind.ui.theme.ShapeCard
 import com.rajasudhan.taskmind.ui.theme.ShapePanel
-import com.rajasudhan.taskmind.ui.theme.ShapeWell
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun SourcesScreen(
+    isDark: Boolean = true,
+    onToggleTheme: () -> Unit = {},
     viewModel: SourcesViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -109,240 +100,225 @@ fun SourcesScreen(
         }
     }
 
-    val activeCount = listOf(
-        notificationsEnabled, smsEnabled, callLogEnabled, appUsageEnabled,
-        emailEnabled, calendarEnabled, audioEnabled, imagesEnabled
-    ).count { it }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(c.screen),
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 6.dp, bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(11.dp)
-    ) {
-        item {
-            Column {
-                BoldEyebrow("What it may read")
-                Text("Sources", style = BoldType.screenTitle, color = c.ink, modifier = Modifier.semantics { heading() })
-                Spacer(Modifier.height(14.dp))
-                SourcesHero(activeCount = activeCount, totalCount = 8)
-            }
-        }
-
-        item { SectionLabel("Passive observers") }
-
-        item {
-            BoldSourceRow(
-                icon = Icons.Default.Notifications,
-                name = "Notifications",
-                meta = "Read incoming notification text",
-                checked = notificationsEnabled,
-                onCheckedChange = {
-                    if (it) context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                    viewModel.toggleNotifications(it)
-                }
+    Column(Modifier.fillMaxSize().background(c.screen)) {
+        Column(Modifier.padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 8.dp)) {
+            BoldPageHeader(
+                title = "Sources",
+                subtitle = "What TaskMind is allowed to read",
+                isDark = isDark,
+                onToggleTheme = onToggleTheme
             )
         }
 
-        if (notificationsEnabled) {
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
+            verticalArrangement = Arrangement.spacedBy(11.dp)
+        ) {
+            item { SectionLabel("Passive observers") }
+
             item {
-                BoldCard(Modifier.fillMaxWidth(), shape = ShapePanel) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text(
-                            "Leave all unchecked to watch every app, or pick specific apps (e.g. Messages, " +
-                                "WhatsApp, Gmail) to cut noise.",
-                            style = BoldType.body, color = c.ink2
-                        )
-                        OutlinedTextField(
-                            value = appSearch,
-                            onValueChange = { appSearch = it },
-                            label = { Text("Search apps") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
-                        )
-                        LazyColumn(
-                            modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp).padding(top = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            items(filteredApps, key = { it.packageName }) { app ->
-                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Column(Modifier.weight(1f).padding(end = 8.dp)) {
-                                        Text(app.label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Text(app.packageName, style = BoldType.noteSrcMeta, color = c.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                BoldSourceRow(
+                    name = "Notifications",
+                    desc = "Read incoming notification text",
+                    meta = "Notification access",
+                    checked = notificationsEnabled,
+                    onCheckedChange = {
+                        if (it) context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                        viewModel.toggleNotifications(it)
+                    }
+                )
+            }
+
+            if (notificationsEnabled) {
+                item {
+                    BoldCard(Modifier.fillMaxWidth(), shape = ShapePanel) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text("MONITOR THESE APPS", style = BoldType.sectionMono, color = c.ink3, modifier = Modifier.padding(bottom = 9.dp))
+                            Text(
+                                "Leave all unchecked to watch every app, or pick specific apps (e.g. Messages, " +
+                                    "WhatsApp, Gmail) to cut noise.",
+                                style = BoldType.sourceMeta, color = c.ink2
+                            )
+                            OutlinedTextField(
+                                value = appSearch,
+                                onValueChange = { appSearch = it },
+                                label = { Text("Search apps") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+                            )
+                            LazyColumn(
+                                modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp).padding(top = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                items(filteredApps, key = { it.packageName }) { app ->
+                                    val monitored = app.packageName in allowlist
+                                    Row(
+                                        // One toggleable element so TalkBack announces the app name with the checkbox state.
+                                        Modifier.fillMaxWidth().toggleable(
+                                            value = monitored,
+                                            role = Role.Checkbox,
+                                            onValueChange = { viewModel.setAppMonitored(app.packageName, it) }
+                                        ),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                                            Text(app.label, style = MaterialTheme.typography.bodyLarge, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text(app.packageName, style = BoldType.noteSrcMeta, color = c.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        }
+                                        Checkbox(checked = monitored, onCheckedChange = null)
                                     }
-                                    Checkbox(
-                                        checked = app.packageName in allowlist,
-                                        onCheckedChange = { viewModel.setAppMonitored(app.packageName, it) }
-                                    )
                                 }
                             }
                         }
                     }
                 }
             }
-        }
 
-        item {
-            BoldSourceRow(
-                icon = Icons.Default.Sms,
-                name = "SMS Messages",
-                meta = "Read incoming and recent text messages",
-                checked = smsEnabled,
-                onCheckedChange = {
-                    if (it && !smsPermissionState.status.isGranted) smsPermissionState.launchPermissionRequest()
-                    else viewModel.toggleSms(it)
-                }
-            )
-        }
-
-        item {
-            BoldSourceRow(
-                icon = Icons.Default.Call,
-                name = "Call Logs",
-                meta = "Read recent call history context",
-                checked = callLogEnabled,
-                onCheckedChange = {
-                    if (it && !callLogPermissionState.status.isGranted) callLogPermissionState.launchPermissionRequest()
-                    else viewModel.toggleCallLog(it)
-                }
-            )
-        }
-
-        item {
-            val contactsGranted = contactsPermissionState.status.isGranted
-            BoldSourceRow(
-                icon = Icons.Default.Person,
-                name = "Contacts",
-                meta = "Match a name in a message to a number so \"Call\" can dial",
-                checked = contactsGranted,
-                onCheckedChange = { if (it && !contactsGranted) contactsPermissionState.launchPermissionRequest() }
-            )
-        }
-
-        item {
-            BoldSourceRow(
-                icon = Icons.Default.BarChart,
-                name = "App Usage",
-                meta = "Track which apps you use and when",
-                checked = appUsageEnabled,
-                onCheckedChange = {
-                    if (it) context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-                    viewModel.toggleAppUsage(it)
-                }
-            )
-        }
-
-        item { SectionLabel("Connected accounts") }
-
-        item {
-            BoldSourceRow(
-                icon = Icons.Default.Email,
-                name = "Email (Gmail)",
-                meta = if (gmailAccounts.isEmpty()) "Read unread Primary emails (read-only)"
-                    else "${gmailAccounts.size} account${if (gmailAccounts.size == 1) "" else "s"} connected",
-                checked = emailEnabled,
-                onCheckedChange = { viewModel.onEmailToggle(it) }
-            )
-            gmailStatus?.let {
-                Text(it, style = BoldType.body, color = c.ink2, modifier = Modifier.padding(start = 6.dp, top = 6.dp))
+            item {
+                BoldSourceRow(
+                    name = "SMS Messages",
+                    desc = "Read incoming & recent texts",
+                    meta = "READ_SMS",
+                    checked = smsEnabled,
+                    onCheckedChange = {
+                        if (it && !smsPermissionState.status.isGranted) smsPermissionState.launchPermissionRequest()
+                        else viewModel.toggleSms(it)
+                    }
+                )
             }
-            if (emailEnabled) {
-                gmailAccounts.forEach { account ->
-                    Row(
-                        Modifier.fillMaxWidth().padding(start = 6.dp, top = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(account, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { viewModel.disconnectGmailAccount(account) }) { Text("Disconnect") }
+
+            item {
+                BoldSourceRow(
+                    name = "Call Logs",
+                    desc = "Missed calls → \"Call back\"",
+                    meta = "READ_CALL_LOG",
+                    checked = callLogEnabled,
+                    onCheckedChange = {
+                        if (it && !callLogPermissionState.status.isGranted) callLogPermissionState.launchPermissionRequest()
+                        else viewModel.toggleCallLog(it)
+                    }
+                )
+            }
+
+            item {
+                val contactsGranted = contactsPermissionState.status.isGranted
+                BoldSourceRow(
+                    name = "Contacts",
+                    desc = "Match a name in a message to a number so \"Call\" can dial",
+                    meta = "READ_CONTACTS",
+                    checked = contactsGranted,
+                    onCheckedChange = { if (it && !contactsGranted) contactsPermissionState.launchPermissionRequest() }
+                )
+            }
+
+            item {
+                BoldSourceRow(
+                    name = "App Usage",
+                    desc = "Daily screen-time digest",
+                    meta = "Usage access",
+                    checked = appUsageEnabled,
+                    onCheckedChange = {
+                        if (it) context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                        viewModel.toggleAppUsage(it)
+                    }
+                )
+            }
+
+            item { SectionLabel("Connected accounts") }
+
+            item {
+                BoldSourceRow(
+                    name = "Email (Gmail)",
+                    desc = "Unread Primary, read-only",
+                    meta = if (gmailAccounts.isEmpty()) "Not connected"
+                        else "${gmailAccounts.size} account${if (gmailAccounts.size == 1) "" else "s"} connected",
+                    checked = emailEnabled,
+                    onCheckedChange = { viewModel.onEmailToggle(it) }
+                )
+                gmailStatus?.let {
+                    Text(it, style = BoldType.body, color = c.ink2, modifier = Modifier.padding(start = 6.dp, top = 6.dp))
+                }
+                if (emailEnabled) {
+                    gmailAccounts.forEach { account ->
+                        Row(
+                            Modifier.fillMaxWidth().padding(start = 6.dp, top = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(account, style = MaterialTheme.typography.bodyMedium, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { viewModel.disconnectGmailAccount(account) }) { Text("Disconnect") }
+                        }
+                    }
+                    TextButton(onClick = { viewModel.addGmailAccount() }, modifier = Modifier.padding(start = 6.dp)) {
+                        Text(if (gmailAccounts.isEmpty()) "Connect Gmail" else "Add another account")
                     }
                 }
-                TextButton(onClick = { viewModel.addGmailAccount() }, modifier = Modifier.padding(start = 6.dp)) {
-                    Text(if (gmailAccounts.isEmpty()) "Connect Gmail" else "Add another account")
-                }
             }
-        }
 
-        item {
-            BoldSourceRow(
-                icon = Icons.Default.Event,
-                name = "Calendar",
-                meta = "Read to prevent duplicates; write to add events on approve",
-                checked = calendarEnabled,
-                onCheckedChange = {
-                    if (it && !calendarPermissionState.allPermissionsGranted) calendarPermissionState.launchMultiplePermissionRequest()
-                    else viewModel.toggleCalendar(it)
-                }
-            )
-        }
-
-        item { SectionLabel("Reactive sensors") }
-
-        item {
-            BoldSourceRow(
-                icon = Icons.Default.Mic,
-                name = "Voice / Call recordings",
-                meta = "Watch folders for new audio to transcribe",
-                checked = audioEnabled,
-                onCheckedChange = {
-                    if (it && !audioPermissionState.status.isGranted) audioPermissionState.launchPermissionRequest()
-                    else viewModel.toggleAudio(it)
-                }
-            )
-            if (audioEnabled) {
-                OutlinedTextField(
-                    value = callPath,
-                    onValueChange = { viewModel.updateCallRecordingPath(it) },
-                    label = { Text("Call recording path") },
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                )
-                OutlinedTextField(
-                    value = voicePath,
-                    onValueChange = { viewModel.updateVoiceRecordingPath(it) },
-                    label = { Text("Voice memo path") },
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            item {
+                BoldSourceRow(
+                    name = "Calendar",
+                    desc = "Dedupe + add events on approve",
+                    meta = "Calendar access",
+                    checked = calendarEnabled,
+                    onCheckedChange = {
+                        if (it && !calendarPermissionState.allPermissionsGranted) calendarPermissionState.launchMultiplePermissionRequest()
+                        else viewModel.toggleCalendar(it)
+                    }
                 )
             }
-        }
 
-        item {
-            BoldSourceRow(
-                icon = Icons.Default.Image,
-                name = "Screenshots (OCR)",
-                meta = "Read text from new screenshots on-device. Needs a Tesseract model (Settings).",
-                checked = imagesEnabled,
-                onCheckedChange = {
-                    if (it && !imagesPermissionState.status.isGranted) imagesPermissionState.launchPermissionRequest()
-                    else viewModel.toggleImages(it)
-                }
-            )
-        }
-    }
-}
+            item { SectionLabel("Reactive sensors") }
 
-@Composable
-private fun SourcesHero(activeCount: Int, totalCount: Int) {
-    Box(Modifier.fillMaxWidth().clip(ShapeHero).background(BoldTheme.colors.accent).padding(18.dp)) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(Color.Black.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) { Icon(Icons.Default.Memory, contentDescription = null, tint = BoldOnAccent, modifier = Modifier.size(22.dp)) }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("On-device intelligence", style = BoldType.heroTitle, color = BoldOnAccent)
-                    Text("$activeCount of $totalCount sources active", style = BoldType.detailMeta, color = BoldOnAccent.copy(alpha = 0.7f))
-                }
-                Row(
-                    Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.12f)).padding(horizontal = 9.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                ) {
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(BoldOnAccent))
-                    Text("ACTIVE", style = BoldType.deckCountLabel, color = BoldOnAccent)
+            item {
+                BoldSourceRow(
+                    name = "Voice / Call recordings",
+                    desc = "Watch folders for new audio to transcribe",
+                    meta = "On-device (Vosk)",
+                    checked = audioEnabled,
+                    onCheckedChange = {
+                        if (it && !audioPermissionState.status.isGranted) audioPermissionState.launchPermissionRequest()
+                        else viewModel.toggleAudio(it)
+                    }
+                )
+                if (audioEnabled) {
+                    OutlinedTextField(
+                        value = callPath,
+                        onValueChange = { viewModel.updateCallRecordingPath(it) },
+                        label = { Text("Call recording path") },
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    )
+                    OutlinedTextField(
+                        value = voicePath,
+                        onValueChange = { viewModel.updateVoiceRecordingPath(it) },
+                        label = { Text("Voice memo path") },
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    )
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            Text("Read and understood on this phone. Nothing is uploaded.", style = BoldType.body, color = BoldOnAccent.copy(alpha = 0.85f))
+
+            item {
+                BoldSourceRow(
+                    name = "Screenshots (OCR)",
+                    desc = "Read text from new screenshots, on-device",
+                    meta = "On-device (Tesseract)",
+                    checked = imagesEnabled,
+                    onCheckedChange = {
+                        if (it && !imagesPermissionState.status.isGranted) imagesPermissionState.launchPermissionRequest()
+                        else viewModel.toggleImages(it)
+                    }
+                )
+            }
+
+            item {
+                Text(
+                    "Each source asks for its permission when enabled. Understanding always runs on-device.",
+                    style = BoldType.body.copy(fontSize = 12.sp, lineHeight = 18.sp),
+                    color = c.ink3,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)
+                )
+            }
         }
     }
 }
@@ -357,31 +333,40 @@ private fun SectionLabel(text: String) {
     )
 }
 
+/**
+ * A source card to the handoff spec: no icon — the name itself carries the on/off state (ink when on,
+ * faint when off), with a behaviour line, a mono permission/status line, and the pill [BoldSwitch].
+ */
 @Composable
 private fun BoldSourceRow(
-    icon: ImageVector,
     name: String,
+    desc: String,
     meta: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    warn: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val c = BoldTheme.colors
-    BoldCard(modifier.fillMaxWidth(), shape = ShapePanel) {
+    BoldCard(modifier.fillMaxWidth(), shape = ShapeCard) {
         Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            Modifier.padding(start = 16.dp, end = 16.dp, top = 15.dp, bottom = 15.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(13.dp)
         ) {
-            Box(
-                Modifier.size(40.dp).clip(ShapeWell).background(c.surface2),
-                contentAlignment = Alignment.Center
-            ) { Icon(icon, contentDescription = null, tint = if (checked) c.accent else c.ink3, modifier = Modifier.size(19.dp)) }
             Column(Modifier.weight(1f)) {
-                Text(name, style = BoldType.sourceName, color = c.ink)
-                Text(meta, style = BoldType.sourceMeta, color = c.ink2)
+                // On = ink; off = ink2 (the spec's faint fails contrast, so keep the off name legible).
+                Text(name, style = BoldType.sourceName.copy(fontSize = 15.5.sp), color = if (checked) c.ink else c.ink2)
+                Spacer(Modifier.height(3.dp))
+                Text(desc, style = BoldType.sourceMeta.copy(fontSize = 12.5.sp), color = c.ink2)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    meta,
+                    style = BoldType.detailMeta.copy(fontSize = 10.sp, letterSpacing = 0.3.sp),
+                    color = if (warn) c.reminder else c.ink3
+                )
             }
-            Switch(checked = checked, onCheckedChange = onCheckedChange)
+            BoldSwitch(checked = checked, onCheckedChange = onCheckedChange)
         }
     }
 }
