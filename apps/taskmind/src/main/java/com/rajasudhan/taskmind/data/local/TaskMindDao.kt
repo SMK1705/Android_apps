@@ -84,6 +84,16 @@ interface TaskMindDao {
     @Query("SELECT * FROM notes ORDER BY createdDate DESC")
     suspend fun getNotesList(): List<Note>
 
+    /**
+     * Active reminder notes that carry a date and time — exactly the set that owns an exact alarm
+     * (the approver only schedules alarms for `type = 'reminder'`). Used to re-arm alarms after a
+     * reboot, since AlarmManager alarms don't survive a restart and the app keeps no other record of
+     * them. The `type` filter matters: a plain timed to-do has a date+time but never had an alarm, so
+     * re-arming it would fabricate a reminder the user never set.
+     */
+    @Query("SELECT * FROM notes WHERE completed = 0 AND type = 'reminder' AND dueDate IS NOT NULL AND dueTime IS NOT NULL")
+    suspend fun getReminderNotes(): List<Note>
+
     /** Retention: drop notes created before [cutoff] (epoch millis). */
     @Query("DELETE FROM notes WHERE createdDate < :cutoff")
     suspend fun deleteNotesOlderThan(cutoff: Long)

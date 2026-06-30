@@ -10,6 +10,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.rajasudhan.taskmind.data.source.DataCollectionWorker
 import com.rajasudhan.taskmind.data.source.SettingsManager
+import com.rajasudhan.taskmind.data.source.TaskMindForegroundService
 import dagger.hilt.android.HiltAndroidApp
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -30,6 +31,9 @@ class TaskMindApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        // Create the notification channel eagerly so a reminder alarm that fires after a reboot (before
+        // the foreground service has ever run this process) still has a channel to post to.
+        TaskMindForegroundService.ensureNotificationChannel(this)
         // Keep the existing schedule on launch; only an explicit settings change replaces it.
         scheduleScan(this, settingsManager.scanFrequencyMinutes.toLong(), replace = false)
     }

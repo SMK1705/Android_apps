@@ -21,6 +21,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Re-arm reminder alarms after a reboot (AlarmManager alarms don't survive a restart). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
     <!-- Screenshot OCR (READ_MEDIA_IMAGES + ML Kit) removed for now. -->
@@ -71,6 +73,18 @@
             android:exported="false" />
 
         <receiver android:name=".data.source.AlarmReceiver" android:exported="false" />
+
+        <!-- Re-arms reminder alarms after a device reboot (alarms are cleared on restart). -->
+        <receiver
+            android:name=".data.source.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
 
         <!-- Approve/Reject actions on the review notification. -->
         <receiver android:name=".data.source.NotificationActionReceiver" android:exported="false" />

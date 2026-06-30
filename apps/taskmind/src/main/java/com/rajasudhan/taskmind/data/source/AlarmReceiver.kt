@@ -13,6 +13,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.time.LocalDateTime
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -41,8 +42,14 @@ class AlarmReceiver : BroadcastReceiver() {
                 notifyReminder(context, title)
 
                 // Repeating reminder: advance the note's due date and schedule the next occurrence.
+                // Step at least one period past the date that just fired, then keep skipping forward
+                // until the slot is actually in the future — otherwise a late delivery (device was
+                // asleep/off) would compute a slot already in the past, which the scheduler drops,
+                // silently breaking the recurrence forever.
                 if (noteId >= 0 && !recurrence.isNullOrBlank() && dueDate != null) {
-                    val next = RecurrenceUtil.next(dueDate, recurrence) ?: return@launch
+                    val firstNext = RecurrenceUtil.next(dueDate, recurrence) ?: return@launch
+                    val next = RecurrenceUtil.firstFutureOccurrence(firstNext, dueTime, recurrence, LocalDateTime.now())
+                        ?: firstNext
                     dao.updateNoteDueDate(noteId, next)
                     alarmScheduler.schedule(noteId, title, next, dueTime, recurrence)
                 }

@@ -17,7 +17,6 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import java.util.TimeZone
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -113,8 +112,10 @@ class SuggestionApprover @Inject constructor(
             val timeZone: String
             val allDay: Boolean
             if (isTimed) {
-                val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
-                startMs = LocalDateTime.parse("${dueDate}T$dueTime", formatter)
+                // Tolerant time parse (shared with AlarmScheduler) so a single-digit-hour time like
+                // "9:30" still produces a calendar event instead of being silently skipped.
+                val time = RecurrenceUtil.parseTime(dueTime) ?: return
+                startMs = LocalDateTime.of(LocalDate.parse(dueDate), time)
                     .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
                 endMs = startMs + settingsManager.eventDurationMinutes.toLong() * 60 * 1000
                 timeZone = TimeZone.getDefault().id
