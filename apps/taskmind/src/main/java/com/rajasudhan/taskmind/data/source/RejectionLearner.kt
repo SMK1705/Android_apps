@@ -24,6 +24,20 @@ class RejectionLearner @Inject constructor(
         )
     }
 
+    /**
+     * Record an approval for the suggestion's sender, walking its rejection count back down so the
+     * learned penalty can recover. Without this a sender that crossed the threshold during a busy
+     * spell stays penalised forever, even after the user starts approving their items again. One
+     * approval forgives one rejection; the row is dropped once it reaches zero.
+     */
+    suspend fun recordApproval(suggestion: Suggestion) {
+        val key = senderKey(suggestion.source) ?: return
+        val existing = dao.rejectedPatternFor("sender", key) ?: return
+        val next = countAfterApproval(existing.count)
+        if (next <= 0) dao.deleteRejectedPattern("sender", key)
+        else dao.upsertRejectedPattern(RejectedPattern("sender", key, next, System.currentTimeMillis()))
+    }
+
     /** Confidence penalty to apply to items from [source] (0 unless its sender is past the threshold). */
     suspend fun confidencePenalty(source: String): Double {
         val key = senderKey(source) ?: return 0.0
@@ -34,6 +48,9 @@ class RejectionLearner @Inject constructor(
     companion object {
         const val REJECT_THRESHOLD = 3
         const val PENALTY = 0.3
+
+        /** The rejection count after one approval forgives one rejection (never negative). */
+        fun countAfterApproval(current: Int): Int = (current - 1).coerceAtLeast(0)
 
         /**
          * The sender/origin from a source label such as "SMS from +91…", "Email (a@x) from Alice",

@@ -246,6 +246,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             dao.deleteAllNotes()
             dao.deleteAllSuggestions()
+            dao.deleteAllRejectedPatterns() // also forget the on-device rejection learning
             settingsManager.clearSettings()
             context.dataStore.edit { it.clear() }
 

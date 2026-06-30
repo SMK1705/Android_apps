@@ -111,4 +111,12 @@ interface TaskMindDao {
 
     @Query("SELECT * FROM rejected_patterns")
     suspend fun allRejectedPatterns(): List<RejectedPattern>
+
+    /** Forget one learned pattern (e.g. when an approval walks a sender's penalty back to zero). */
+    @Query("DELETE FROM rejected_patterns WHERE kind = :kind AND value = :value")
+    suspend fun deleteRejectedPattern(kind: String, value: String)
+
+    /** Forget all learned patterns (e.g. on a full data wipe). */
+    @Query("DELETE FROM rejected_patterns")
+    suspend fun deleteAllRejectedPatterns()
 }
