@@ -356,7 +356,8 @@ private fun InboxHeader(
             trailing = {
                 Row(verticalAlignment = Alignment.Bottom) {
                     Box {
-                        IconButton(onClick = { onOverflowToggle(true) }, modifier = Modifier.size(28.dp)) {
+                        // No size override: IconButton keeps its default 48dp interactive touch target.
+                        IconButton(onClick = { onOverflowToggle(true) }) {
                             if (isRefreshing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = c.ink3)
                             else Icon(Icons.Default.MoreVert, contentDescription = "More actions", tint = c.ink3)
                         }
