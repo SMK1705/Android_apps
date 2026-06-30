@@ -55,11 +55,29 @@ class TaskMindForegroundService : Service() {
     companion object {
         const val NOTIFICATION_CHANNEL_ID = "taskmind_service_channel"
         const val NOTIFICATION_ID = 1
+
+        /**
+         * Idempotently creates the notification channel shared by the foreground service AND by
+         * reminder / geofence notifications. Also called from [com.rajasudhan.taskmind.TaskMindApp]
+         * on startup, so an alarm that fires after a reboot — before the user reopens the app, so this
+         * service has never run — still has a channel to post to. Without it, Android O+ silently drops
+         * a notification posted to a non-existent channel.
+         */
+        fun ensureNotificationChannel(context: Context) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    NOTIFICATION_CHANNEL_ID,
+                    "TaskMind Service Channel",
+                    NotificationManager.IMPORTANCE_LOW
+                )
+                context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
+            }
+        }
     }
 
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
+        ensureNotificationChannel(this)
         observeSmsSource()
         observeMediaSource(
             enabledFlow = { sourceManager.isAudioEnabled },
@@ -136,18 +154,6 @@ class TaskMindForegroundService : Service() {
         if (audioWatching) contentResolver.unregisterContentObserver(audioObserver)
         if (imageWatching) contentResolver.unregisterContentObserver(imageObserver)
         serviceScope.cancel()
-    }
-
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val serviceChannel = NotificationChannel(
-                NOTIFICATION_CHANNEL_ID,
-                "TaskMind Service Channel",
-                NotificationManager.IMPORTANCE_LOW
-            )
-            val manager = getSystemService(NotificationManager::class.java)
-            manager?.createNotificationChannel(serviceChannel)
-        }
     }
 
     override fun onBind(intent: Intent?): IBinder? {

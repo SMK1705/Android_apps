@@ -5,9 +5,9 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,8 +22,11 @@ class AlarmScheduler @Inject constructor(
 ) {
     fun schedule(noteId: Int, title: String, dueDate: String?, dueTime: String?, recurrence: String?) {
         if (dueDate == null || dueTime == null) return
+        // Parse the time tolerantly via the shared helper — single-digit hours like "9:30" are valid
+        // and persisted, and a strict HH parser would reject them and silently drop the alarm.
+        val time = RecurrenceUtil.parseTime(dueTime) ?: return
         val timeMillis = runCatching {
-            LocalDateTime.parse("${dueDate}T$dueTime", DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))
+            LocalDateTime.of(LocalDate.parse(dueDate), time)
                 .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         }.getOrNull() ?: return
         if (timeMillis <= System.currentTimeMillis()) return // never fire in the past

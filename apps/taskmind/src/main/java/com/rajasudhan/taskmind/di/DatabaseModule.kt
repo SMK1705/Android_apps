@@ -76,18 +76,32 @@ object DatabaseModule {
         // The on-disk format is unchanged (both are SQLCipher 4), so existing databases reopen with
         // the same key — no data migration needed.
         System.loadLibrary("sqlcipher")
-        val factory = SupportOpenHelperFactory(dbKey)
-        return Room.databaseBuilder(
-            context,
-            TaskMindDatabase::class.java,
-            "taskmind_db"
-        )
-        .openHelperFactory(factory)
-        .addMigrations(
-            TaskMindDatabase.MIGRATION_1_2, TaskMindDatabase.MIGRATION_2_3,
-            TaskMindDatabase.MIGRATION_3_4, TaskMindDatabase.MIGRATION_4_5
-        )
-        .build()
+
+        fun build(): TaskMindDatabase =
+            Room.databaseBuilder(context, TaskMindDatabase::class.java, "taskmind_db")
+                .openHelperFactory(SupportOpenHelperFactory(dbKey))
+                .addMigrations(
+                    TaskMindDatabase.MIGRATION_1_2, TaskMindDatabase.MIGRATION_2_3,
+                    TaskMindDatabase.MIGRATION_3_4, TaskMindDatabase.MIGRATION_4_5
+                )
+                .build()
+
+        val db = build()
+        return try {
+            // Force the SQLCipher open now so a key/DB mismatch surfaces here, not as a crash on the
+            // first query later. This covers the rare case where a backup restore was interrupted
+            // between swapping the DB file and committing its key, leaving the stored key unable to
+            // open the (already-restored) file.
+            db.openHelper.readableDatabase
+            db
+        } catch (e: Exception) {
+            // Unrecoverable: the stored key can't open the on-disk DB. Drop it so a fresh DB is created
+            // rather than crash-looping on every launch. Mirrors the prefs self-heal above — the app
+            // stays usable even if the encrypted data is lost.
+            runCatching { db.close() }
+            context.deleteDatabase("taskmind_db")
+            build()
+        }
     }
 
     @Provides
