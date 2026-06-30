@@ -24,7 +24,7 @@ in your messages, and understands what you say a lot more accurately (including 
   **recurring reminders** (daily / weekly / monthly), not just set by hand.
 - **In-app model downloads** — fetch and install the Vosk (speech) and Tesseract (OCR) models from
   inside the app, no `adb` needed.
-- **UI overhaul** — theme-aware category colors + a Material You toggle, source icons and confidence
+- **UI overhaul** — theme-aware category colors, source icons and confidence
   pills, haptic swipe, a Sources "cockpit", inline note editing, and checklist drag-to-reorder.
 - **Over-the-air installs** — a *Publish debug APK* workflow keeps a rolling `debug-latest` release so
   you can install a fresh build straight from the phone.
