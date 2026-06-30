@@ -333,7 +333,7 @@ fun BoldPageHeader(
     ) {
         Column(Modifier.weight(1f).padding(end = 8.dp)) {
             Text(title, style = BoldType.screenTitle, color = c.ink, modifier = Modifier.semantics { heading() })
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(7.dp))
             Text(
                 subtitle,
                 style = BoldType.srcLabel.copy(fontSize = 11.5.sp, letterSpacing = 0.3.sp),

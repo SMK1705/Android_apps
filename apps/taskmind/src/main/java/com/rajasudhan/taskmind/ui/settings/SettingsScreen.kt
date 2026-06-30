@@ -120,8 +120,8 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Column {
-            BoldEyebrow("Proof, not promises")
-            Text("Privacy", style = BoldType.screenTitle, color = c.ink, modifier = Modifier.semantics { heading() })
+            BoldEyebrow("Tune & configure")
+            Text("Settings", style = BoldType.screenTitle, color = c.ink, modifier = Modifier.semantics { heading() })
         }
         // "today" = since local midnight, so the hero stat matches its label.
         val startOfToday = remember {
