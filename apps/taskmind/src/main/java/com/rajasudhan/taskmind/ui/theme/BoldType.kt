@@ -30,7 +30,7 @@ object BoldType {
     val detailMeta = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Normal, fontSize = 10.sp)
     val hint = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Normal, fontSize = 10.sp, letterSpacing = 0.3.sp)
     val tabLabel = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Normal, fontSize = 9.5.sp, letterSpacing = 0.3.sp)
-    val sectionMono = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 0.5.sp)
+    val sectionMono = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Normal, fontSize = 10.sp, letterSpacing = 1.0.sp)
     val loadedLabel = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.3.sp)
 
     val kindChip = TextStyle(fontFamily = HankenGrotesk, fontWeight = FontWeight.Bold, fontSize = 10.sp)

@@ -5,26 +5,28 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.biometric.BiometricManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -32,12 +34,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.rajasudhan.taskmind.AppLock
 import com.rajasudhan.taskmind.data.source.SettingsManager
-import com.rajasudhan.taskmind.ui.bold.BoldEyebrow
 import com.rajasudhan.taskmind.ui.bold.BoldFilterChip
-import com.rajasudhan.taskmind.ui.theme.BoldOnAccent
 import com.rajasudhan.taskmind.ui.theme.BoldTheme
 import com.rajasudhan.taskmind.ui.theme.BoldType
-import com.rajasudhan.taskmind.ui.theme.ShapeHeroBig
 import com.rajasudhan.taskmind.ui.theme.ShapePanel
 import com.rajasudhan.taskmind.ui.theme.ThemeMode
 
@@ -119,20 +118,8 @@ fun SettingsScreen(
             .padding(start = 18.dp, end = 18.dp, top = 6.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Column {
-            BoldEyebrow("Tune & configure")
-            Text("Settings", style = BoldType.screenTitle, color = c.ink, modifier = Modifier.semantics { heading() })
-        }
-        // "today" = since local midnight, so the hero stat matches its label.
-        val startOfToday = remember {
-            java.util.Calendar.getInstance().apply {
-                set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
-                set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
-            }.timeInMillis
-        }
-        val todayOutbound = remember(egressEvents, startOfToday) { egressEvents.count { it.timestamp >= startOfToday } }
-        PrivacyHero(outbound = todayOutbound)
-
+        // The shell top bar already shows a back arrow + "Settings" for this sub-route; the egress
+        // hero and delete action now live on the Privacy tab. This screen is just the knobs.
         SettingsSectionCard(accent = Color(0xFF5C6BC0), title = "Appearance") {
             Text("Theme", style = MaterialTheme.typography.bodyMedium, color = c.ink)
             Text(
@@ -181,7 +168,7 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Switch(checked = appLockEnabled, onCheckedChange = { viewModel.updateAppLockEnabled(it) })
+                com.rajasudhan.taskmind.ui.bold.BoldSwitch(checked = appLockEnabled, onCheckedChange = { viewModel.updateAppLockEnabled(it) })
             }
             // The toggle can read ON while there's no screen lock to enforce it — the app still opens
             // straight to the data in that case. Say so plainly instead of showing a checked switch
@@ -203,13 +190,9 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Row {
-                RadioButton(selected = useOnDeviceLlm, onClick = { viewModel.updateUseOnDeviceLlm(true) })
-                Text("On-Device (private, fast — default)", modifier = Modifier.padding(start = 8.dp, top = 12.dp))
-            }
-            Row {
-                RadioButton(selected = !useOnDeviceLlm, onClick = { viewModel.updateUseOnDeviceLlm(false) })
-                Text("Cloud (higher accuracy — data leaves device)", modifier = Modifier.padding(start = 8.dp, top = 12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                BoldFilterChip("On-device", useOnDeviceLlm, { viewModel.updateUseOnDeviceLlm(true) })
+                BoldFilterChip("Cloud", !useOnDeviceLlm, { viewModel.updateUseOnDeviceLlm(false) })
             }
 
             if (useOnDeviceLlm) {
@@ -441,34 +424,11 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            val retentionOptions = listOf(0 to "Keep forever", 30 to "30 days", 90 to "90 days", 365 to "1 year")
-            var retentionExpanded by remember { mutableStateOf(false) }
-            val retentionLabel = retentionOptions.firstOrNull { it.first == retentionDays }?.second ?: "Keep forever"
-            ExposedDropdownMenuBox(
-                expanded = retentionExpanded,
-                onExpandedChange = { retentionExpanded = it }
-            ) {
-                OutlinedTextField(
-                    value = retentionLabel,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Keep notes for") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = retentionExpanded) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth()
-                )
-                ExposedDropdownMenu(
-                    expanded = retentionExpanded,
-                    onDismissRequest = { retentionExpanded = false }
-                ) {
-                    retentionOptions.forEach { (days, label) ->
-                        DropdownMenuItem(
-                            text = { Text(label) },
-                            onClick = {
-                                viewModel.updateRetentionDays(days)
-                                retentionExpanded = false
-                            }
-                        )
-                    }
+            val retentionOptions = listOf(0 to "Forever", 30 to "30 days", 90 to "90 days", 365 to "1 year")
+            Text("KEEP NOTES FOR", style = BoldType.sectionMono, color = c.ink3)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                retentionOptions.forEach { (days, label) ->
+                    BoldFilterChip(label, retentionDays == days, { viewModel.updateRetentionDays(days) })
                 }
             }
             OutlinedButton(onClick = {
@@ -487,34 +447,11 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            val scanOptions = listOf(15 to "Every 15 min", 30 to "Every 30 min", 60 to "Hourly", 180 to "Every 3 hours", 360 to "Every 6 hours")
-            var scanExpanded by remember { mutableStateOf(false) }
-            val scanLabel = scanOptions.firstOrNull { it.first == scanFrequencyMinutes }?.second ?: "Every 30 min"
-            ExposedDropdownMenuBox(
-                expanded = scanExpanded,
-                onExpandedChange = { scanExpanded = it }
-            ) {
-                OutlinedTextField(
-                    value = scanLabel,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Scan frequency") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = scanExpanded) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth()
-                )
-                ExposedDropdownMenu(
-                    expanded = scanExpanded,
-                    onDismissRequest = { scanExpanded = false }
-                ) {
-                    scanOptions.forEach { (minutes, label) ->
-                        DropdownMenuItem(
-                            text = { Text(label) },
-                            onClick = {
-                                viewModel.updateScanFrequency(minutes)
-                                scanExpanded = false
-                            }
-                        )
-                    }
+            val scanOptions = listOf(15 to "15 min", 30 to "30 min", 60 to "Hourly", 180 to "3 hours", 360 to "6 hours")
+            Text("BACKGROUND SCAN EVERY", style = BoldType.sectionMono, color = c.ink3)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                scanOptions.forEach { (minutes, label) ->
+                    BoldFilterChip(label, scanFrequencyMinutes == minutes, { viewModel.updateScanFrequency(minutes) })
                 }
             }
         }
@@ -559,16 +496,24 @@ fun SettingsScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
         var showDeleteDialog by remember { mutableStateOf(false) }
-        Button(
-            onClick = { showDeleteDialog = true },
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-            modifier = Modifier.fillMaxWidth()
+        Box(
+            Modifier.fillMaxWidth().padding(top = 4.dp).height(48.dp).clip(RoundedCornerShape(14.dp))
+                .border(1.dp, c.skip, RoundedCornerShape(14.dp)).clickable { showDeleteDialog = true }
+                .semantics { contentDescription = "Delete all private data"; role = Role.Button },
+            contentAlignment = Alignment.Center
         ) {
-            Text("Delete All Private Data")
+            Text(
+                "DELETE ALL PRIVATE DATA",
+                style = BoldType.detailMeta.copy(fontSize = 12.sp, letterSpacing = 0.5.sp), color = c.skip
+            )
         }
+        Text(
+            "TASKMIND · UPDATE 4 · v4.0",
+            style = BoldType.detailMeta.copy(letterSpacing = 0.5.sp), color = c.ink3,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center
+        )
 
         if (showDeleteDialog) {
             AlertDialog(
@@ -653,51 +598,18 @@ fun SettingsScreen(
     }
 }
 
-/** The "0 B left your device today" privacy stat card. [outbound] = recorded egress events. */
-@Composable
-private fun PrivacyHero(outbound: Int) {
-    val c = BoldTheme.colors
-    Box(Modifier.fillMaxWidth().clip(ShapeHeroBig).background(c.surface).border(1.dp, c.line, ShapeHeroBig)) {
-        Box(
-            Modifier.align(Alignment.TopCenter).fillMaxWidth().height(140.dp)
-                .background(Brush.verticalGradient(listOf(c.accentGlow, Color.Transparent)))
-        )
-        Column(
-            Modifier.fillMaxWidth().padding(vertical = 26.dp, horizontal = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Box(
-                Modifier.size(56.dp).clip(RoundedCornerShape(18.dp)).background(c.accent),
-                contentAlignment = Alignment.Center
-            ) { Icon(Icons.Outlined.Shield, contentDescription = null, tint = BoldOnAccent, modifier = Modifier.size(26.dp)) }
-            Spacer(Modifier.height(16.dp))
-            Text("$outbound", style = BoldType.privacyBig, color = if (outbound == 0) c.accent else c.ink)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                if (outbound == 0) "Nothing left your device today" else "left your device today",
-                style = MaterialTheme.typography.bodyMedium, color = c.ink, fontWeight = FontWeight.SemiBold
-            )
-            Spacer(Modifier.height(3.dp))
-            Text("$outbound outbound · 0 trackers", style = BoldType.detailMeta, color = c.ink2)
-        }
-    }
-}
-
 @Composable
 private fun SettingsSectionCard(
-    accent: Color,
+    @Suppress("UNUSED_PARAMETER") accent: Color,  // retained for call sites; the redesign uses a mono label, not a colour dot
     title: String,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val c = BoldTheme.colors
-    Column(
-        Modifier.fillMaxWidth().clip(ShapePanel).background(c.surface).border(1.dp, c.line, ShapePanel).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(accent))
-            Text(title, style = MaterialTheme.typography.titleMedium, color = c.ink, fontWeight = FontWeight.SemiBold)
-        }
-        content()
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+        Text(title.uppercase(), style = BoldType.sectionMono, color = c.ink3, modifier = Modifier.padding(start = 2.dp).semantics { heading() })
+        Column(
+            Modifier.fillMaxWidth().clip(ShapePanel).background(c.surface).border(1.dp, c.line, ShapePanel).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) { content() }
     }
 }

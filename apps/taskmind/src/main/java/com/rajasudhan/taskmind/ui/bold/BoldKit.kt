@@ -181,6 +181,7 @@ fun BoldFilterChip(label: String, selected: Boolean, onClick: () -> Unit, modifi
             .clip(ShapeChip)
             .background(if (selected) c.accent else c.surface2)
             .clickable { onClick() }
+            .semantics { role = Role.Button; this.selected = selected }
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
