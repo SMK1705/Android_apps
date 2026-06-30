@@ -155,7 +155,15 @@ class MainActivity : AppCompatActivity() {
                     LaunchedEffect(Unit) { promptBiometric { isAuthenticated = true } }
                 } else {
                     // The manual-lock action only makes sense when the lock is on AND enforceable.
-                    TaskMindAppContent(onLock = if (lockEnabled && canLock) ({ isAuthenticated = false }) else null)
+                    TaskMindAppContent(
+                        onLock = if (lockEnabled && canLock) ({ isAuthenticated = false }) else null,
+                        isDark = darkTheme,
+                        // The in-screen header toggle flips between an explicit Light/Dark choice
+                        // (it leaves SYSTEM behind, which is what a deliberate tap implies).
+                        onToggleTheme = {
+                            settingsManager.themeMode = if (darkTheme) ThemeMode.LIGHT else ThemeMode.DARK
+                        }
+                    )
                 }
             }
         }
@@ -275,7 +283,11 @@ fun LockScreen(onUnlockClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TaskMindAppContent(onLock: (() -> Unit)?) {
+fun TaskMindAppContent(
+    onLock: (() -> Unit)?,
+    isDark: Boolean = true,
+    onToggleTheme: () -> Unit = {},
+) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -346,7 +358,9 @@ fun TaskMindAppContent(onLock: (() -> Unit)?) {
                 fadeOut(tween(180)) + slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(180))
             }
         ) {
-            composable("inbox") { com.rajasudhan.taskmind.ui.inbox.InboxScreen() }
+            composable("inbox") {
+                com.rajasudhan.taskmind.ui.inbox.InboxScreen(isDark = isDark, onToggleTheme = onToggleTheme)
+            }
             composable("notes") {
                 com.rajasudhan.taskmind.ui.notes.NotesScreen(
                     onNoteClick = { id -> navController.navigate("notes/$id") { launchSingleTop = true } }

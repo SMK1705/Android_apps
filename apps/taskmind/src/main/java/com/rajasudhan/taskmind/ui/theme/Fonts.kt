@@ -35,6 +35,18 @@ val PlusJakarta = FontFamily(
     Font(R.font.plus_jakarta_sans_bold, FontWeight.Bold),
 )
 
+/**
+ * Body / UI sans for the refined Bold direction (the design handoff). One OFL-licensed variable
+ * font; each weight is rendered from its `wght` axis, so no extra files. Weights 400–800.
+ */
+val HankenGrotesk = FontFamily(
+    Font(R.font.hanken_grotesk, FontWeight.Normal),
+    Font(R.font.hanken_grotesk, FontWeight.Medium),
+    Font(R.font.hanken_grotesk, FontWeight.SemiBold),
+    Font(R.font.hanken_grotesk, FontWeight.Bold),
+    Font(R.font.hanken_grotesk, FontWeight.ExtraBold),
+)
+
 /** Monospace for eyebrows, meta, source labels, counts. Weights 400/500/700. */
 val JetBrainsMono = FontFamily(
     Font(R.font.jetbrains_mono_regular, FontWeight.Normal),

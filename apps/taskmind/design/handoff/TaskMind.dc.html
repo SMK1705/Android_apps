@@ -1,0 +1,1684 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body { background: #1a1a1c; font-family: 'Hanken Grotesk', system-ui, sans-serif; }
+  .tm-scroll::-webkit-scrollbar { width: 0; height: 0; }
+  .tm-scroll { scrollbar-width: none; }
+  @keyframes tmFill { from { width: 0 } to { width: var(--w, 0%) } }
+  @keyframes tmDraw { to { stroke-dashoffset: 0 } }
+  @keyframes tmShimmer { 0% { transform: translateX(-120%) } 100% { transform: translateX(320%) } }
+  @keyframes tmUp { from { transform: translateY(102%) } to { transform: translateY(0) } }
+  @keyframes tmFade { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes tmPop { from { opacity: 0; transform: translateY(14px) scale(.985) } to { opacity: 1; transform: none } }
+  @keyframes tmRing { 0% { transform: scale(.78); opacity: .65 } 70% { opacity: 0 } 100% { transform: scale(1.7); opacity: 0 } }
+  @keyframes tmSpin { to { transform: rotate(360deg) } }
+  @keyframes tmPulse { 0%,100% { opacity: .45 } 50% { opacity: 1 } }
+  @keyframes tmGlow { 0%,100% { opacity: .08 } 50% { opacity: .22 } }
+  @keyframes tmSlideIn { from { opacity: 0; transform: translateX(26px) } to { opacity: 1; transform: none } }
+  @keyframes tmScan { 0% { top: 0 } 100% { top: 100% } }
+</style>
+</helmet>
+
+<div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 28px 16px; background: radial-gradient(120% 120% at 50% 0%, #232327 0%, #161618 55%, #0e0e10 100%);">
+  <div style="{{ rootStyle }}">
+
+    <!-- ============ DEVICE FRAME ============ -->
+    <div style="position: relative; width: 412px; height: 892px; border-radius: 46px; padding: 6px; background: linear-gradient(160deg, #34343a, #1a1a1e 40%, #2a2a30); box-shadow: 0 40px 90px -20px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.04);">
+      <div style="position: relative; width: 100%; height: 100%; border-radius: 40px; overflow: hidden; background: var(--tm-bg, #0c0c0e); display: flex; flex-direction: column;">
+
+        <!-- status bar -->
+        <div style="position: relative; z-index: 30; height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 26px; color: var(--tm-text, #f4f3ee); font-family: 'JetBrains Mono', monospace;">
+          <span style="font-size: 13px; font-weight: 500; letter-spacing: .5px;">9:41</span>
+          <div style="position: absolute; left: 50%; top: 11px; transform: translateX(-50%); width: 22px; height: 22px; border-radius: 50%; background: #050506;"></div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="none"><rect x="0" y="7" width="3" height="5" rx="1" fill="currentColor"/><rect x="4.5" y="4.5" width="3" height="7.5" rx="1" fill="currentColor"/><rect x="9" y="2" width="3" height="10" rx="1" fill="currentColor"/><rect x="13.5" y="0" width="3" height="12" rx="1" fill="currentColor" opacity=".35"/></svg>
+            <svg width="16" height="12" viewBox="0 0 16 12" fill="none"><path d="M8 2.2c2.2 0 4.2.8 5.7 2.2l1.3-1.4A10.3 10.3 0 0 0 8 .2 10.3 10.3 0 0 0 1 3l1.3 1.4A8.3 8.3 0 0 1 8 2.2Z" fill="currentColor"/><path d="M8 5.6c1.3 0 2.5.5 3.4 1.3l1.3-1.4A8 8 0 0 0 8 3.4a8 8 0 0 0-4.7 2.1l1.3 1.4A5 5 0 0 1 8 5.6Z" fill="currentColor"/><path d="M8 9 9.9 7A3 3 0 0 0 8 6.4 3 3 0 0 0 6.1 7L8 9Z" fill="currentColor"/></svg>
+            <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="1" y="1" width="20" height="10" rx="3" stroke="currentColor" stroke-opacity=".4" stroke-width="1"/><rect x="2.5" y="2.5" width="14" height="7" rx="1.5" fill="currentColor"/><rect x="22.5" y="4" width="1.5" height="4" rx=".75" fill="currentColor" fill-opacity=".5"/></svg>
+          </div>
+        </div>
+
+        <!-- ============ VIEWPORT (screens stack here) ============ -->
+        <div style="position: relative; flex: 1; min-height: 0; overflow: hidden;">
+
+          <!-- ===== ONBOARDING ===== -->
+          <sc-if value="{{ scOnboarding }}" hint-placeholder-val="{{ true }}">
+            <div style="position: absolute; inset: 0; z-index: 70; background: var(--tm-bg, #0c0c0e); display: flex; flex-direction: column; padding: 22px 26px 26px;">
+              <div style="display: flex; justify-content: flex-end;">
+                <button onClick="{{ obSkip }}" style="border: none; background: none; color: var(--tm-muted, #9a988f); font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: .5px; cursor: pointer; padding: 6px;">SKIP</button>
+              </div>
+
+              <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+                <div style="width: 108px; height: 108px; border-radius: 32px; background: var(--tm-accent-soft, rgba(207,245,74,.16)); border: 1px solid var(--tm-accent, #cff54a); display: grid; place-items: center; color: var(--tm-accent, #cff54a); margin-bottom: 30px;">
+                  <sc-if value="{{ obS0 }}" hint-placeholder-val="{{ true }}">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10 5.5h4"/><circle cx="12" cy="13" r="3.2"/><path d="M12 9.8V8M12 16.2V18M8.8 13H7M17 13h-1.8"/></svg>
+                  </sc-if>
+                  <sc-if value="{{ obS1 }}" hint-placeholder-val="{{ false }}">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11.5 11.2 14 15.5 9"/><circle cx="12" cy="12" r="9"/></svg>
+                  </sc-if>
+                  <sc-if value="{{ obS2 }}" hint-placeholder-val="{{ false }}">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4 3 7.5 7 9 4-1.5 7-5 7-9V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+                  </sc-if>
+                </div>
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 3px; color: var(--tm-accent, #cff54a); margin-bottom: 16px;">{{ obLabel }}</div>
+                <div style="font-family: 'Instrument Serif', serif; font-size: 36px; line-height: 1.06; color: var(--tm-text, #f4f3ee); letter-spacing: -.5px; max-width: 300px;">{{ obTitle }}</div>
+                <div style="font-size: 15px; color: var(--tm-muted, #9a988f); line-height: 1.55; margin-top: 16px; max-width: 290px;">{{ obBody }}</div>
+              </div>
+
+              <div style="display: flex; align-items: center; justify-content: center; gap: 7px; margin-bottom: 22px;">
+                <div style="{{ obDot0 }}"></div><div style="{{ obDot1 }}"></div><div style="{{ obDot2 }}"></div>
+              </div>
+              <button onClick="{{ obNext }}" style="width: 100%; height: 54px; border-radius: 16px; border: none; background: var(--tm-accent, #cff54a); color: var(--tm-accent-ink, #14160b); font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; letter-spacing: .8px; cursor: pointer; text-transform: uppercase;">{{ obCta }}</button>
+            </div>
+          </sc-if>
+
+          <!-- ===== LOCK SCREEN ===== -->
+          <sc-if value="{{ scLock }}" hint-placeholder-val="{{ true }}">
+            <div style="position: absolute; inset: 0; z-index: 60; background: var(--tm-bg, #0c0c0e); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px;">
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 3px; color: var(--tm-accent, #cff54a); text-transform: uppercase; margin-bottom: 22px;">On-device · Private</div>
+              <div style="font-family: 'Instrument Serif', serif; font-size: 52px; line-height: .95; color: var(--tm-text, #f4f3ee); letter-spacing: -1px;">TaskMind</div>
+              <div style="color: var(--tm-muted, #9a988f); font-size: 15px; margin-top: 14px; text-align: center; max-width: 250px; line-height: 1.5;">Your assistant that never phones home. Unlock to review what it found.</div>
+
+              <button onClick="{{ unlock }}" style="margin-top: 64px; position: relative; width: 92px; height: 92px; border: none; background: none; cursor: pointer; display: grid; place-items: center;">
+                <span style="position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--tm-accent, #cff54a); animation: tmRing 2.4s ease-out infinite;"></span>
+                <span style="position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--tm-accent, #cff54a); animation: tmRing 2.4s ease-out infinite 1.2s;"></span>
+                <span style="position: relative; width: 76px; height: 76px; border-radius: 50%; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border2, rgba(255,255,255,.14)); display: grid; place-items: center; color: var(--tm-accent, #cff54a);">
+                  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 11c-1.5 0-2.5 1-2.5 3 0 1.5-.3 3-1 4.3"/><path d="M5.5 14.5c.3-1 .5-2 .5-3a6 6 0 0 1 9.3-5"/><path d="M8.2 7.4A6 6 0 0 0 6 12c0 2-.4 4-1.2 5.6"/><path d="M18 11c0 3.5-.6 6-2 8.5"/><path d="M12 14c0 2.5-.4 4.5-1.3 6.4"/><path d="M15 12c0 2.7-.4 5-1.4 7.2"/></svg>
+                </span>
+              </button>
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--tm-muted, #9a988f); margin-top: 22px; letter-spacing: .5px;">Touch to unlock</div>
+            </div>
+          </sc-if>
+
+          <!-- ===== TAB SCREENS ===== -->
+          <div style="position: absolute; inset: 0; display: flex; flex-direction: column;">
+
+            <!-- INBOX -->
+            <sc-if value="{{ scInbox }}" hint-placeholder-val="{{ true }}">
+              <div class="tm-scroll" style="position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden;">
+                <!-- header -->
+                <div style="padding: 14px 22px 8px; display: flex; align-items: flex-start; justify-content: space-between;">
+                  <div>
+                    <div style="font-family: 'Instrument Serif', serif; font-size: 40px; line-height: 1; color: var(--tm-text, #f4f3ee); letter-spacing: -.5px;">Inbox</div>
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--tm-muted, #9a988f); margin-top: 7px; letter-spacing: .3px;">{{ pendingLabel }}</div>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <button onClick="{{ toggleTheme }}" style="width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--tm-border, rgba(255,255,255,.09)); background: var(--tm-card, #17171a); color: var(--tm-text, #f4f3ee); display: grid; place-items: center; cursor: pointer;">
+                      <span style="{{ themeIconStyle }}">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke-linecap="round"/></svg>
+                      </span>
+                    </button>
+                    <button onClick="{{ openNotif }}" style="position: relative; width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--tm-border, rgba(255,255,255,.09)); background: var(--tm-card, #17171a); color: var(--tm-text, #f4f3ee); display: grid; place-items: center; cursor: pointer;">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+                      <span style="position: absolute; top: 8px; right: 9px; width: 6px; height: 6px; border-radius: 50%; background: var(--tm-accent, #cff54a);"></span>
+                    </button>
+                    <button onClick="{{ doScan }}" style="width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--tm-border, rgba(255,255,255,.09)); background: var(--tm-card, #17171a); color: var(--tm-text, #f4f3ee); display: grid; place-items: center; cursor: pointer;">
+                      <span style="{{ scanIconStyle }}">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v4h-4"/></svg>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- scanning pipeline -->
+                <sc-if value="{{ scanning }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin: 6px 22px 10px; border-radius: 16px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); overflow: hidden; position: relative; animation: tmPop .3s ease both;">
+                    <span style="position: absolute; left: 0; right: 0; top: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--tm-accent, #cff54a), transparent); animation: tmScan 1.7s linear infinite; opacity: .85;"></span>
+                    <div style="display: flex; align-items: center; gap: 9px; padding: 13px 16px 11px; border-bottom: 1px solid var(--tm-border, rgba(255,255,255,.06));">
+                      <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--tm-accent, #cff54a); animation: tmPulse 1s ease infinite;"></span>
+                      <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--tm-accent, #cff54a); letter-spacing: .5px;">ANALYSING ON-DEVICE</span>
+                      <span style="flex: 1;"></span>
+                      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-muted, #9a988f);">Gemma · local</span>
+                    </div>
+                    <div style="padding: 13px 16px 15px; display: flex; flex-direction: column; gap: 13px;">
+                      <div style="{{ pipe0Style }}">
+                        <span style="width: 20px; height: 20px; flex-shrink: 0; display: grid; place-items: center;">
+                          <sc-if value="{{ pipe0Done }}" hint-placeholder-val="{{ false }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--tm-accent, #cff54a)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></sc-if>
+                          <sc-if value="{{ pipe0Active }}" hint-placeholder-val="{{ true }}"><span style="width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--tm-border2, rgba(255,255,255,.14)); border-top-color: var(--tm-accent, #cff54a); animation: tmSpin .7s linear infinite;"></span></sc-if>
+                        </span>
+                        <span style="font-size: 13.5px; color: var(--tm-text, #f4f3ee);">Reading your sources</span>
+                      </div>
+                      <div style="{{ pipe1Style }}">
+                        <span style="width: 20px; height: 20px; flex-shrink: 0; display: grid; place-items: center;">
+                          <sc-if value="{{ pipe1Done }}" hint-placeholder-val="{{ false }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--tm-accent, #cff54a)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></sc-if>
+                          <sc-if value="{{ pipe1Active }}" hint-placeholder-val="{{ false }}"><span style="width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--tm-border2, rgba(255,255,255,.14)); border-top-color: var(--tm-accent, #cff54a); animation: tmSpin .7s linear infinite;"></span></sc-if>
+                          <sc-if value="{{ pipe1Pending }}" hint-placeholder-val="{{ true }}"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--tm-border2, rgba(255,255,255,.14));"></span></sc-if>
+                        </span>
+                        <span style="font-size: 13.5px; color: var(--tm-text, #f4f3ee);">Understanding meaning &amp; intent</span>
+                      </div>
+                      <div style="{{ pipe2Style }}">
+                        <span style="width: 20px; height: 20px; flex-shrink: 0; display: grid; place-items: center;">
+                          <sc-if value="{{ pipe2Active }}" hint-placeholder-val="{{ false }}"><span style="width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--tm-border2, rgba(255,255,255,.14)); border-top-color: var(--tm-accent, #cff54a); animation: tmSpin .7s linear infinite;"></span></sc-if>
+                          <sc-if value="{{ pipe2Pending }}" hint-placeholder-val="{{ true }}"><span style="width: 7px; height: 7px; border-radius: 50%; background: var(--tm-border2, rgba(255,255,255,.14));"></span></sc-if>
+                        </span>
+                        <span style="font-size: 13.5px; color: var(--tm-text, #f4f3ee);">Drafting suggestions to review</span>
+                      </div>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <!-- filter chips -->
+                <div class="tm-scroll" style="display: flex; gap: 8px; padding: 6px 22px 12px; overflow-x: auto;">
+                  <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
+                    <button onClick="{{ f.onClick }}" style="{{ f.style }}">{{ f.label }}</button>
+                  </sc-for>
+                </div>
+
+                <!-- suggestion cards -->
+                <div style="padding: 0 16px 8px; display: flex; flex-direction: column; gap: 12px;">
+                  <sc-for list="{{ sugVMs }}" as="s" hint-placeholder-count="4">
+                    <div style="position: relative; border-radius: 18px; overflow: hidden;">
+                      <!-- swipe reveals -->
+                      <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 26px; border-radius: 18px; background: var(--tm-bg2, #141417);">
+                        <span style="{{ s.approveHint }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span style="font-family:'JetBrains Mono',monospace; font-size: 12px; letter-spacing: 1px;">APPROVE</span></span>
+                        <span style="{{ s.rejectHint }}"><span style="font-family:'JetBrains Mono',monospace; font-size: 12px; letter-spacing: 1px;">REJECT</span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+                      </div>
+                      <!-- card -->
+                      <div onClick="{{ s.onOpen }}" onPointerDown="{{ s.onDown }}" onPointerMove="{{ s.onMove }}" onPointerUp="{{ s.onUp }}" style="{{ s.cardStyle }}">
+                        <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: {{ s.color }};"></div>
+                        <div style="padding: 15px 16px 13px 19px;">
+                          <div style="display: flex; align-items: center; gap: 9px; margin-bottom: 11px;">
+                            <span style="{{ s.pillStyle }}">{{ s.typeLabel }}</span>
+                            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--tm-muted, #9a988f); letter-spacing: .3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ s.source }}</span>
+                            <span style="flex: 1;"></span>
+                            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--tm-faint, rgba(255,255,255,.34)); white-space: nowrap;">{{ s.when }}</span>
+                          </div>
+                          <div style="font-family: 'Hanken Grotesk', system-ui, sans-serif; font-size: 16.5px; font-weight: 600; line-height: 1.3; letter-spacing: -.1px; color: var(--tm-text, #f4f3ee); margin-bottom: 5px;">{{ s.title }}</div>
+                          <div style="font-size: 13.5px; color: var(--tm-muted, #9a988f); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{{ s.detail }}</div>
+
+                          <!-- confidence + actions -->
+                          <div style="display: flex; align-items: center; gap: 12px; margin-top: 14px;">
+                            <div style="display: flex; align-items: center; gap: 7px;">
+                              <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: .5px;">CONF</span>
+                              <div style="width: 46px; height: 4px; border-radius: 2px; background: var(--tm-border2, rgba(255,255,255,.14)); overflow: hidden;">
+                                <div style="{{ s.confStyle }}"></div>
+                              </div>
+                              <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: {{ s.confColor }}; font-weight: 600;">{{ s.confPct }}</span>
+                            </div>
+                            <span style="flex: 1;"></span>
+                            <button onClick="{{ s.onReject }}" onPointerDown="{{ s.stop }}" style="width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--tm-border2, rgba(255,255,255,.14)); background: transparent; color: var(--tm-muted, #9a988f); display: grid; place-items: center; cursor: pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+                            <button onClick="{{ s.onSnooze }}" onPointerDown="{{ s.stop }}" style="width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--tm-border2, rgba(255,255,255,.14)); background: transparent; color: var(--tm-muted, #9a988f); display: grid; place-items: center; cursor: pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M5 3 2 6M22 6l-3-3"/></svg></button>
+                            <button onClick="{{ s.onApprove }}" onPointerDown="{{ s.stop }}" style="height: 34px; padding: 0 15px; border-radius: 10px; border: none; background: var(--tm-accent, #cff54a); color: var(--tm-accent-ink, #14160b); font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; letter-spacing: .5px; display: flex; align-items: center; gap: 5px; cursor: pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>OK</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+
+                <!-- empty state -->
+                <sc-if value="{{ inboxEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding: 46px 30px 30px; text-align: center; display: flex; flex-direction: column; align-items: center; animation: tmPop .4s ease both;">
+                    <div style="position: relative; width: 76px; height: 76px; margin-bottom: 20px;">
+                      <span style="position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--tm-accent, #cff54a); opacity: .5; animation: tmRing 2.4s ease-out infinite;"></span>
+                      <span style="position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--tm-accent, #cff54a); opacity: .5; animation: tmRing 2.4s ease-out infinite 1.2s;"></span>
+                      <div style="position: absolute; inset: 0; border-radius: 50%; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); display: grid; place-items: center; color: var(--tm-accent, #cff54a);"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+                    </div>
+                    <div style="font-family: 'Instrument Serif', serif; font-size: 28px; color: var(--tm-text, #f4f3ee);">Inbox zero</div>
+                    <div style="color: var(--tm-muted, #9a988f); font-size: 14px; margin-top: 6px; max-width: 250px; line-height: 1.5;">You've reviewed everything. TaskMind keeps watching your sources in the background.</div>
+                    <button onClick="{{ doScan }}" style="margin-top: 22px; height: 46px; padding: 0 22px; border-radius: 14px; border: 1px solid var(--tm-accent, #cff54a); background: var(--tm-accent-soft, rgba(207,245,74,.16)); color: var(--tm-accent, #cff54a); font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; letter-spacing: .6px; display: flex; align-items: center; gap: 8px; cursor: pointer;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>SCAN NOW</button>
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); margin-top: 16px; letter-spacing: .5px;">LAST SCAN · 2 MIN AGO</div>
+                  </div>
+                </sc-if>
+
+                <!-- approve/reject all -->
+                <sc-if value="{{ hasSug }}" hint-placeholder-val="{{ true }}">
+                  <div style="display: flex; gap: 10px; padding: 8px 22px 26px;">
+                    <button onClick="{{ rejectAll }}" style="flex: 1; height: 44px; border-radius: 13px; border: 1px solid var(--tm-border2, rgba(255,255,255,.14)); background: transparent; color: var(--tm-muted, #9a988f); font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: .5px; cursor: pointer;">REJECT ALL</button>
+                    <button onClick="{{ approveAll }}" style="flex: 1; height: 44px; border-radius: 13px; border: 1px solid var(--tm-accent, #cff54a); background: transparent; color: var(--tm-accent, #cff54a); font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: .5px; cursor: pointer;">APPROVE ALL</button>
+                  </div>
+                </sc-if>
+                <div style="height: 86px;"></div>
+              </div>
+            </sc-if>
+
+            <!-- NOTES -->
+            <sc-if value="{{ scNotes }}" hint-placeholder-val="{{ false }}">
+              <div class="tm-scroll" style="position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden;">
+                <div style="padding: 14px 22px 8px; display: flex; align-items: flex-start; justify-content: space-between;">
+                  <div>
+                    <div style="font-family: 'Instrument Serif', serif; font-size: 40px; line-height: 1; color: var(--tm-text, #f4f3ee); letter-spacing: -.5px;">Notes</div>
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--tm-muted, #9a988f); margin-top: 7px; letter-spacing: .3px;">Approved · encrypted at rest</div>
+                  </div>
+                  <button onClick="{{ toggleTheme }}" style="width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--tm-border, rgba(255,255,255,.09)); background: var(--tm-card, #17171a); color: var(--tm-text, #f4f3ee); display: grid; place-items: center; cursor: pointer;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke-linecap="round"/></svg>
+                  </button>
+                </div>
+
+                <!-- search -->
+                <div style="margin: 8px 22px 10px; display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px; border-radius: 13px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09));">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--tm-muted, #9a988f)" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+                  <input value="{{ search }}" onInput="{{ onSearch }}" placeholder="Search notes, sources…" style="flex: 1; border: none; background: none; outline: none; color: var(--tm-text, #f4f3ee); font-family: 'Hanken Grotesk', sans-serif; font-size: 14.5px;"/>
+                </div>
+
+                <!-- active / completed segmented -->
+                <div style="margin: 0 22px 14px; display: flex; gap: 4px; padding: 4px; border-radius: 13px; background: var(--tm-bg2, #141417); border: 1px solid var(--tm-border, rgba(255,255,255,.09));">
+                  <button onClick="{{ setActive }}" style="{{ activeTabStyle }}">Active · {{ activeCount }}</button>
+                  <button onClick="{{ setCompleted }}" style="{{ completedTabStyle }}">Done · {{ completedCount }}</button>
+                </div>
+
+                <!-- notes list -->
+                <div style="padding: 0 16px 8px; display: flex; flex-direction: column; gap: 10px;">
+                  <sc-for list="{{ noteList }}" as="n" hint-placeholder-count="4">
+                    <div onClick="{{ n.onOpen }}" style="position: relative; border-radius: 16px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); padding: 14px 15px 14px 18px; cursor: pointer;">
+                      <div style="position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 2px; background: {{ n.color }};"></div>
+                      <div style="display: flex; align-items: flex-start; gap: 12px;">
+                        <button onClick="{{ n.onToggle }}" style="{{ n.checkBoxStyle }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+                        <div style="flex: 1; min-width: 0;">
+                          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                            <span style="{{ n.pillStyle }}">{{ n.typeLabel }}</span>
+                            <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ n.source }}</span>
+                          </div>
+                          <div style="{{ n.titleStyle }}">{{ n.title }}</div>
+                          <div style="font-size: 13px; color: var(--tm-muted, #9a988f); line-height: 1.4; margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;">{{ n.body }}</div>
+                          <div style="display: flex; align-items: center; gap: 12px; margin-top: 9px;">
+                            <sc-if value="{{ n.hasDue }}" hint-placeholder-val="{{ false }}">
+                              <span style="display: flex; align-items: center; gap: 5px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--tm-reminder, #ffc24b);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2"/></svg>{{ n.due }}</span>
+                            </sc-if>
+                            <sc-if value="{{ n.hasChecklist }}" hint-placeholder-val="{{ false }}">
+                              <span style="display: flex; align-items: center; gap: 5px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--tm-muted, #9a988f);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>{{ n.checkLabel }}</span>
+                            </sc-if>
+                          </div>
+                        </div>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--tm-faint, rgba(255,255,255,.34))" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;"><path d="m9 6 6 6-6 6"/></svg>
+                      </div>
+                    </div>
+                  </sc-for>
+                  <sc-if value="{{ notesEmpty }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding: 40px 30px; text-align: center; color: var(--tm-muted, #9a988f); animation: tmPop .4s ease both;">
+                      <div style="width: 56px; height: 56px; border-radius: 16px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); display: grid; place-items: center; color: var(--tm-faint, rgba(255,255,255,.34)); margin: 0 auto 16px;"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h10l4 4v14H5V3Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></div>
+                      <div style="font-family: 'Instrument Serif', serif; font-size: 24px; color: var(--tm-text, #f4f3ee); margin-bottom: 6px;">Nothing here yet</div>
+                      <div style="font-size: 14px; line-height: 1.5;">Approve items from your Inbox and they land here.</div>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ notesNoResults }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding: 40px 30px; text-align: center; color: var(--tm-muted, #9a988f); animation: tmPop .4s ease both;">
+                      <div style="width: 56px; height: 56px; border-radius: 16px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); display: grid; place-items: center; color: var(--tm-faint, rgba(255,255,255,.34)); margin: 0 auto 16px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg></div>
+                      <div style="font-family: 'Instrument Serif', serif; font-size: 23px; color: var(--tm-text, #f4f3ee); margin-bottom: 6px;">No matches</div>
+                      <div style="font-size: 14px; line-height: 1.5;">Nothing matches “{{ searchTerm }}”. Try another word or source.</div>
+                    </div>
+                  </sc-if>
+                </div>
+                <div style="height: 12px;"></div>
+              </div>
+            </sc-if>
+
+            <!-- SOURCES -->
+            <sc-if value="{{ scSources }}" hint-placeholder-val="{{ false }}">
+              <div class="tm-scroll" style="position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden;">
+                <div style="padding: 14px 22px 8px; display: flex; align-items: flex-start; justify-content: space-between;">
+                  <div>
+                    <div style="font-family: 'Instrument Serif', serif; font-size: 40px; line-height: 1; color: var(--tm-text, #f4f3ee); letter-spacing: -.5px;">Sources</div>
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--tm-muted, #9a988f); margin-top: 7px;">What TaskMind is allowed to read</div>
+                  </div>
+                  <button onClick="{{ toggleTheme }}" style="width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--tm-border, rgba(255,255,255,.09)); background: var(--tm-card, #17171a); color: var(--tm-text, #f4f3ee); display: grid; place-items: center; cursor: pointer;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke-linecap="round"/></svg>
+                  </button>
+                </div>
+
+                <div style="padding: 12px 16px 8px; display: flex; flex-direction: column; gap: 11px;">
+                  <sc-for list="{{ sourceVMs }}" as="src" hint-placeholder-count="6">
+                    <div style="border-radius: 16px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); overflow: hidden;">
+                      <div style="display: flex; align-items: center; gap: 13px; padding: 15px 16px;">
+                        <div style="flex: 1; min-width: 0;">
+                          <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 15.5px; font-weight: 600; color: {{ src.iconColor }};">{{ src.name }}</span>
+                          </div>
+                          <div style="font-size: 12.5px; color: var(--tm-muted, #9a988f); margin-top: 3px;">{{ src.desc }}</div>
+                          <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: {{ src.metaColor }}; margin-top: 6px; letter-spacing: .3px;">{{ src.meta }}</div>
+                        </div>
+                        <div onClick="{{ src.onToggle }}" style="{{ src.switchTrack }}"><div style="{{ src.knob }}"></div></div>
+                      </div>
+
+                      <!-- per-app picker -->
+                      <sc-if value="{{ src.hasApps }}" hint-placeholder-val="{{ false }}">
+                        <div style="padding: 0 16px 15px;">
+                          <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: .5px; margin-bottom: 9px;">MONITOR THESE APPS</div>
+                          <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            <sc-for list="{{ src.appVMs }}" as="a" hint-placeholder-count="4">
+                              <div onClick="{{ a.onToggle }}" style="{{ a.chip }}">
+                                <span style="{{ a.box }}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                                <span style="font-size: 13px; color: {{ a.nameColor }};">{{ a.n }}</span>
+                              </div>
+                            </sc-for>
+                          </div>
+                        </div>
+                      </sc-if>
+
+                      <!-- gmail accounts -->
+                      <sc-if value="{{ src.hasAccounts }}" hint-placeholder-val="{{ false }}">
+                        <div style="padding: 0 16px 15px;">
+                          <div style="border-top: 1px solid var(--tm-border, rgba(255,255,255,.09)); padding-top: 12px; display: flex; flex-direction: column; gap: 9px;">
+                            <sc-for list="{{ src.accounts }}" as="acc" hint-placeholder-count="2">
+                              <div style="display: flex; align-items: center; gap: 10px;">
+                                <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--tm-event, #2fd8c3);"></span>
+                                <span style="flex: 1; font-size: 13px; color: var(--tm-text, #f4f3ee); font-family: 'JetBrains Mono', monospace;">{{ acc }}</span>
+                                <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34));">DISCONNECT</span>
+                              </div>
+                            </sc-for>
+                          </div>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="padding: 4px 22px 24px; font-size: 12px; color: var(--tm-faint, rgba(255,255,255,.34)); line-height: 1.5; text-align: center;">Each source asks for its permission when enabled. Understanding always runs on-device.</div>
+              </div>
+            </sc-if>
+
+            <!-- PRIVACY -->
+            <sc-if value="{{ scPrivacy }}" hint-placeholder-val="{{ false }}">
+              <div class="tm-scroll" style="position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden;">
+                <div style="padding: 14px 22px 8px; display: flex; align-items: flex-start; justify-content: space-between;">
+                  <div>
+                    <div style="font-family: 'Instrument Serif', serif; font-size: 40px; line-height: 1; color: var(--tm-text, #f4f3ee); letter-spacing: -.5px;">Privacy</div>
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--tm-muted, #9a988f); margin-top: 7px;">Auditable · on-device by default</div>
+                  </div>
+                  <div style="display: flex; gap: 6px;">
+                    <button onClick="{{ openSettings }}" style="width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--tm-border, rgba(255,255,255,.09)); background: var(--tm-card, #17171a); color: var(--tm-text, #f4f3ee); display: grid; place-items: center; cursor: pointer;">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+                    </button>
+                    <button onClick="{{ toggleTheme }}" style="width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--tm-border, rgba(255,255,255,.09)); background: var(--tm-card, #17171a); color: var(--tm-text, #f4f3ee); display: grid; place-items: center; cursor: pointer;">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke-linecap="round"/></svg>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- egress hero -->
+                <div style="margin: 12px 16px 14px; border-radius: 20px; padding: 24px 20px; background: var(--tm-accent-soft, rgba(207,245,74,.16)); border: 1px solid var(--tm-accent, #cff54a); position: relative; overflow: hidden;">
+                  <div style="position: relative; display: flex; flex-direction: column; align-items: center; text-align: center;">
+                    <div style="position: relative; width: 60px; height: 60px; display: grid; place-items: center; margin-bottom: 14px;">
+                      <span style="position: absolute; inset: 0; border-radius: 50%; background: var(--tm-accent, #cff54a); opacity: .14; animation: tmGlow 2.6s ease-in-out infinite;"></span>
+                      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--tm-accent, #cff54a)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4 3 7.5 7 9 4-1.5 7-5 7-9V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+                    </div>
+                    <div style="font-family: 'Instrument Serif', serif; font-size: 25px; color: var(--tm-text, #f4f3ee); line-height: 1.15;">No data has left this device</div>
+                    <div style="font-size: 13.5px; color: var(--tm-muted, #9a988f); margin-top: 8px; line-height: 1.5; max-width: 260px;">Every byte of understanding ran locally. The egress log is empty.</div>
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--tm-accent, #cff54a); margin-top: 14px; letter-spacing: 1px;">EGRESS LOG · 0 ENTRIES</div>
+                  </div>
+                </div>
+
+                <!-- status rows -->
+                <div style="padding: 0 16px; display: flex; flex-direction: column; gap: 10px;">
+                  <div style="border-radius: 16px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); padding: 15px 16px; display: flex; align-items: center; gap: 14px;">
+                    <span style="width: 40px; height: 40px; border-radius: 11px; background: var(--tm-bg2, #141417); display: grid; place-items: center; color: var(--tm-text, #f4f3ee); flex-shrink: 0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>
+                    <div style="flex: 1;">
+                      <div style="font-size: 14.5px; font-weight: 600; color: var(--tm-text, #f4f3ee);">App lock</div>
+                      <div style="font-size: 12.5px; color: var(--tm-muted, #9a988f);">Biometric on launch &amp; every return</div>
+                    </div>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-accent, #cff54a); padding: 4px 9px; border-radius: 7px; background: var(--tm-accent-soft, rgba(207,245,74,.16));">ON</span>
+                  </div>
+                  <div style="border-radius: 16px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); padding: 15px 16px; display: flex; align-items: center; gap: 14px;">
+                    <span style="width: 40px; height: 40px; border-radius: 11px; background: var(--tm-bg2, #141417); display: grid; place-items: center; color: var(--tm-text, #f4f3ee); flex-shrink: 0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 8.4 8 10 4.6-1.6 8-5 8-10V5l-8-3Z"/></svg></span>
+                    <div style="flex: 1;">
+                      <div style="font-size: 14.5px; font-weight: 600; color: var(--tm-text, #f4f3ee);">Encryption at rest</div>
+                      <div style="font-size: 12.5px; color: var(--tm-muted, #9a988f);">SQLCipher · AES-256-GCM</div>
+                    </div>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-accent, #cff54a); padding: 4px 9px; border-radius: 7px; background: var(--tm-accent-soft, rgba(207,245,74,.16));">ON</span>
+                  </div>
+                  <div style="border-radius: 16px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); padding: 15px 16px; display: flex; align-items: center; gap: 14px;">
+                    <span style="width: 40px; height: 40px; border-radius: 11px; background: var(--tm-bg2, #141417); display: grid; place-items: center; color: var(--tm-event, #2fd8c3); flex-shrink: 0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg></span>
+                    <div style="flex: 1;">
+                      <div style="font-size: 14.5px; font-weight: 600; color: var(--tm-text, #f4f3ee);">Understanding engine</div>
+                      <div style="font-size: 12.5px; color: var(--tm-muted, #9a988f);">On-device Gemma · loaded</div>
+                    </div>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-event, #2fd8c3); padding: 4px 9px; border-radius: 7px; background: var(--tm-event-soft, rgba(47,216,195,.15));">LOCAL</span>
+                  </div>
+                  <div style="border-radius: 16px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); padding: 15px 16px; display: flex; align-items: center; gap: 14px;">
+                    <span style="width: 40px; height: 40px; border-radius: 11px; background: var(--tm-bg2, #141417); display: grid; place-items: center; color: var(--tm-text, #f4f3ee); flex-shrink: 0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v8M12 2 9 5M12 2l3 3"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></span>
+                    <div style="flex: 1;">
+                      <div style="font-size: 14.5px; font-weight: 600; color: var(--tm-text, #f4f3ee);">No telemetry</div>
+                      <div style="font-size: 12.5px; color: var(--tm-muted, #9a988f);">Zero analytics · zero tracking</div>
+                    </div>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-accent, #cff54a); padding: 4px 9px; border-radius: 7px; background: var(--tm-accent-soft, rgba(207,245,74,.16));">✓</span>
+                  </div>
+                </div>
+
+                <!-- danger zone -->
+                <div style="padding: 16px 16px 26px;">
+                  <button style="width: 100%; height: 48px; border-radius: 14px; background: transparent; border: 1px solid var(--tm-danger, #ff6f6f); color: var(--tm-danger, #ff6f6f); font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: .5px; cursor: pointer;">DELETE ALL PRIVATE DATA</button>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+
+          <!-- ===== CAPTURE FAB ===== -->
+          <sc-if value="{{ scShowFab }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ openCapture }}" style="position: absolute; right: 18px; bottom: 18px; z-index: 38; width: 58px; height: 58px; border-radius: 19px; border: none; background: var(--tm-accent, #cff54a); color: var(--tm-accent-ink, #14160b); display: grid; place-items: center; cursor: pointer; box-shadow: 0 14px 32px -6px rgba(0,0,0,.5), 0 0 0 1px rgba(0,0,0,.04);">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+          </sc-if>
+
+          <!-- ===== CAPTURE SHEET ===== -->
+          <sc-if value="{{ scCaptureSheet }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ closeSheet }}" style="{{ backdropStyle }}"></div>
+            <div style="{{ sheetStyle }}">
+              <div style="width: 38px; height: 4px; border-radius: 2px; background: var(--tm-border2, rgba(255,255,255,.14)); margin: 4px auto 16px;"></div>
+              <div style="font-family: 'Instrument Serif', serif; font-size: 26px; color: var(--tm-text, #f4f3ee); margin-bottom: 4px;">Quick capture</div>
+              <div style="font-size: 13px; color: var(--tm-muted, #9a988f); margin-bottom: 18px; line-height: 1.45;">Type it or speak it — understood on-device, then sent to your Inbox to approve.</div>
+
+              <div style="display: flex; gap: 6px; padding: 4px; border-radius: 13px; background: var(--tm-bg2, #141417); margin-bottom: 18px;">
+                <button onClick="{{ setCaptureType }}" style="{{ capTypeStyle }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5h16v2M9 19h6M12 5v14"/></svg>TYPE</button>
+                <button onClick="{{ setCaptureSpeak }}" style="{{ capSpeakStyle }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>SPEAK</button>
+              </div>
+
+              <!-- type mode -->
+              <sc-if value="{{ isCapType }}" hint-placeholder-val="{{ true }}">
+                <textarea value="{{ captureText }}" onInput="{{ onCaptureInput }}" placeholder="Paste a message, or jot a task — “Renew passport before August”…" style="width: 100%; height: 118px; resize: none; border-radius: 14px; background: var(--tm-bg2, #141417); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); padding: 14px; color: var(--tm-text, #f4f3ee); font-family: 'Hanken Grotesk', sans-serif; font-size: 14.5px; line-height: 1.5; outline: none;"></textarea>
+              </sc-if>
+
+              <!-- speak mode -->
+              <sc-if value="{{ isCapSpeak }}" hint-placeholder-val="{{ false }}">
+                <div style="display: flex; flex-direction: column; align-items: center; padding: 8px 0 4px;">
+                  <button onClick="{{ toggleRecord }}" style="{{ recBtnStyle }}">
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18.5v3"/></svg>
+                  </button>
+                  <div style="display: flex; align-items: center; gap: 4px; height: 36px; margin-top: 18px;">
+                    <sc-for list="{{ waveBars }}" as="w" hint-placeholder-count="15"><div style="{{ w.barStyle }}"></div></sc-for>
+                  </div>
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--tm-muted, #9a988f); margin-top: 12px; letter-spacing: .5px;">{{ recLabel }}</div>
+                </div>
+                <sc-if value="{{ hasCaptureText }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top: 14px; border-radius: 14px; background: var(--tm-bg2, #141417); border: 1px dashed var(--tm-border2, rgba(255,255,255,.14)); padding: 14px;">
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: 1px; margin-bottom: 8px;">TRANSCRIPT</div>
+                    <div style="font-size: 14px; color: var(--tm-text, #f4f3ee); line-height: 1.5;">{{ captureText }}</div>
+                  </div>
+                </sc-if>
+              </sc-if>
+
+              <button onClick="{{ openAnywhere }}" style="width: 100%; margin-top: 12px; height: 42px; border: none; background: none; color: var(--tm-muted, #9a988f); font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: .5px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>MORE WAYS TO CAPTURE
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+              </button>
+              <button onClick="{{ analyseCapture }}" style="{{ analyseBtnStyle }}">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>{{ analyseLabel }}
+              </button>
+            </div>
+          </sc-if>
+
+          <!-- ===== SUGGESTION DETAIL ===== -->
+          <sc-if value="{{ scSugOverlay }}" hint-placeholder-val="{{ false }}">
+            <div class="tm-scroll" style="position: absolute; inset: 0; z-index: 45; background: var(--tm-bg, #0c0c0e); overflow-y: auto; overflow-x: hidden;">
+              <div style="position: sticky; top: 0; z-index: 5; background: var(--tm-bg, #0c0c0e); padding: 12px 18px 10px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--tm-border, rgba(255,255,255,.09));">
+                <button onClick="{{ closeOverlay }}" style="width: 38px; height: 38px; border-radius: 11px; border: 1px solid var(--tm-border, rgba(255,255,255,.09)); background: var(--tm-card, #17171a); color: var(--tm-text, #f4f3ee); display: grid; place-items: center; cursor: pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg></button>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--tm-muted, #9a988f); letter-spacing: 1px;">PENDING REVIEW</span>
+                <span style="flex: 1;"></span>
+                <button onClick="{{ toggleEdit }}" style="{{ editBtnStyle }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"/></svg>{{ editLabel }}</button>
+              </div>
+
+              <div style="padding: 20px 22px 8px;">
+                <sc-if value="{{ notEditing }}" hint-placeholder-val="{{ true }}">
+                  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px;">
+                    <span style="{{ sel.pillStyle }}">{{ sel.typeLabel }}</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--tm-muted, #9a988f);">{{ sel.source }}</span>
+                  </div>
+                  <div style="font-family: 'Instrument Serif', serif; font-size: 31px; line-height: 1.1; color: var(--tm-text, #f4f3ee); letter-spacing: -.3px;">{{ sel.title }}</div>
+                </sc-if>
+                <sc-if value="{{ editing }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: 1px; margin-bottom: 9px;">CLASSIFY AS</div>
+                  <div style="display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 14px;">
+                    <sc-for list="{{ typeChips }}" as="c" hint-placeholder-count="4"><button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button></sc-for>
+                  </div>
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: 1px; margin-bottom: 9px;">TITLE</div>
+                  <input value="{{ sel.title }}" onInput="{{ onEditTitle }}" style="{{ editTitleStyle }}"/>
+                  <div style="display: flex; align-items: center; gap: 7px; margin-top: 11px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--tm-accent, #cff54a)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span style="font-size: 12px; color: var(--tm-muted, #9a988f);">Your edits are saved when you approve.</span></div>
+                </sc-if>
+
+                <!-- confidence -->
+                <sc-if value="{{ selHasConf }}" hint-placeholder-val="{{ true }}">
+                  <div style="margin-top: 18px; padding: 14px 16px; border-radius: 14px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09));">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px;">
+                      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--tm-muted, #9a988f); letter-spacing: .5px;">MODEL CONFIDENCE</span>
+                      <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600; color: var(--tm-accent, #cff54a);">{{ sel.confPct }}</span>
+                    </div>
+                    <div style="height: 6px; border-radius: 3px; background: var(--tm-border2, rgba(255,255,255,.14)); overflow: hidden;"><div style="{{ sel.confBar }}"></div></div>
+                  </div>
+                </sc-if>
+              </div>
+
+              <!-- extracted fields -->
+              <sc-if value="{{ selHasFields }}" hint-placeholder-val="{{ false }}">
+                <div style="padding: 10px 22px 4px;">
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: 1px; margin-bottom: 10px;">EXTRACTED</div>
+                  <div style="border-radius: 14px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); overflow: hidden;">
+                    <sc-for list="{{ sel.fieldRows }}" as="f" hint-placeholder-count="3">
+                      <div style="display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; border-bottom: 1px solid var(--tm-border, rgba(255,255,255,.06));">
+                        <span style="font-size: 13px; color: var(--tm-muted, #9a988f);">{{ f.k }}</span>
+                        <span style="font-size: 14px; color: var(--tm-text, #f4f3ee); font-weight: 500;">{{ f.v }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+
+              <!-- checklist -->
+              <sc-if value="{{ selHasChecklist }}" hint-placeholder-val="{{ false }}">
+                <div style="padding: 14px 22px 4px;">
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: 1px; margin-bottom: 10px;">CHECKLIST</div>
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <sc-for list="{{ sel.checkItems }}" as="c" hint-placeholder-count="3">
+                      <div style="display: flex; align-items: center; gap: 11px; padding: 11px 14px; border-radius: 12px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09));">
+                        <span style="width: 19px; height: 19px; border-radius: 6px; border: 1.5px solid var(--tm-border2, rgba(255,255,255,.14)); flex-shrink: 0;"></span>
+                        <span style="font-size: 14px; color: var(--tm-text, #f4f3ee);">{{ c.t }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+
+              <!-- original source -->
+              <div style="padding: 14px 22px 4px;">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: 1px; margin-bottom: 10px;">ORIGINAL MESSAGE</div>
+                <div style="border-radius: 14px; background: var(--tm-bg2, #141417); border: 1px dashed var(--tm-border2, rgba(255,255,255,.14)); padding: 16px; font-size: 14px; line-height: 1.6; color: var(--tm-muted, #9a988f);">{{ sel.full }}</div>
+                <div style="display: flex; align-items: center; gap: 7px; margin-top: 12px; padding: 0 2px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--tm-accent, #cff54a)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                  <span style="font-size: 12px; color: var(--tm-faint, rgba(255,255,255,.34)); line-height: 1.4;">Extracted on-device. Nothing was sent anywhere.</span>
+                </div>
+              </div>
+
+              <div style="height: 100px;"></div>
+            </div>
+            <!-- detail action bar -->
+            <sc-if value="{{ scSugOverlay }}" hint-placeholder-val="{{ false }}">
+              <div style="position: absolute; left: 0; right: 0; bottom: 0; z-index: 46; padding: 14px 18px 18px; background: linear-gradient(to top, var(--tm-bg, #0c0c0e) 70%, transparent); display: flex; gap: 10px;">
+                <button onClick="{{ onRejectSel }}" style="width: 52px; height: 52px; border-radius: 15px; border: 1px solid var(--tm-border2, rgba(255,255,255,.14)); background: var(--tm-card, #17171a); color: var(--tm-danger, #ff6f6f); display: grid; place-items: center; cursor: pointer; flex-shrink: 0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+                <button onClick="{{ openReminderSheet }}" style="width: 52px; height: 52px; border-radius: 15px; border: 1px solid var(--tm-border2, rgba(255,255,255,.14)); background: var(--tm-card, #17171a); color: var(--tm-text, #f4f3ee); display: grid; place-items: center; cursor: pointer; flex-shrink: 0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></button>
+                <button onClick="{{ onApproveSel }}" style="flex: 1; height: 52px; border-radius: 15px; border: none; background: var(--tm-accent, #cff54a); color: var(--tm-accent-ink, #14160b); font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; letter-spacing: .5px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>APPROVE &amp; SAVE</button>
+              </div>
+            </sc-if>
+          </sc-if>
+
+          <!-- ===== NOTE DETAIL ===== -->
+          <sc-if value="{{ scNoteOverlay }}" hint-placeholder-val="{{ false }}">
+            <div class="tm-scroll" style="position: absolute; inset: 0; z-index: 45; background: var(--tm-bg, #0c0c0e); overflow-y: auto; overflow-x: hidden;">
+              <div style="position: sticky; top: 0; z-index: 5; background: var(--tm-bg, #0c0c0e); padding: 12px 18px 10px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--tm-border, rgba(255,255,255,.09));">
+                <button onClick="{{ closeOverlay }}" style="width: 38px; height: 38px; border-radius: 11px; border: 1px solid var(--tm-border, rgba(255,255,255,.09)); background: var(--tm-card, #17171a); color: var(--tm-text, #f4f3ee); display: grid; place-items: center; cursor: pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg></button>
+                <button onClick="{{ onDeleteSel }}" style="width: 38px; height: 38px; border-radius: 11px; border: 1px solid var(--tm-border, rgba(255,255,255,.09)); background: var(--tm-card, #17171a); color: var(--tm-danger, #ff6f6f); display: grid; place-items: center; cursor: pointer;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/></svg></button>
+              </div>
+
+              <div style="padding: 20px 22px 8px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px;">
+                  <span style="{{ sel.pillStyle }}">{{ sel.typeLabel }}</span>
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--tm-muted, #9a988f);">{{ sel.source }}</span>
+                </div>
+                <div style="font-family: 'Instrument Serif', serif; font-size: 31px; line-height: 1.1; color: var(--tm-text, #f4f3ee); letter-spacing: -.3px;">{{ sel.title }}</div>
+                <div style="font-size: 15px; color: var(--tm-muted, #9a988f); line-height: 1.55; margin-top: 12px;">{{ sel.body }}</div>
+              </div>
+
+              <!-- due / recurrence row -->
+              <sc-if value="{{ selHasDue }}" hint-placeholder-val="{{ false }}">
+                <div style="padding: 12px 22px 4px;">
+                  <div onClick="{{ openReminderSheet }}" style="display: flex; align-items: center; gap: 13px; padding: 15px 16px; border-radius: 14px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); cursor: pointer;">
+                    <span style="width: 38px; height: 38px; border-radius: 11px; background: var(--tm-reminder-soft, rgba(255,194,75,.15)); display: grid; place-items: center; color: var(--tm-reminder, #ffc24b); flex-shrink: 0;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2"/></svg></span>
+                    <div style="flex: 1;">
+                      <div style="font-size: 14.5px; color: var(--tm-text, #f4f3ee); font-weight: 500;">{{ sel.due }}</div>
+                      <div style="font-size: 12px; color: var(--tm-muted, #9a988f); margin-top: 2px;">{{ sel.recurrenceLabel }}</div>
+                    </div>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--tm-faint, rgba(255,255,255,.34))" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+                  </div>
+                </div>
+              </sc-if>
+
+              <!-- checklist tickable -->
+              <sc-if value="{{ selHasChecklist }}" hint-placeholder-val="{{ false }}">
+                <div style="padding: 14px 22px 4px;">
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: 1px; margin-bottom: 10px;">CHECKLIST</div>
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <sc-for list="{{ sel.checkVMs }}" as="c" hint-placeholder-count="3">
+                      <div onClick="{{ c.onToggle }}" style="display: flex; align-items: center; gap: 11px; padding: 11px 14px; border-radius: 12px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); cursor: pointer;">
+                        <span style="{{ c.box }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                        <span style="{{ c.label }}">{{ c.t }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+
+              <!-- location map -->
+              <sc-if value="{{ selHasPlace }}" hint-placeholder-val="{{ false }}">
+                <div style="padding: 14px 22px 4px;">
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: 1px; margin-bottom: 10px;">LOCATION</div>
+                  <div style="border-radius: 16px; overflow: hidden; border: 1px solid var(--tm-border, rgba(255,255,255,.09));">
+                    <div style="position: relative; height: 150px; background: var(--tm-mapbg, linear-gradient(135deg, #1c2620, #14181c)); overflow: hidden;">
+                      <div style="position: absolute; inset: 0; background-image: linear-gradient(var(--tm-mapgrid, rgba(255,255,255,.05)) 1px, transparent 1px), linear-gradient(90deg, var(--tm-mapgrid, rgba(255,255,255,.05)) 1px, transparent 1px); background-size: 26px 26px;"></div>
+                      <div style="position: absolute; left: -10%; top: 60%; width: 130%; height: 12px; background: var(--tm-maproad, rgba(255,255,255,.08)); transform: rotate(-8deg);"></div>
+                      <div style="position: absolute; left: 30%; top: -10%; width: 12px; height: 130%; background: var(--tm-maproad, rgba(255,255,255,.08)); transform: rotate(6deg);"></div>
+                      <sc-if value="{{ sel.geofence }}" hint-placeholder-val="{{ false }}">
+                        <div style="position: absolute; left: 50%; top: 50%; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 2px solid var(--tm-accent, #cff54a); background: var(--tm-accent-soft, rgba(207,245,74,.16));"></div>
+                      </sc-if>
+                      <div style="position: absolute; left: 50%; top: 50%; transform: translate(-50%,-100%); color: var(--tm-accent, #cff54a);"><svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg></div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 11px; padding: 13px 15px; background: var(--tm-card, #17171a);">
+                      <div style="flex: 1;">
+                        <div style="font-size: 14px; color: var(--tm-text, #f4f3ee); font-weight: 500;">{{ sel.place }}</div>
+                        <div style="font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--tm-muted, #9a988f); margin-top: 3px;">{{ sel.geoLabel }}</div>
+                      </div>
+                      <button style="height: 38px; padding: 0 14px; border-radius: 11px; border: 1px solid var(--tm-border2, rgba(255,255,255,.14)); background: transparent; color: var(--tm-text, #f4f3ee); font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; cursor: pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5-7 18-2-8-9-5Z"/></svg>Directions</button>
+                    </div>
+                  </div>
+                </div>
+              </sc-if>
+
+              <!-- deep links -->
+              <sc-if value="{{ selHasLinks }}" hint-placeholder-val="{{ false }}">
+                <div style="padding: 14px 22px 4px;">
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: 1px; margin-bottom: 10px;">DETECTED LINKS</div>
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <sc-for list="{{ sel.linkRows }}" as="l" hint-placeholder-count="1">
+                      <div style="display: flex; align-items: center; gap: 11px; padding: 12px 14px; border-radius: 12px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09));">
+                        <span style="{{ l.iconWrap }}">
+                          <sc-if value="{{ l.isCall }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z"/></svg></sc-if>
+                          <sc-if value="{{ l.isUrl }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></sc-if>
+                          <sc-if value="{{ l.isDir }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5-7 18-2-8-9-5Z"/></svg></sc-if>
+                        </span>
+                        <span style="flex: 1; font-size: 13.5px; color: var(--tm-text, #f4f3ee); font-family: 'JetBrains Mono', monospace;">{{ l.val }}</span>
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-accent, #cff54a); letter-spacing: .5px;">{{ l.action }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+
+              <div style="height: 90px;"></div>
+            </div>
+            <!-- note action: call/complete -->
+            <div style="position: absolute; left: 0; right: 0; bottom: 0; z-index: 46; padding: 14px 18px 18px; background: linear-gradient(to top, var(--tm-bg, #0c0c0e) 70%, transparent); display: flex; gap: 10px;">
+              <sc-if value="{{ selHasCall }}" hint-placeholder-val="{{ false }}">
+                <button style="flex: 1; height: 52px; border-radius: 15px; border: 1px solid var(--tm-border2, rgba(255,255,255,.14)); background: var(--tm-card, #17171a); color: var(--tm-text, #f4f3ee); font-family: 'JetBrains Mono', monospace; font-size: 12.5px; font-weight: 600; letter-spacing: .5px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z"/></svg>CALL</button>
+              </sc-if>
+              <button onClick="{{ onCompleteSel }}" style="flex: 2; height: 52px; border-radius: 15px; border: none; background: var(--tm-accent, #cff54a); color: var(--tm-accent-ink, #14160b); font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; letter-spacing: .5px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>{{ selDoneLabel }}</button>
+            </div>
+          </sc-if>
+
+          <!-- ===== REMINDER SHEET ===== -->
+          <sc-if value="{{ scSheet }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ closeSheet }}" style="{{ backdropStyle }}"></div>
+            <div style="{{ sheetStyle }}">
+              <div style="width: 38px; height: 4px; border-radius: 2px; background: var(--tm-border2, rgba(255,255,255,.14)); margin: 4px auto 16px;"></div>
+              <div style="font-family: 'Instrument Serif', serif; font-size: 26px; color: var(--tm-text, #f4f3ee); margin-bottom: 4px;">Set a reminder</div>
+              <div style="font-size: 13px; color: var(--tm-muted, #9a988f); margin-bottom: 18px;">Scheduled with an exact alarm — fires even in Doze.</div>
+
+              <!-- mode -->
+              <div style="display: flex; gap: 6px; padding: 4px; border-radius: 13px; background: var(--tm-bg2, #141417); margin-bottom: 18px;">
+                <button onClick="{{ setOnce }}" style="{{ modeOnce }}">ONCE</button>
+                <button onClick="{{ setRepeat }}" style="{{ modeRepeat }}">REPEAT</button>
+                <button onClick="{{ setGeo }}" style="{{ modeGeo }}">LOCATION</button>
+              </div>
+
+              <!-- once -->
+              <sc-if value="{{ isOnce }}" hint-placeholder-val="{{ true }}">
+                <div style="display: flex; gap: 10px;">
+                  <div style="flex: 1; padding: 14px 16px; border-radius: 14px; background: var(--tm-bg2, #141417); border: 1px solid var(--tm-border, rgba(255,255,255,.09));">
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: .5px;">DATE</div>
+                    <div style="font-size: 16px; color: var(--tm-text, #f4f3ee); margin-top: 6px; font-weight: 500;">{{ remDate }}</div>
+                  </div>
+                  <div style="flex: 1; padding: 14px 16px; border-radius: 14px; background: var(--tm-bg2, #141417); border: 1px solid var(--tm-border, rgba(255,255,255,.09));">
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: .5px;">TIME</div>
+                    <div style="font-size: 16px; color: var(--tm-text, #f4f3ee); margin-top: 6px; font-weight: 500;">{{ remTime }}</div>
+                  </div>
+                </div>
+              </sc-if>
+
+              <!-- repeat -->
+              <sc-if value="{{ isRepeat }}" hint-placeholder-val="{{ false }}">
+                <div>
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: .5px; margin-bottom: 10px;">FREQUENCY</div>
+                  <div style="display: flex; gap: 8px; margin-bottom: 18px;">
+                    <sc-for list="{{ repeats }}" as="r" hint-placeholder-count="3"><button onClick="{{ r.onClick }}" style="{{ r.style }}">{{ r.label }}</button></sc-for>
+                  </div>
+                  <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: .5px; margin-bottom: 10px;">ON DAY</div>
+                  <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    <sc-for list="{{ days }}" as="d" hint-placeholder-count="7"><button onClick="{{ d.onClick }}" style="{{ d.style }}">{{ d.label }}</button></sc-for>
+                  </div>
+                </div>
+              </sc-if>
+
+              <!-- geofence -->
+              <sc-if value="{{ isGeo }}" hint-placeholder-val="{{ false }}">
+                <div>
+                  <div style="border-radius: 14px; overflow: hidden; border: 1px solid var(--tm-border, rgba(255,255,255,.09)); margin-bottom: 14px;">
+                    <div style="position: relative; height: 130px; background: var(--tm-mapbg, linear-gradient(135deg, #1c2620, #14181c));">
+                      <div style="position: absolute; inset: 0; background-image: linear-gradient(var(--tm-mapgrid, rgba(255,255,255,.05)) 1px, transparent 1px), linear-gradient(90deg, var(--tm-mapgrid, rgba(255,255,255,.05)) 1px, transparent 1px); background-size: 24px 24px;"></div>
+                      <div style="position: absolute; left: 50%; top: 50%; width: 110px; height: 110px; margin: -55px 0 0 -55px; border-radius: 50%; border: 2px solid var(--tm-accent, #cff54a); background: var(--tm-accent-soft, rgba(207,245,74,.16));"></div>
+                      <div style="position: absolute; left: 50%; top: 50%; transform: translate(-50%,-100%); color: var(--tm-accent, #cff54a);"><svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg></div>
+                    </div>
+                  </div>
+                  <div style="padding: 14px 16px; border-radius: 14px; background: var(--tm-bg2, #141417); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); margin-bottom: 10px;">
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: .5px;">PLACE</div>
+                    <div style="font-size: 15px; color: var(--tm-text, #f4f3ee); margin-top: 6px; font-weight: 500;">{{ remPlace }}</div>
+                  </div>
+                  <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 4px;">
+                    <span style="font-size: 13px; color: var(--tm-muted, #9a988f);">Trigger radius</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--tm-accent, #cff54a); font-weight: 600;">{{ remRadius }} m</span>
+                  </div>
+                </div>
+              </sc-if>
+
+              <button onClick="{{ saveReminder }}" style="width: 100%; height: 52px; border-radius: 15px; border: none; background: var(--tm-accent, #cff54a); color: var(--tm-accent-ink, #14160b); font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; letter-spacing: .5px; margin-top: 22px; cursor: pointer;">SCHEDULE REMINDER</button>
+            </div>
+          </sc-if>
+
+          <!-- ===== SNOOZE PICKER ===== -->
+          <sc-if value="{{ scSnoozeSheet }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ closeSheet }}" style="{{ backdropStyle }}"></div>
+            <div style="{{ sheetStyle }}">
+              <div style="width: 38px; height: 4px; border-radius: 2px; background: var(--tm-border2, rgba(255,255,255,.14)); margin: 4px auto 16px;"></div>
+              <div style="font-family: 'Instrument Serif', serif; font-size: 26px; color: var(--tm-text, #f4f3ee); margin-bottom: 4px;">Snooze until</div>
+              <div style="font-size: 13px; color: var(--tm-muted, #9a988f); margin-bottom: 18px; line-height: 1.45;">It comes back to your Inbox then — nothing is saved yet.</div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <sc-for list="{{ snoozeOpts }}" as="o" hint-placeholder-count="6">
+                  <button onClick="{{ o.onClick }}" style="display: flex; align-items: center; gap: 13px; width: 100%; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--tm-border, rgba(255,255,255,.09)); background: var(--tm-bg2, #141417); cursor: pointer; text-align: left;">
+                    <span style="width: 34px; height: 34px; border-radius: 10px; background: var(--tm-reminder-soft, rgba(255,194,75,.15)); color: var(--tm-reminder, #ffc24b); display: grid; place-items: center; flex-shrink: 0;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M5 3 2 6M22 6l-3-3"/></svg></span>
+                    <span style="flex: 1; font-size: 15px; color: var(--tm-text, #f4f3ee); font-weight: 500;">{{ o.label }}</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--tm-muted, #9a988f);">{{ o.when }}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- ===== CALENDAR PREVIEW ===== -->
+          <sc-if value="{{ scCalSheet }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ closeSheet }}" style="{{ backdropStyle }}"></div>
+            <div style="{{ sheetStyle }}">
+              <div style="width: 38px; height: 4px; border-radius: 2px; background: var(--tm-border2, rgba(255,255,255,.14)); margin: 4px auto 16px;"></div>
+              <div style="font-family: 'Instrument Serif', serif; font-size: 26px; color: var(--tm-text, #f4f3ee); margin-bottom: 4px;">Add to calendar</div>
+              <div style="font-size: 13px; color: var(--tm-muted, #9a988f); margin-bottom: 16px; line-height: 1.45;">Check the time before it's scheduled — an exact alarm that fires even in Doze.</div>
+
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px;">
+                <span style="width: 10px; height: 10px; border-radius: 3px; background: var(--tm-event, #0a9b8c); flex-shrink: 0;"></span>
+                <span style="font-family: 'Instrument Serif', serif; font-size: 21px; line-height: 1.1; color: var(--tm-text, #f4f3ee);">{{ calTitle }}</span>
+              </div>
+
+              <!-- day timeline -->
+              <div style="position: relative; height: 224px; border-radius: 14px; background: var(--tm-bg2, #141417); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); overflow: hidden; margin-bottom: 14px;">
+                <sc-for list="{{ calTicks }}" as="t" hint-placeholder-count="7">
+                  <div>
+                    <div style="{{ t.lineStyle }}"></div>
+                    <div style="{{ t.labelStyle }}">{{ t.label }}</div>
+                  </div>
+                </sc-for>
+                <div style="{{ calBlockStyle }}">
+                  <span style="font-size: 12.5px; font-weight: 700; line-height: 1.12; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ calTitle }}</span>
+                  <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; opacity: .82; margin-top: 2px;">{{ calBlockTime }}</span>
+                </div>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 18px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--tm-accent, #cff54a)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M20 6 9 17l-5-5"/></svg>
+                <span style="font-size: 12.5px; color: var(--tm-muted, #9a988f);">TaskMind checked your calendar — no overlap.</span>
+              </div>
+
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: 1px; margin-bottom: 10px;">DURATION</div>
+              <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                <sc-for list="{{ calDurChips }}" as="c" hint-placeholder-count="3"><button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button></sc-for>
+              </div>
+
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: 1px; margin-bottom: 10px;">CALENDAR</div>
+              <div style="display: flex; gap: 8px;">
+                <sc-for list="{{ calTargetChips }}" as="c" hint-placeholder-count="2"><button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button></sc-for>
+              </div>
+
+              <div style="display: flex; gap: 10px; margin-top: 22px;">
+                <button onClick="{{ confirmCalNote }}" style="flex: 1; height: 52px; border-radius: 15px; border: 1px solid var(--tm-border2, rgba(255,255,255,.14)); background: transparent; color: var(--tm-text, #f4f3ee); font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; letter-spacing: .5px; cursor: pointer;">NOTE ONLY</button>
+                <button onClick="{{ confirmCalAdd }}" style="flex: 1.6; height: 52px; border-radius: 15px; border: none; background: var(--tm-accent, #cff54a); color: var(--tm-accent-ink, #14160b); font-family: 'JetBrains Mono', monospace; font-size: 12.5px; font-weight: 600; letter-spacing: .5px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>ADD TO CALENDAR</button>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- ===== NOTIFICATION OVERLAY ===== -->
+          <sc-if value="{{ scNotif }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ closeOverlay }}" style="position: absolute; inset: 0; z-index: 80; background: rgba(0,0,0,.55); backdrop-filter: blur(2px); padding: 14px;">
+              <div style="border-radius: 22px; background: var(--tm-toast, #232327); border: 1px solid var(--tm-border2, rgba(255,255,255,.14)); overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,.5);">
+                <div style="padding: 15px 16px 13px;">
+                  <div style="display: flex; align-items: center; gap: 9px; margin-bottom: 12px;">
+                    <span style="width: 22px; height: 22px; border-radius: 6px; background: var(--tm-accent, #cff54a); display: grid; place-items: center; color: var(--tm-accent-ink, #14160b);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--tm-muted, #9a988f); letter-spacing: .5px;">TASKMIND</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--tm-faint, rgba(255,255,255,.34));">now</span>
+                  </div>
+                  <div style="font-size: 15px; font-weight: 600; color: var(--tm-text, #f4f3ee);">3 suggestions to review</div>
+                  <div style="font-size: 13.5px; color: var(--tm-muted, #9a988f); margin-top: 3px; line-height: 1.45;">Dental appt · Pay electricity bill · Call back Amma. Approve or reject without opening the app.</div>
+                </div>
+                <div style="display: flex; border-top: 1px solid var(--tm-border, rgba(255,255,255,.09));">
+                  <button onClick="{{ closeOverlay }}" style="flex: 1; height: 48px; border: none; background: transparent; color: var(--tm-danger, #ff6f6f); font-family: 'JetBrains Mono', monospace; font-size: 12.5px; font-weight: 600; letter-spacing: .5px; cursor: pointer; border-right: 1px solid var(--tm-border, rgba(255,255,255,.09));">REJECT</button>
+                  <button onClick="{{ approveFromNotif }}" style="flex: 1; height: 48px; border: none; background: transparent; color: var(--tm-accent, #cff54a); font-family: 'JetBrains Mono', monospace; font-size: 12.5px; font-weight: 600; letter-spacing: .5px; cursor: pointer;">APPROVE</button>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- ===== CAPTURE ANYWHERE ===== -->
+          <sc-if value="{{ scAnywhere }}" hint-placeholder-val="{{ false }}">
+            <div class="tm-scroll" style="position: absolute; inset: 0; z-index: 60; background: var(--tm-bg, #0c0c0e); overflow-y: auto; overflow-x: hidden; animation: tmFade .25s ease both;">
+              <div style="position: sticky; top: 0; z-index: 5; background: var(--tm-bg, #0c0c0e); padding: 12px 18px 12px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--tm-border, rgba(255,255,255,.09));">
+                <button onClick="{{ closeOverlay }}" style="width: 38px; height: 38px; border-radius: 11px; border: 1px solid var(--tm-border, rgba(255,255,255,.09)); background: var(--tm-card, #17171a); color: var(--tm-text, #f4f3ee); display: grid; place-items: center; cursor: pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg></button>
+                <span style="font-family: 'Instrument Serif', serif; font-size: 24px; color: var(--tm-text, #f4f3ee);">Capture anywhere</span>
+              </div>
+
+              <div style="padding: 18px 20px 8px;">
+                <div style="font-size: 14px; color: var(--tm-muted, #9a988f); line-height: 1.5;">TaskMind reaches into the rest of your phone, so an action item is never more than one tap away — and it's still understood on-device.</div>
+              </div>
+
+              <!-- SHARE SHEET -->
+              <div style="padding: 16px 20px 6px;">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-accent, #cff54a); letter-spacing: 1px; margin-bottom: 4px;">01 · SHARE SHEET</div>
+                <div style="font-size: 13px; color: var(--tm-muted, #9a988f); margin-bottom: 13px; line-height: 1.45;">Highlight text or a link in any app, hit Share, pick TaskMind.</div>
+                <div style="border-radius: 20px; overflow: hidden; border: 1px solid var(--tm-border, rgba(255,255,255,.09)); background: var(--tm-bg2, #141417);">
+                  <div style="padding: 16px 16px 12px; background: var(--tm-card2, #1d1d20);">
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); margin-bottom: 8px;">MESSAGES · MANAGER</div>
+                    <div style="font-size: 13.5px; color: var(--tm-text, #f4f3ee); line-height: 1.5; background: var(--tm-task-soft, rgba(46,107,230,.12)); border-radius: 13px 13px 13px 4px; padding: 11px 13px; display: inline-block; max-width: 86%;">Can you send the Q3 report before Thursday's review at 2pm?</div>
+                  </div>
+                  <div style="background: var(--tm-card, #17171a); border-top: 1px solid var(--tm-border, rgba(255,255,255,.09)); padding: 14px 16px 16px;">
+                    <div style="width: 34px; height: 4px; border-radius: 2px; background: var(--tm-border2, rgba(255,255,255,.14)); margin: 0 auto 14px;"></div>
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); margin-bottom: 12px; letter-spacing: .5px;">SHARE TO</div>
+                    <div style="display: flex; gap: 16px;">
+                      <div style="display: flex; flex-direction: column; align-items: center; gap: 7px; position: relative;">
+                        <div style="width: 52px; height: 52px; border-radius: 16px; background: var(--tm-accent, #cff54a); color: var(--tm-accent-ink, #14160b); display: grid; place-items: center; box-shadow: 0 0 0 3px var(--tm-accent-soft, rgba(207,245,74,.16));"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+                        <span style="font-size: 11px; color: var(--tm-text, #f4f3ee); font-weight: 600;">TaskMind</span>
+                      </div>
+                      <div style="display: flex; flex-direction: column; align-items: center; gap: 7px; opacity: .6;">
+                        <div style="width: 52px; height: 52px; border-radius: 16px; background: var(--tm-bg2, #141417); border: 1px solid var(--tm-border2, rgba(255,255,255,.14)); display: grid; place-items: center; color: var(--tm-muted, #9a988f);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z"/></svg></div>
+                        <span style="font-size: 11px; color: var(--tm-muted, #9a988f);">Send</span>
+                      </div>
+                      <div style="display: flex; flex-direction: column; align-items: center; gap: 7px; opacity: .6;">
+                        <div style="width: 52px; height: 52px; border-radius: 16px; background: var(--tm-bg2, #141417); border: 1px solid var(--tm-border2, rgba(255,255,255,.14)); display: grid; place-items: center; color: var(--tm-muted, #9a988f);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></div>
+                        <span style="font-size: 11px; color: var(--tm-muted, #9a988f);">Mail</span>
+                      </div>
+                      <div style="display: flex; flex-direction: column; align-items: center; gap: 7px; opacity: .6;">
+                        <div style="width: 52px; height: 52px; border-radius: 16px; background: var(--tm-bg2, #141417); border: 1px solid var(--tm-border2, rgba(255,255,255,.14)); display: grid; place-items: center; color: var(--tm-muted, #9a988f);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H7l-3 3V4Z"/></svg></div>
+                        <span style="font-size: 11px; color: var(--tm-muted, #9a988f);">Copy</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- HOME WIDGET -->
+              <div style="padding: 16px 20px 6px;">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-accent, #cff54a); letter-spacing: 1px; margin-bottom: 4px;">02 · HOME-SCREEN WIDGET</div>
+                <div style="font-size: 13px; color: var(--tm-muted, #9a988f); margin-bottom: 13px; line-height: 1.45;">A capture box and your pending count, right on the launcher.</div>
+                <div style="border-radius: 20px; overflow: hidden; border: 1px solid var(--tm-border, rgba(255,255,255,.09)); background: linear-gradient(150deg, #2b3a2a, #1a2230 70%); padding: 22px 18px;">
+                  <div style="border-radius: 20px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border2, rgba(255,255,255,.14)); padding: 15px 16px; box-shadow: 0 14px 34px -10px rgba(0,0,0,.5);">
+                    <div style="display: flex; align-items: center; gap: 9px; margin-bottom: 13px;">
+                      <span style="width: 22px; height: 22px; border-radius: 7px; background: var(--tm-accent, #cff54a); display: grid; place-items: center; color: var(--tm-accent-ink, #14160b);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                      <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--tm-text, #f4f3ee); letter-spacing: .5px; flex: 1;">TASKMIND</span>
+                      <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-accent, #cff54a);">3 to review</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                      <div style="flex: 1; height: 44px; border-radius: 13px; background: var(--tm-bg2, #141417); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); display: flex; align-items: center; padding: 0 14px; font-size: 13.5px; color: var(--tm-muted, #9a988f);">Jot a task…</div>
+                      <div style="width: 44px; height: 44px; border-radius: 13px; background: var(--tm-accent-soft, rgba(207,245,74,.16)); border: 1px solid var(--tm-accent, #cff54a); display: grid; place-items: center; color: var(--tm-accent, #cff54a);"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- QUICK SETTINGS TILE -->
+              <div style="padding: 16px 20px 28px;">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-accent, #cff54a); letter-spacing: 1px; margin-bottom: 4px;">03 · QUICK SETTINGS TILE</div>
+                <div style="font-size: 13px; color: var(--tm-muted, #9a988f); margin-bottom: 13px; line-height: 1.45;">Pull down once and tap to start a voice capture instantly.</div>
+                <div style="border-radius: 20px; overflow: hidden; border: 1px solid var(--tm-border, rgba(255,255,255,.09)); background: var(--tm-card2, #1d1d20); padding: 16px;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 11px;">
+                    <div style="display: flex; align-items: center; gap: 11px; padding: 13px 14px; border-radius: 26px; background: var(--tm-accent, #cff54a); color: var(--tm-accent-ink, #14160b);">
+                      <span style="width: 34px; height: 34px; border-radius: 50%; background: rgba(0,0,0,.12); display: grid; place-items: center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span>
+                      <div style="min-width: 0;"><div style="font-size: 12.5px; font-weight: 700;">TaskMind</div><div style="font-size: 10.5px; opacity: .7;">Capture</div></div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 11px; padding: 13px 14px; border-radius: 26px; background: var(--tm-bg2, #141417); color: var(--tm-muted, #9a988f);">
+                      <span style="width: 34px; height: 34px; border-radius: 50%; background: var(--tm-card, #17171a); display: grid; place-items: center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13a7 7 0 0 1 14 0M8.5 16a3.5 3.5 0 0 1 7 0M2 10a11 11 0 0 1 20 0"/></svg></span>
+                      <div><div style="font-size: 12.5px; color: var(--tm-text, #f4f3ee);">Wi-Fi</div><div style="font-size: 10.5px;">Home</div></div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 11px; padding: 13px 14px; border-radius: 26px; background: var(--tm-bg2, #141417); color: var(--tm-muted, #9a988f);">
+                      <span style="width: 34px; height: 34px; border-radius: 50%; background: var(--tm-card, #17171a); display: grid; place-items: center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg></span>
+                      <div><div style="font-size: 12.5px; color: var(--tm-text, #f4f3ee);">Bluetooth</div><div style="font-size: 10.5px;">On</div></div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 11px; padding: 13px 14px; border-radius: 26px; background: var(--tm-bg2, #141417); color: var(--tm-muted, #9a988f);">
+                      <span style="width: 34px; height: 34px; border-radius: 50%; background: var(--tm-card, #17171a); display: grid; place-items: center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0-6 6c0 4-2 5-2 5h16s-2-1-2-5a6 6 0 0 0-6-6ZM10 20a2 2 0 0 0 4 0"/></svg></span>
+                      <div><div style="font-size: 12.5px; color: var(--tm-text, #f4f3ee);">Silent</div><div style="font-size: 10.5px;">Off</div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- ===== SETTINGS ===== -->
+          <sc-if value="{{ scSettings }}" hint-placeholder-val="{{ false }}">
+            <div class="tm-scroll" style="position: absolute; inset: 0; z-index: 47; background: var(--tm-bg, #0c0c0e); overflow-y: auto; overflow-x: hidden;">
+              <div style="position: sticky; top: 0; z-index: 5; background: var(--tm-bg, #0c0c0e); padding: 12px 18px 10px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--tm-border, rgba(255,255,255,.09));">
+                <button onClick="{{ closeOverlay }}" style="width: 38px; height: 38px; border-radius: 11px; border: 1px solid var(--tm-border, rgba(255,255,255,.09)); background: var(--tm-card, #17171a); color: var(--tm-text, #f4f3ee); display: grid; place-items: center; cursor: pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg></button>
+                <span style="font-family: 'Instrument Serif', serif; font-size: 24px; color: var(--tm-text, #f4f3ee);">Settings</span>
+              </div>
+
+              <!-- understanding engine -->
+              <div style="padding: 18px 22px 6px;">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: 1px; margin-bottom: 11px;">UNDERSTANDING ENGINE</div>
+                <div style="display: flex; gap: 6px; padding: 4px; border-radius: 13px; background: var(--tm-bg2, #141417); margin-bottom: 12px;">
+                  <button onClick="{{ setProviderDevice }}" style="{{ provDeviceStyle }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg>ON-DEVICE</button>
+                  <button onClick="{{ setProviderCloud }}" style="{{ provCloudStyle }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11.5 1.5A4 4 0 0 0 6.5 19Z"/></svg>CLOUD</button>
+                </div>
+                <div style="border-radius: 14px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); padding: 14px 16px;">
+                  <sc-if value="{{ isDevice }}" hint-placeholder-val="{{ true }}">
+                    <div style="display: flex; align-items: center; gap: 11px;">
+                      <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--tm-accent, #cff54a); flex-shrink: 0;"></span>
+                      <div style="flex: 1;">
+                        <div style="font-size: 14px; color: var(--tm-text, #f4f3ee); font-weight: 500;">Gemma 3 1B · loaded</div>
+                        <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-muted, #9a988f); margin-top: 3px;">/data/…/files/model.task</div>
+                      </div>
+                      <button onClick="{{ checkModel }}" style="height: 32px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--tm-border2, rgba(255,255,255,.14)); background: transparent; color: var(--tm-text, #f4f3ee); font-family: 'JetBrains Mono', monospace; font-size: 11px; cursor: pointer;">CHECK</button>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ isCloud }}" hint-placeholder-val="{{ false }}">
+                    <div style="display: flex; align-items: flex-start; gap: 11px;">
+                      <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--tm-reminder, #ffc24b); flex-shrink: 0; margin-top: 5px;"></span>
+                      <div style="flex: 1;">
+                        <div style="font-size: 14px; color: var(--tm-text, #f4f3ee); font-weight: 500;">Gemini 2.5 Flash</div>
+                        <div style="font-size: 12px; color: var(--tm-reminder, #ffc24b); margin-top: 3px; line-height: 1.4;">Leaves the device. Every call is logged in Data Egress.</div>
+                      </div>
+                    </div>
+                  </sc-if>
+                </div>
+              </div>
+
+              <!-- on-device add-ons -->
+              <div style="padding: 14px 22px 6px;">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: 1px; margin-bottom: 11px;">ON-DEVICE ADD-ONS</div>
+                <div style="border-radius: 14px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); overflow: hidden;">
+                  <div style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--tm-border, rgba(255,255,255,.06));">
+                    <div style="flex: 1;"><div style="font-size: 14px; color: var(--tm-text, #f4f3ee);">Voice transcription (Vosk)</div><div style="font-size: 12px; color: var(--tm-muted, #9a988f); margin-top: 2px;">Transcribe recordings on-device</div></div>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-reminder, #ffc24b); padding: 4px 9px; border-radius: 7px; background: var(--tm-reminder-soft, rgba(255,194,75,.15));">SET UP</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 12px; padding: 14px 16px;">
+                    <div style="flex: 1;"><div style="font-size: 14px; color: var(--tm-text, #f4f3ee);">Screenshot OCR (Tesseract)</div><div style="font-size: 12px; color: var(--tm-muted, #9a988f); margin-top: 2px;">Read text from screenshots on-device</div></div>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-reminder, #ffc24b); padding: 4px 9px; border-radius: 7px; background: var(--tm-reminder-soft, rgba(255,194,75,.15));">SET UP</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- scanning -->
+              <div style="padding: 14px 22px 6px;">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: 1px; margin-bottom: 11px;">BACKGROUND SCAN EVERY</div>
+                <div style="display: flex; gap: 7px; flex-wrap: wrap;">
+                  <sc-for list="{{ scanFreqChips }}" as="c" hint-placeholder-count="5"><button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button></sc-for>
+                </div>
+              </div>
+
+              <!-- retention -->
+              <div style="padding: 14px 22px 6px;">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: 1px; margin-bottom: 11px;">KEEP NOTES FOR</div>
+                <div style="display: flex; gap: 7px; flex-wrap: wrap;">
+                  <sc-for list="{{ retentionChips }}" as="c" hint-placeholder-count="4"><button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button></sc-for>
+                </div>
+              </div>
+
+              <!-- data -->
+              <div style="padding: 14px 22px 6px;">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); letter-spacing: 1px; margin-bottom: 11px;">YOUR DATA</div>
+                <div style="border-radius: 14px; background: var(--tm-card, #17171a); border: 1px solid var(--tm-border, rgba(255,255,255,.09)); overflow: hidden;">
+                  <button onClick="{{ exportNotes }}" style="width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: none; border-bottom: 1px solid var(--tm-border, rgba(255,255,255,.06)); background: transparent; color: var(--tm-text, #f4f3ee); cursor: pointer; text-align: left;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--tm-text, #f4f3ee)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M12 3v12M8 11l4 4 4-4M5 21h14"/></svg>
+                    <span style="flex: 1; font-size: 14px;">Export notes (JSON)</span>
+                  </button>
+                  <div style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--tm-border, rgba(255,255,255,.06));">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--tm-text, #f4f3ee)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+                    <div style="flex: 1;"><div style="font-size: 14px; color: var(--tm-text, #f4f3ee);">Encrypted backup &amp; restore</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-muted, #9a988f); margin-top: 2px;">AES-256-GCM · passphrase</div></div>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--tm-faint, rgba(255,255,255,.34))" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 12px; padding: 14px 16px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--tm-accent, #cff54a)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M12 3 5 6v5c0 4 3 7.5 7 9 4-1.5 7-5 7-9V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+                    <div style="flex: 1;"><div style="font-size: 14px; color: var(--tm-text, #f4f3ee);">Data egress audit</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-accent, #cff54a); margin-top: 2px;">0 entries · nothing has left</div></div>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--tm-faint, rgba(255,255,255,.34))" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+                  </div>
+                </div>
+              </div>
+
+              <!-- danger -->
+              <div style="padding: 14px 22px 26px;">
+                <button style="width: 100%; height: 48px; border-radius: 14px; background: transparent; border: 1px solid var(--tm-danger, #ff6f6f); color: var(--tm-danger, #ff6f6f); font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: .5px; cursor: pointer;">DELETE ALL PRIVATE DATA</button>
+                <div style="text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--tm-faint, rgba(255,255,255,.34)); margin-top: 14px; letter-spacing: .5px;">TASKMIND · UPDATE 4 · v4.0</div>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- undo toast -->
+          <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+            <div style="position: absolute; left: 16px; right: 16px; bottom: 16px; z-index: 50; display: flex; align-items: center; gap: 12px; padding: 13px 16px; border-radius: 15px; background: var(--tm-toast, #232327); border: 1px solid var(--tm-border2, rgba(255,255,255,.14)); box-shadow: 0 16px 40px rgba(0,0,0,.4);">
+              <span style="width: 8px; height: 8px; border-radius: 50%; background: {{ toastColor }}; flex-shrink: 0;"></span>
+              <span style="flex: 1; font-size: 13.5px; color: var(--tm-text, #f4f3ee);">{{ toastMsg }}</span>
+              <button onClick="{{ onUndo }}" style="border: none; background: none; color: var(--tm-accent, #cff54a); font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; letter-spacing: .5px; cursor: pointer; padding: 4px 6px;">UNDO</button>
+            </div>
+          </sc-if>
+        </div>
+
+        <!-- ============ BOTTOM NAV ============ -->
+        <sc-if value="{{ scShowNav }}" hint-placeholder-val="{{ true }}">
+          <div style="flex-shrink: 0; position: relative; z-index: 20; background: var(--tm-navbg, rgba(18,18,21,.92)); backdrop-filter: blur(16px); border-top: 1px solid var(--tm-border, rgba(255,255,255,.09));">
+            <div style="display: flex; padding: 9px 14px 6px;">
+              <button onClick="{{ navInbox }}" style="{{ navInboxStyle }}">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h5l2 3h4l2-3h5"/><path d="M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/></svg>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: .5px;">INBOX</span>
+                <sc-if value="{{ navBadge }}" hint-placeholder-val="{{ true }}"><span style="position: absolute; top: 2px; right: 50%; margin-right: -22px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--tm-accent, #cff54a); color: var(--tm-accent-ink, #14160b); font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600; display: grid; place-items: center;">{{ pendingCount }}</span></sc-if>
+              </button>
+              <button onClick="{{ navNotes }}" style="{{ navNotesStyle }}">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h10l4 4v14a0 0 0 0 1 0 0H5a0 0 0 0 1 0 0V3Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: .5px;">NOTES</span>
+              </button>
+              <button onClick="{{ navSources }}" style="{{ navSourcesStyle }}">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.5"/><path d="M12 4v3.5M12 16.5V20M4 12h3.5M16.5 12H20M6.3 6.3l2.5 2.5M15.2 15.2l2.5 2.5M17.7 6.3l-2.5 2.5M8.8 15.2l-2.5 2.5"/></svg>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: .5px;">SOURCES</span>
+              </button>
+              <button onClick="{{ navPrivacy }}" style="{{ navPrivacyStyle }}">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4 3 7.5 7 9 4-1.5 7-5 7-9V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: .5px;">PRIVACY</span>
+              </button>
+            </div>
+            <div style="height: 22px; display: flex; align-items: center; justify-content: center;"><div style="width: 120px; height: 4px; border-radius: 2px; background: var(--tm-text, #f4f3ee); opacity: .25;"></div></div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    theme: 'dark',
+    locked: true,
+    onboarding: true,
+    obStep: 0,
+    tab: 'inbox',
+    overlay: null,
+    selId: null,
+    filter: 'all',
+    scanning: false,
+    toast: null,
+    entered: false,
+    ovIn: false,
+    editing: false,
+    drag: { id: null, dx: 0, axis: null },
+    suggestions: this.seedSuggestions(),
+    scanned: false,
+    noteTab: 'active',
+    search: '',
+    notes: this.seedNotes(),
+    sources: this.seedSources(),
+    sheet: null,
+    snoozeId: null,
+    calId: null,
+    calDuration: '1h',
+    calTarget: 'Personal',
+    scanStage: 0,
+    remDraft: { mode: 'once', date: 'Fri, 28 Jun', time: '9:00 AM', repeat: 'Weekly', day: 'Mon', place: 'India Post, Anna Nagar', radius: 200 },
+    captureMode: 'type',
+    captureText: '',
+    recording: false,
+    analysing: false,
+    provider: 'device',
+    scanFreq: '30m',
+    retention: '90d',
+  };
+
+  seedNotes() {
+    return [
+      { id: 'n1', type: 'event', title: 'Dental check-up — Dr. Mehta', body: 'Tuesday at 3:00 PM. Confirm by replying C.', source: 'SMS · Smile Dental', due: 'Tue · 3:00 PM', done: false, place: 'Smile Dental Clinic, Anna Nagar', links: [['call', '+91 44 ••• 2200'], ['directions', 'Smile Dental Clinic']] },
+      { id: 'n2', type: 'task', title: 'Groceries', body: 'Picked up from a WhatsApp message.', source: 'WhatsApp', done: false, checklist: [{ t: 'Milk', done: true }, { t: 'Eggs', done: false }, { t: 'Bread', done: false }, { t: 'Coffee (if available)', done: false }] },
+      { id: 'n3', type: 'reminder', title: 'Pay electricity bill', body: '₹1,840 to TNEB. Consumer no. 04-221-••••.', source: 'Gmail · TNEB', due: 'Fri · all day', done: false, recurrence: 'Repeats monthly', links: [['url', 'tneb.tnebnet.org']] },
+      { id: 'n4', type: 'reminder', title: 'Pick up parcel', body: 'Held at Anna Nagar Post Office. Collect within 7 days.', source: 'SMS · India Post', due: 'When near', done: false, place: 'India Post, Anna Nagar', geofence: true, radius: 200, links: [['directions', 'India Post, Anna Nagar']] },
+      { id: 'n5', type: 'task', title: 'Call back Amma', body: '3 missed calls this morning.', source: 'Call log', done: false, links: [['call', '+91 98••• ••210']] },
+      { id: 'n6', type: 'note', title: 'Screen time — yesterday', body: '4h 12m total. Top: Instagram 1h 20m, Chrome 48m, WhatsApp 41m.', source: 'App usage digest', done: true },
+      { id: 'n7', type: 'task', title: 'Renew car insurance', body: 'Policy TN-09-••••. Renewed online.', source: 'Gmail', done: true },
+    ];
+  }
+
+  seedSources() {
+    return [
+      { id: 'sms', name: 'SMS', desc: 'Live + periodic scan', on: true, meta: 'READ_SMS' },
+      { id: 'notif', name: 'Notifications', desc: 'Per-app picker below', on: true, meta: 'Notification access', apps: [{ n: 'Messages', on: true }, { n: 'WhatsApp', on: true }, { n: 'Gmail', on: true }, { n: 'Slack', on: true }, { n: 'Instagram', on: false }] },
+      { id: 'calls', name: 'Call Logs', desc: 'Missed calls → "Call back"', on: true, meta: 'READ_CALL_LOG' },
+      { id: 'gmail', name: 'Email (Gmail)', desc: 'Unread Primary · on-device', on: true, meta: '2 accounts connected', accounts: ['raja@gmail.com', 'work@company.in'] },
+      { id: 'usage', name: 'App Usage', desc: 'Daily screen-time digest', on: true, meta: 'Usage access' },
+      { id: 'voice', name: 'Voice / Call Recordings', desc: 'On-device transcription (Vosk)', on: false, meta: 'Model not installed', warn: true },
+      { id: 'ocr', name: 'Screenshots (OCR)', desc: 'On-device OCR (Tesseract)', on: false, meta: 'Model not installed', warn: true },
+    ];
+  }
+
+  seedSuggestions() {
+    return [
+      { id: 's1', type: 'event', title: 'Dental check-up — Tue 3:00 PM', detail: 'Dr. Mehta at Smile Dental Clinic. Reply C to confirm.', source: 'SMS · Smile Dental', when: '9:12 AM', conf: 0.94,
+        full: 'Reminder: You have a dental check-up appointment on Tuesday at 3:00 PM with Dr. Mehta. Reply C to confirm or R to reschedule. — Smile Dental Clinic, Anna Nagar.',
+        fields: [['When', 'Tue, 3:00 PM'], ['Where', 'Smile Dental Clinic'], ['Action', 'Add to calendar']], place: 'Smile Dental Clinic' },
+      { id: 's2', type: 'task', title: 'Call back Amma', detail: '3 missed calls. Number resolved from Contacts.', source: 'Call log · missed', when: '8:40 AM', conf: 0.88,
+        full: 'Missed call from Amma — 3 missed calls between 8:31 and 8:40 AM. Matched to a saved contact, so the Call button can dial directly.',
+        fields: [['Contact', 'Amma']], number: '+91 98••• ••210' },
+      { id: 's3', type: 'reminder', title: 'Pay electricity bill — due Fri', detail: '₹1,840 to TNEB. Looks monthly — set to repeat?', source: 'Gmail · TNEB', when: 'Yesterday', conf: 0.91,
+        full: 'Your TANGEDCO (TNEB) electricity bill of Rs. 1,840.00 is due on Friday, 28th. Pay online to avoid disconnection. Consumer no. 04-221-••••.',
+        fields: [['Amount', '₹1,840'], ['Due', 'Fri 28th'], ['Repeat', 'Monthly']], recurrence: 'Monthly' },
+      { id: 's4', type: 'task', title: 'Groceries: milk, eggs, bread', detail: 'Extracted as a checklist from a chat message.', source: 'WhatsApp', when: 'Yesterday', conf: 0.79,
+        full: 'can u pick up milk, eggs and bread on the way home? also coffee if they have the good one 🙏', checklist: ['Milk', 'Eggs', 'Bread', 'Coffee (if available)'] },
+      { id: 's5', type: 'event', title: 'Standup moved to 10:30', detail: 'Daily team standup rescheduled today.', source: 'Slack · #eng', when: '7:55 AM', conf: 0.83,
+        full: '@here heads up — pushing today\u2019s standup to 10:30 so folks on the late shift can join. Same Meet link.',
+        fields: [['When', 'Today 10:30 AM'], ['Action', 'Update calendar']] },
+      { id: 's6', type: 'reminder', title: 'Pick up parcel near India Post', detail: 'Location reminder — triggers when you arrive.', source: 'SMS · India Post', when: '2 days ago', conf: 0.86,
+        full: 'Your parcel SR••••91IN is held at Anna Nagar Post Office. Collect within 7 days with this SMS and a photo ID.',
+        fields: [['Where', 'India Post, Anna Nagar'], ['Trigger', 'On arrival']], place: 'India Post, Anna Nagar', geofence: true },
+    ];
+  }
+
+  // ----- theme tokens -----
+  themeVars() {
+    const dark = {
+      '--tm-bg': '#0c0c0e', '--tm-bg2': '#141417', '--tm-card': '#17171a', '--tm-card2': '#1f1f23',
+      '--tm-text': '#f4f3ee', '--tm-muted': 'rgba(244,243,238,.56)', '--tm-faint': 'rgba(244,243,238,.34)',
+      '--tm-border': 'rgba(244,243,238,.09)', '--tm-border2': 'rgba(244,243,238,.15)',
+      '--tm-accent': '#cff54a', '--tm-accent-ink': '#14160b', '--tm-accent-soft': 'rgba(207,245,74,.16)',
+      '--tm-task': '#6aa6ff', '--tm-event': '#2fd8c3', '--tm-note': '#f58fc2', '--tm-reminder': '#ffc24b',
+      '--tm-danger': '#ff6f6f', '--tm-navbg': 'rgba(18,18,21,.92)', '--tm-toast': '#232327',
+      '--tm-task-soft': 'rgba(106,166,255,.15)', '--tm-event-soft': 'rgba(47,216,195,.15)',
+      '--tm-note-soft': 'rgba(245,143,194,.15)', '--tm-reminder-soft': 'rgba(255,194,75,.15)',
+    };
+    const light = {
+      '--tm-bg': '#f3f1ea', '--tm-bg2': '#eae7dd', '--tm-card': '#ffffff', '--tm-card2': '#f6f4ee',
+      '--tm-text': '#15150f', '--tm-muted': 'rgba(21,21,15,.58)', '--tm-faint': 'rgba(21,21,15,.40)',
+      '--tm-border': 'rgba(21,21,15,.10)', '--tm-border2': 'rgba(21,21,15,.16)',
+      '--tm-accent': '#aad400', '--tm-accent-ink': '#15150f', '--tm-accent-soft': 'rgba(170,212,0,.18)',
+      '--tm-task': '#2e6be6', '--tm-event': '#0a9b8c', '--tm-note': '#d6519a', '--tm-reminder': '#bd7d00',
+      '--tm-danger': '#dd463f', '--tm-navbg': 'rgba(243,241,234,.9)', '--tm-toast': '#ffffff',
+      '--tm-task-soft': 'rgba(46,107,230,.12)', '--tm-event-soft': 'rgba(10,155,140,.13)',
+      '--tm-note-soft': 'rgba(214,81,154,.12)', '--tm-reminder-soft': 'rgba(189,125,0,.14)',
+    };
+    return this.state.theme === 'dark' ? dark : light;
+  }
+
+  typeMeta(t) {
+    return ({
+      task: { label: 'TASK', color: 'var(--tm-task)', soft: 'var(--tm-task-soft)' },
+      event: { label: 'EVENT', color: 'var(--tm-event)', soft: 'var(--tm-event-soft)' },
+      note: { label: 'NOTE', color: 'var(--tm-note)', soft: 'var(--tm-note-soft)' },
+      reminder: { label: 'REMINDER', color: 'var(--tm-reminder)', soft: 'var(--tm-reminder-soft)' },
+    })[t] || { label: 'NOTE', color: 'var(--tm-note)', soft: 'var(--tm-note-soft)' };
+  }
+
+  // ----- actions -----
+  componentDidMount() { this._mt = setTimeout(() => this.setState({ entered: true }), 60); }
+  afterOpen() { clearTimeout(this._ovT); this.setState({ ovIn: false }); this._ovT = setTimeout(() => this.setState({ ovIn: true }), 30); }
+  obNext = () => { if (this.state.obStep >= 2) { this.setState({ onboarding: false }); } else { this.setState(s => ({ obStep: s.obStep + 1 })); } };
+  obSkip = () => this.setState({ onboarding: false });
+  toggleTheme = () => this.setState(s => ({ theme: s.theme === 'dark' ? 'light' : 'dark' }));
+  unlock = () => { const first = !this._notifSeen; this._notifSeen = true; this.setState({ locked: false, entered: false, tab: 'inbox', overlay: first ? 'notif' : null }); clearTimeout(this._mt); this._mt = setTimeout(() => this.setState({ entered: true }), 70); };
+  navTo = (tab) => () => this.setState({ tab, overlay: null });
+
+  doScan = () => {
+    if (this.state.scanning) return;
+    [this._sc1, this._sc2, this._sc3].forEach(t => clearTimeout(t));
+    this.setState({ scanning: true, scanStage: 0 });
+    this._sc1 = setTimeout(() => this.setState({ scanStage: 1 }), 750);
+    this._sc2 = setTimeout(() => this.setState({ scanStage: 2 }), 1550);
+    this._sc3 = setTimeout(() => {
+      const wasEmpty = this.state.suggestions.length === 0;
+      if (wasEmpty) {
+        const fresh = this.freshBatch();
+        this.setState({ scanning: false, scanned: true, scanStage: 0, suggestions: fresh });
+        this.showToast(fresh.length + ' new suggestions found', 'var(--tm-accent)', null);
+      } else {
+        this.setState({ scanning: false, scanned: true, scanStage: 0 });
+        this.showToast('Scan complete · no new items', 'var(--tm-muted)', null);
+      }
+    }, 2450);
+  };
+  freshBatch() {
+    return [
+      { id: 'f1', type: 'reminder', title: 'Parking expires 4:30 PM', detail: 'Detected from a parking SMS — extend or move the car.', source: 'SMS · Park+', when: 'just now', conf: 0.9,
+        full: 'Your parking session at Lot 12, Anna Nagar expires at 4:30 PM. Reply EXT to extend by 1 hour for ₹30.', fields: [['When', 'Today 4:30 PM'], ['Action', 'Set reminder']] },
+      { id: 'f2', type: 'event', title: 'Diwali dinner — Sat 7:00 PM', detail: 'A WhatsApp invite is waiting on your reply.', source: 'WhatsApp · Family', when: 'just now', conf: 0.82,
+        full: 'Beta, are you coming for Diwali dinner on Saturday 7pm? Let me know by tomorrow so I can plan the food.', fields: [['When', 'Sat 7:00 PM'], ['Action', 'Add to calendar']] },
+    ];
+  }
+
+  setFilter = (f) => () => this.setState({ filter: f });
+
+  showToast = (msg, color, undo) => {
+    if (this._toastT) clearTimeout(this._toastT);
+    this.setState({ toast: { msg, color, undo } });
+    this._toastT = setTimeout(() => this.setState({ toast: null }), 4200);
+  };
+
+  removeSug(id) { this.setState(s => ({ suggestions: s.suggestions.filter(x => x.id !== id) })); }
+
+  approve = (id, msg) => {
+    const it = this.state.suggestions.find(x => x.id === id); if (!it) return;
+    const idx = this.state.suggestions.indexOf(it);
+    this.removeSug(id);
+    this.showToast(msg || ('Saved to Notes — ' + it.title), 'var(--tm-accent)', () => this.restore(it, idx));
+  };
+  tryApprove = (id) => {
+    const it = this.state.suggestions.find(x => x.id === id);
+    if (it && it.type === 'event') { this.setState({ sheet: 'calendar', calId: id, calDuration: '1h', calTarget: 'Personal' }); this.afterOpen(); }
+    else { this.approve(id); }
+  };
+  setCalDuration = (d) => () => this.setState({ calDuration: d });
+  setCalTarget = (t) => () => this.setState({ calTarget: t });
+  confirmCalendar = (alsoCal) => () => { const id = this.state.calId; this.setState({ sheet: null, ovIn: false, calId: null }); if (id) this.approve(id, alsoCal ? 'Added to calendar & Notes' : 'Saved to Notes only'); };
+  reject = (id) => {
+    const it = this.state.suggestions.find(x => x.id === id); if (!it) return;
+    const idx = this.state.suggestions.indexOf(it);
+    this.removeSug(id);
+    this.showToast('Rejected — TaskMind will learn from this', 'var(--tm-danger)', () => this.restore(it, idx));
+  };
+  openSnoozePicker = (id) => { this.setState({ sheet: 'snooze', snoozeId: id }); this.afterOpen(); };
+  chooseSnooze = (label) => () => {
+    const id = this.state.snoozeId;
+    const it = this.state.suggestions.find(x => x.id === id);
+    const idx = it ? this.state.suggestions.indexOf(it) : 0;
+    this.setState({ sheet: null, ovIn: false, snoozeId: null });
+    if (it) { this.removeSug(id); this.showToast('Snoozed · ' + label, 'var(--tm-reminder)', () => this.restore(it, idx)); }
+  };
+  restore = (it, idx) => {
+    this.setState(s => { const a = s.suggestions.slice(); a.splice(Math.min(idx, a.length), 0, it); return { suggestions: a, toast: null }; });
+  };
+  approveAll = () => { const n = this.state.suggestions.length; const all = this.state.suggestions.slice(); this.setState({ suggestions: [] }); this.showToast('Approved all ' + n + ' — saved to Notes', 'var(--tm-accent)', () => this.setState({ suggestions: all, toast: null })); };
+  rejectAll = () => { const all = this.state.suggestions.slice(); this.setState({ suggestions: [] }); this.showToast('Cleared the inbox', 'var(--tm-danger)', () => this.setState({ suggestions: all, toast: null })); };
+
+  openSug = (id) => { if (this._moved) { this._moved = false; return; } this.setState({ overlay: 'suggestion', selId: id, editing: false }); this.afterOpen(); };
+  closeOverlay = () => this.setState({ overlay: null, ovIn: false, editing: false });
+  toggleEdit = () => this.setState(s => ({ editing: !s.editing }));
+  editSugField = (id, field) => (e) => { const v = e && e.target ? e.target.value : e; this.setState(st => ({ suggestions: st.suggestions.map(x => x.id === id ? { ...x, [field]: v } : x) })); };
+  setSugType = (id, t) => () => this.setState(st => ({ suggestions: st.suggestions.map(x => x.id === id ? { ...x, type: t } : x) }));
+
+  // ----- settings -----
+  openSettings = () => { this.setState({ overlay: 'settings' }); this.afterOpen(); };
+  setProvider = (p) => () => this.setState({ provider: p });
+  setScanFreq = (f) => () => this.setState({ scanFreq: f });
+  setRetention = (r) => () => this.setState({ retention: r });
+  exportNotes = () => this.showToast('Exported notes.json — stays on-device', 'var(--tm-accent)', null);
+  checkModel = () => this.showToast('✓ On-device Gemma model loaded', 'var(--tm-accent)', null);
+
+  // ----- swipe -----
+  onDown = (id) => (e) => { this._x0 = e.clientX; this._y0 = e.clientY; this._moved = false; this.setState({ drag: { id, dx: 0, axis: null } }); try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} };
+  onMove = (id) => (e) => {
+    if (this.state.drag.id !== id) return;
+    const dx = e.clientX - this._x0, dy = e.clientY - this._y0;
+    let axis = this.state.drag.axis;
+    if (!axis) { if (Math.abs(dx) > 8 || Math.abs(dy) > 8) { axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'; } else return; }
+    if (axis === 'y') { this.setState({ drag: { id: null, dx: 0, axis: null } }); return; }
+    this._moved = true;
+    this.setState({ drag: { id, dx, axis: 'x' } });
+  };
+  onUp = (id) => (e) => {
+    const { dx } = this.state.drag;
+    this.setState({ drag: { id: null, dx: 0, axis: null } });
+    if (dx > 92) { this.tryApprove(id); } else if (dx < -92) { this.reject(id); }
+  };
+  stop = (e) => { e.stopPropagation(); };
+
+  clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+  // ----- notes -----
+  setNoteTab = (t) => () => this.setState({ noteTab: t });
+  onSearch = (e) => this.setState({ search: e.target.value });
+  openNote = (id) => () => { this.setState({ overlay: 'note', selId: id }); this.afterOpen(); };
+  toggleNoteDone = (id) => (e) => { if (e) e.stopPropagation(); this.setState(st => ({ notes: st.notes.map(n => n.id === id ? { ...n, done: !n.done } : n) })); };
+  toggleCheck = (id, idx) => (e) => { if (e) e.stopPropagation(); this.setState(st => ({ notes: st.notes.map(n => { if (n.id !== id) return n; const c = n.checklist.map((x, i) => i === idx ? { ...x, done: !x.done } : x); return { ...n, checklist: c }; }) })); };
+  deleteNote = (id) => () => { this.setState(st => ({ notes: st.notes.filter(n => n.id !== id), overlay: null })); this.showToast('Note deleted', 'var(--tm-danger)', null); };
+
+  // ----- sources -----
+  toggleSource = (id) => () => this.setState(st => ({ sources: st.sources.map(x => x.id === id ? { ...x, on: !x.on } : x) }));
+  toggleApp = (sid, ai) => () => this.setState(st => ({ sources: st.sources.map(x => { if (x.id !== sid) return x; return { ...x, apps: x.apps.map((a, i) => i === ai ? { ...a, on: !a.on } : a) }; }) }));
+
+  // ----- sheets / overlays -----
+  openSheet = (name) => () => { this.setState({ sheet: name }); this.afterOpen(); };
+  closeSheet = () => this.setState({ sheet: null, ovIn: false });
+  setRem = (k, v) => this.setState(st => ({ remDraft: { ...st.remDraft, [k]: v } }));
+  saveReminder = () => { this.setState({ sheet: null }); this.showToast('Reminder scheduled', 'var(--tm-accent)', null); };
+  openNotif = () => { this.setState({ overlay: 'notif' }); this.afterOpen(); };
+  openAnywhere = () => { this.setState({ overlay: 'anywhere', sheet: null, ovIn: false }); this.afterOpen(); };
+
+  // ----- quick capture -----
+  openCapture = () => { this.setState({ sheet: 'capture', captureMode: 'type', captureText: '', recording: false, analysing: false }); this.afterOpen(); };
+  setCaptureMode = (m) => () => this.setState({ captureMode: m });
+  onCaptureInput = (e) => this.setState({ captureText: e.target.value });
+  toggleRecord = () => {
+    if (this.state.recording) {
+      this.setState(st => ({ recording: false, captureText: st.captureText || 'Remind me to call the landlord about the lease renewal tomorrow evening' }));
+    } else { this.setState({ recording: true, captureText: '' }); }
+  };
+  analyseCapture = () => {
+    const text = this.state.captureText.trim();
+    if (!text || this.state.analysing) return;
+    const mode = this.state.captureMode;
+    this.setState({ analysing: true });
+    clearTimeout(this._capT);
+    this._capT = setTimeout(() => {
+      const sug = { id: 'c' + Date.now(), type: 'task', title: text.length > 46 ? text.slice(0, 46) + '…' : text, detail: 'Captured by you — review and save.', source: mode === 'speak' ? 'Voice note · on-device' : 'Manual entry', when: 'now', conf: 0.97, full: text };
+      this.setState(st => ({ suggestions: [sug, ...st.suggestions], sheet: null, ovIn: false, analysing: false, recording: false, tab: 'inbox', filter: 'all' }));
+      this.showToast('Added to Inbox — review to save', 'var(--tm-accent)', null);
+    }, 1300);
+  };
+
+  renderVals() {
+    const s = this.state;
+    const meta = this.typeMeta;
+
+    // filters
+    const fdefs = [['all', 'All'], ['task', 'Tasks'], ['event', 'Events'], ['reminder', 'Reminders'], ['note', 'Notes']];
+    const filters = fdefs.map(([key, label]) => {
+      const active = s.filter === key;
+      return { key, label, onClick: this.setFilter(key), style: {
+        flexShrink: 0, height: 32, padding: '0 14px', borderRadius: 10,
+        border: '1px solid ' + (active ? 'transparent' : 'var(--tm-border2)'),
+        background: active ? 'var(--tm-text)' : 'transparent',
+        color: active ? 'var(--tm-bg)' : 'var(--tm-muted)',
+        fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: '.3px', cursor: 'pointer',
+      } };
+    });
+
+    // suggestions filtered + view models
+    const list = s.suggestions.filter(x => s.filter === 'all' || x.type === s.filter);
+    const sugVMs = list.map(it => {
+      const m = meta(it.type);
+      const dragging = s.drag.id === it.id;
+      const dx = dragging ? s.drag.dx : 0;
+      const ap = this.clamp(dx / 92, 0, 1), rj = this.clamp(-dx / 92, 0, 1);
+      const confColor = it.conf >= 0.85 ? 'var(--tm-accent)' : it.conf >= 0.7 ? 'var(--tm-reminder)' : 'var(--tm-danger)';
+      return {
+        ...it, color: m.color, typeLabel: m.label,
+        confPct: Math.round(it.conf * 100) + '%', confColor,
+        pillStyle: { flexShrink: 0, padding: '3px 8px', borderRadius: 6, background: m.soft, color: m.color, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, letterSpacing: '.6px' },
+        confStyle: { height: '100%', width: (s.entered ? (it.conf * 100) : 0) + '%', background: confColor, borderRadius: 2, transition: 'width .85s cubic-bezier(.2,.8,.2,1)' },
+        cardStyle: {
+          position: 'relative', borderRadius: 18, background: 'var(--tm-card)',
+          border: '1px solid var(--tm-border)', cursor: 'pointer', touchAction: 'pan-y',
+          transform: 'translateX(' + dx + 'px)', transition: dragging ? 'none' : 'transform .34s cubic-bezier(.2,.9,.2,1)',
+          boxShadow: dragging ? '0 12px 30px rgba(0,0,0,.3)' : 'none',
+        },
+        approveHint: { display: 'flex', alignItems: 'center', gap: 8, color: 'var(--tm-accent)', opacity: ap, transform: 'scale(' + (0.8 + ap * 0.2) + ')' },
+        rejectHint: { display: 'flex', alignItems: 'center', gap: 8, color: 'var(--tm-danger)', opacity: rj, transform: 'scale(' + (0.8 + rj * 0.2) + ')' },
+        onOpen: () => this.openSug(it.id),
+        onApprove: (e) => { e.stopPropagation(); this.tryApprove(it.id); },
+        onReject: (e) => { e.stopPropagation(); this.reject(it.id); },
+        onSnooze: (e) => { e.stopPropagation(); this.openSnoozePicker(it.id); },
+        onDown: this.onDown(it.id), onMove: this.onMove(it.id), onUp: this.onUp(it.id), stop: this.stop,
+      };
+    });
+
+    const pendingCount = s.suggestions.length;
+    const navStyle = (tab) => {
+      const active = s.tab === tab && !s.overlay;
+      return { position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '6px 0', background: 'none', border: 'none', cursor: 'pointer', color: active ? 'var(--tm-accent)' : 'var(--tm-faint)' };
+    };
+
+    // ---- notes view models ----
+    const q = s.search.trim().toLowerCase();
+    const matches = (n) => !q || (n.title + ' ' + n.body + ' ' + n.source).toLowerCase().includes(q);
+    const noteVM = (n) => {
+      const m = meta(n.type);
+      const checked = n.checklist ? n.checklist.filter(c => c.done).length : 0;
+      return {
+        ...n, color: m.color, typeLabel: m.label, soft: m.soft,
+        pillStyle: { flexShrink: 0, padding: '3px 8px', borderRadius: 6, background: m.soft, color: m.color, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, letterSpacing: '.6px' },
+        dotStyle: { width: 8, height: 8, borderRadius: '50%', background: m.color, flexShrink: 0 },
+        hasDue: !!n.due, hasChecklist: !!n.checklist,
+        checkLabel: n.checklist ? (checked + '/' + n.checklist.length) : '',
+        titleStyle: { fontFamily: "'Hanken Grotesk', system-ui, sans-serif", fontSize: 15.5, fontWeight: 600, lineHeight: 1.3, letterSpacing: '-.1px', color: 'var(--tm-text)', textDecoration: n.done ? 'line-through' : 'none', opacity: n.done ? 0.5 : 1 },
+        onOpen: this.openNote(n.id),
+        onToggle: this.toggleNoteDone(n.id),
+        checkBoxStyle: { width: 22, height: 22, borderRadius: 7, flexShrink: 0, border: '1.5px solid ' + (n.done ? 'var(--tm-accent)' : 'var(--tm-border2)'), background: n.done ? 'var(--tm-accent)' : 'transparent', display: 'grid', placeItems: 'center', cursor: 'pointer', color: 'var(--tm-accent-ink)' },
+      };
+    };
+    const activeNotes = s.notes.filter(n => !n.done && matches(n)).map(noteVM);
+    const completedNotes = s.notes.filter(n => n.done && matches(n)).map(noteVM);
+    const noteList = s.noteTab === 'active' ? activeNotes : completedNotes;
+
+    // ---- sources view models ----
+    const sourceVMs = s.sources.map(src => ({
+      ...src,
+      onToggle: this.toggleSource(src.id),
+      switchTrack: { width: 46, height: 28, borderRadius: 14, flexShrink: 0, padding: 3, cursor: 'pointer', display: 'flex', background: src.on ? 'var(--tm-accent)' : 'var(--tm-border2)', justifyContent: src.on ? 'flex-end' : 'flex-start', transition: 'background .25s, justify-content .2s' },
+      knob: { width: 22, height: 22, borderRadius: '50%', background: src.on ? 'var(--tm-accent-ink)' : 'var(--tm-card)', transition: 'transform .25s', boxShadow: '0 1px 3px rgba(0,0,0,.3)' },
+      iconColor: src.on ? 'var(--tm-text)' : 'var(--tm-faint)',
+      metaColor: src.warn ? 'var(--tm-reminder)' : 'var(--tm-faint)',
+      hasApps: !!src.apps && src.on,
+      appVMs: (src.apps || []).map((a, i) => ({ ...a, onToggle: this.toggleApp(src.id, i),
+        chip: { display: 'flex', alignItems: 'center', gap: 7, padding: '7px 12px 7px 9px', borderRadius: 10, cursor: 'pointer', border: '1px solid ' + (a.on ? 'transparent' : 'var(--tm-border2)'), background: a.on ? 'var(--tm-accent-soft)' : 'transparent' },
+        box: { width: 16, height: 16, borderRadius: 5, border: '1.5px solid ' + (a.on ? 'var(--tm-accent)' : 'var(--tm-border2)'), background: a.on ? 'var(--tm-accent)' : 'transparent', display: 'grid', placeItems: 'center', color: 'var(--tm-accent-ink)' },
+        nameColor: a.on ? 'var(--tm-text)' : 'var(--tm-muted)' })),
+      hasAccounts: !!src.accounts && src.on,
+    }));
+
+    // ---- selected detail ----
+    const sel = s.suggestions.find(x => x.id === s.selId) || s.notes.find(x => x.id === s.selId) || null;
+    let selVM = null;
+    if (sel) {
+      const m = meta(sel.type);
+      const confColor = sel.conf >= 0.85 ? 'var(--tm-accent)' : sel.conf >= 0.7 ? 'var(--tm-reminder)' : 'var(--tm-danger)';
+      const links = sel.links || [];
+      selVM = { ...sel, color: m.color, typeLabel: m.label, soft: m.soft, confPct: sel.conf != null ? Math.round(sel.conf * 100) + '%' : null,
+        pillStyle: { flexShrink: 0, padding: '4px 10px', borderRadius: 7, background: m.soft, color: m.color, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: '.6px' },
+        confBar: { height: '100%', width: (s.ovIn ? (sel.conf * 100) : 0) + '%', background: confColor, borderRadius: 3, transition: 'width .9s cubic-bezier(.2,.8,.2,1)' },
+        fieldRows: (sel.fields || []).map(f => ({ k: f[0], v: f[1] })),
+        checkItems: (sel.checklist || []).map(c => (typeof c === 'string' ? { t: c, done: false } : c)),
+        checkVMs: (sel.checklist || []).map((c, i) => {
+          const done = typeof c === 'object' && c.done;
+          return { t: typeof c === 'string' ? c : c.t,
+            onToggle: this.toggleCheck(sel.id, i),
+            box: { width: 22, height: 22, borderRadius: 7, flexShrink: 0, border: '1.5px solid ' + (done ? 'var(--tm-accent)' : 'var(--tm-border2)'), background: done ? 'var(--tm-accent)' : 'transparent', display: 'grid', placeItems: 'center', color: 'var(--tm-accent-ink)' },
+            label: { fontSize: 14, color: 'var(--tm-text)', textDecoration: done ? 'line-through' : 'none', opacity: done ? 0.5 : 1 } };
+        }),
+        recurrenceLabel: sel.recurrence || 'One-off · tap to edit',
+        geoLabel: sel.geofence ? ('Geofence · ' + (sel.radius || 200) + 'm radius') : 'Saved place',
+        linkRows: links.map(l => ({ kind: l[0], val: l[1], isCall: l[0] === 'call', isDir: l[0] === 'directions', isUrl: l[0] === 'url',
+          action: l[0] === 'call' ? 'DIAL' : l[0] === 'directions' ? 'MAPS' : 'OPEN',
+          iconWrap: { width: 34, height: 34, borderRadius: 9, flexShrink: 0, display: 'grid', placeItems: 'center', background: 'var(--tm-bg2)', color: l[0] === 'call' ? 'var(--tm-task)' : l[0] === 'directions' ? 'var(--tm-event)' : 'var(--tm-accent)' } })),
+      };
+    }
+    const isSug = sel && s.suggestions.includes(sel);
+    const typeChips = (isSug && sel) ? ['task', 'event', 'reminder', 'note'].map(t => { const tm = meta(t); const active = sel.type === t; return { label: tm.label, onClick: this.setSugType(sel.id, t), style: { height: 32, padding: '0 12px', borderRadius: 9, border: '1px solid ' + (active ? 'transparent' : 'var(--tm-border2)'), background: active ? tm.soft : 'transparent', color: active ? tm.color : 'var(--tm-muted)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: active ? 600 : 400, letterSpacing: '.5px', cursor: 'pointer' } }; }) : [];
+
+    // ---- reminder draft ----
+    const rd = s.remDraft;
+    const modeBtn = (mode) => ({ flex: 1, height: 38, borderRadius: 10, border: '1px solid ' + (rd.mode === mode ? 'transparent' : 'var(--tm-border2)'), background: rd.mode === mode ? 'var(--tm-text)' : 'transparent', color: rd.mode === mode ? 'var(--tm-bg)' : 'var(--tm-muted)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, letterSpacing: '.4px', cursor: 'pointer' });
+    const chip = (active) => ({ height: 34, padding: '0 13px', borderRadius: 9, border: '1px solid ' + (active ? 'transparent' : 'var(--tm-border2)'), background: active ? 'var(--tm-accent)' : 'transparent', color: active ? 'var(--tm-accent-ink)' : 'var(--tm-muted)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, cursor: 'pointer', fontWeight: active ? 600 : 400 });
+    const repeats = ['Daily', 'Weekly', 'Monthly'].map(r => ({ label: r, onClick: () => this.setRem('repeat', r), style: chip(rd.repeat === r) }));
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => ({ label: d, onClick: () => this.setRem('day', d), style: chip(rd.day === d) }));
+
+    // ---- quick capture ----
+    const capModeBtn = (m) => ({ flex: 1, height: 40, borderRadius: 11, border: '1px solid ' + (s.captureMode === m ? 'transparent' : 'var(--tm-border2)'), background: s.captureMode === m ? 'var(--tm-text)' : 'transparent', color: s.captureMode === m ? 'var(--tm-bg)' : 'var(--tm-muted)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: '.4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 });
+    const waveHeights = [9, 17, 27, 14, 30, 20, 11, 25, 33, 15, 22, 12, 28, 18, 10];
+    const waveBars = waveHeights.map((h) => ({ barStyle: { width: 3, borderRadius: 2, background: s.recording ? 'var(--tm-accent)' : 'var(--tm-border2)', height: (s.recording ? h : 4) + 'px', transition: 'height .25s ease, background .25s ease' } }));
+    const canAnalyse = s.captureText.trim().length > 0 && !s.analysing;
+
+    // ---- onboarding ----
+    const obData = [
+      { label: 'PRIVATE BY DESIGN', title: 'A personal assistant that stays personal', body: 'TaskMind reads your messages, calls, email and screenshots — entirely on your device. No account, no cloud, no tracking.' },
+      { label: 'YOU STAY IN CONTROL', title: 'It suggests. You decide.', body: 'Every action item is only a suggestion until you approve it. Nothing is saved or scheduled behind your back.' },
+      { label: 'NOTHING LEAVES', title: 'Understood on your phone', body: 'A local model does the thinking. The egress log stays empty — your data never leaves this device.' },
+    ];
+    const ob = obData[s.obStep] || obData[0];
+    const obDotStyle = (i) => ({ width: i === s.obStep ? 22 : 7, height: 7, borderRadius: 4, background: i === s.obStep ? 'var(--tm-accent)' : 'var(--tm-border2)', transition: 'width .3s ease, background .3s ease' });
+
+    // ---- scanning pipeline ----
+    const pipeRow = (i) => ({ display: 'flex', alignItems: 'center', gap: 12, opacity: s.scanStage >= i ? 1 : 0.4, transition: 'opacity .4s ease' });
+
+    // ---- snooze picker ----
+    const snoozeItem = s.snoozeId ? s.suggestions.find(x => x.id === s.snoozeId) : null;
+    const snoozeOpts = [
+      ['In 1 hour', '4:11 PM'], ['Later today', '6:00 PM'], ['This evening', '8:30 PM'],
+      ['Tomorrow', '9:00 AM'], ['This weekend', 'Sat 10 AM'], ['Next week', 'Mon 9 AM'],
+    ].map(([label, when]) => ({ label, when, onClick: this.chooseSnooze(label) }));
+
+    // ---- calendar preview ----
+    const fmt = (h, m) => { const ap = h < 12 ? 'AM' : 'PM'; let hh = h % 12; if (hh === 0) hh = 12; return hh + ':' + String(Math.round(m)).padStart(2, '0') + ' ' + ap; };
+    const calItem = s.calId ? s.suggestions.find(x => x.id === s.calId) : null;
+    let calWhen = '', calHour = 15, calMin = 0;
+    if (calItem) {
+      const f = (calItem.fields || []).find(x => /when/i.test(x[0]));
+      calWhen = f ? f[1] : (calItem.when || '');
+      const mm = calWhen.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+      if (mm) { calHour = (parseInt(mm[1]) % 12) + (/pm/i.test(mm[3]) ? 12 : 0); calMin = mm[2] ? parseInt(mm[2]) : 0; }
+    }
+    const durH = ({ '30m': 0.5, '1h': 1, '2h': 2 })[s.calDuration] || 1;
+    const railStart = 8, railSpan = 12;
+    const startF = Math.max(railStart, Math.min(railStart + railSpan - durH, calHour + calMin / 60));
+    const calBlockStyle = { position: 'absolute', left: 50, right: 10, top: ((startF - railStart) / railSpan * 100) + '%', height: (durH / railSpan * 100) + '%', minHeight: 36, borderRadius: 11, background: 'var(--tm-accent)', color: 'var(--tm-accent-ink)', padding: '7px 12px', boxSizing: 'border-box', overflow: 'hidden', boxShadow: '0 8px 20px var(--tm-accent-soft)', display: 'flex', flexDirection: 'column', justifyContent: 'center' };
+    const calTicks = [];
+    for (let h = railStart; h <= railStart + railSpan; h += 2) {
+      const top = ((h - railStart) / railSpan * 100) + '%';
+      calTicks.push({ lineStyle: { position: 'absolute', left: 46, right: 0, top, borderTop: '1px dashed var(--tm-border)' }, labelStyle: { position: 'absolute', left: 0, top, transform: 'translateY(-50%)', fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--tm-faint)', width: 40, textAlign: 'right' }, label: (h % 12 === 0 ? 12 : h % 12) + (h < 12 ? 'a' : 'p') });
+    }
+    const calStart = fmt(Math.floor(startF), (startF - Math.floor(startF)) * 60);
+    const calEnd = fmt(Math.floor(startF + durH) % 24, ((startF + durH) - Math.floor(startF + durH)) * 60);
+    const calDurChips = ['30m', '1h', '2h'].map(d => ({ label: d, onClick: this.setCalDuration(d), style: chip(s.calDuration === d) }));
+    const calTargetChips = [['Personal', 'var(--tm-task)'], ['Work', 'var(--tm-event)']].map(([t, c]) => ({ label: t, dotColor: c, onClick: this.setCalTarget(t), style: chip(s.calTarget === t) }));
+
+    return {
+      rootStyle: { ...this.themeVars(), width: 412, height: 892 },
+      scOnboarding: s.onboarding,
+      obLabel: ob.label, obTitle: ob.title, obBody: ob.body,
+      obS0: s.obStep === 0, obS1: s.obStep === 1, obS2: s.obStep === 2,
+      obDot0: obDotStyle(0), obDot1: obDotStyle(1), obDot2: obDotStyle(2), obNext: this.obNext, obSkip: this.obSkip,
+      obCta: s.obStep >= 2 ? 'Get started' : 'Next',
+      scLock: s.locked && !s.onboarding,
+      scShowNav: !s.locked && s.overlay !== 'anywhere',
+      unlock: this.unlock, toggleTheme: this.toggleTheme,
+      themeIconStyle: { display: 'grid', placeItems: 'center', opacity: s.theme === 'dark' ? 1 : 0.55 },
+      scanIconStyle: { display: 'grid', placeItems: 'center', animation: s.scanning ? 'tmSpin .9s linear infinite' : 'none' },
+
+      scInbox: !s.locked && s.tab === 'inbox',
+      scNotes: !s.locked && s.tab === 'notes',
+      scSources: !s.locked && s.tab === 'sources',
+      scPrivacy: !s.locked && s.tab === 'privacy',
+
+      navInbox: this.navTo('inbox'), navNotes: this.navTo('notes'), navSources: this.navTo('sources'), navPrivacy: this.navTo('privacy'),
+      navInboxStyle: navStyle('inbox'), navNotesStyle: navStyle('notes'), navSourcesStyle: navStyle('sources'), navPrivacyStyle: navStyle('privacy'),
+      navBadge: pendingCount > 0, pendingCount,
+
+      pendingLabel: pendingCount > 0 ? (pendingCount + ' pending · sorted by urgency') : 'All clear',
+      pendingCountLabel: pendingCount,
+      scanning: s.scanning, doScan: this.doScan,
+      filters, sugVMs,
+      hasSug: pendingCount > 0 && list.length > 0,
+      inboxEmpty: list.length === 0 && !s.scanning,
+      approveAll: this.approveAll, rejectAll: this.rejectAll,
+
+      toast: !!s.toast, toastMsg: s.toast ? s.toast.msg : '', toastColor: s.toast ? s.toast.color : 'var(--tm-accent)',
+      onUndo: () => { if (this.state.toast && this.state.toast.undo) this.state.toast.undo(); },
+
+      // notes
+      noteTab: s.noteTab, setActive: this.setNoteTab('active'), setCompleted: this.setNoteTab('completed'),
+      activeTabStyle: this.segStyle(s.noteTab === 'active'), completedTabStyle: this.segStyle(s.noteTab === 'completed'),
+      search: s.search, onSearch: this.onSearch,
+      activeCount: activeNotes.length, completedCount: completedNotes.length,
+      noteList, notesEmpty: noteList.length === 0 && !s.search.trim(), notesNoResults: noteList.length === 0 && !!s.search.trim(), searchTerm: s.search,
+
+      // sources
+      sourceVMs,
+      egressClean: true,
+
+      // overlays
+      scSugOverlay: s.overlay === 'suggestion' && isSug,
+      scNoteOverlay: s.overlay === 'note' && !isSug,
+      scNotif: s.overlay === 'notif',
+      closeOverlay: this.closeOverlay,
+      sel: selVM,
+      onApproveSel: () => { if (!selVM) return; if (selVM.type === 'event') { this.closeOverlay(); this.setState({ sheet: 'calendar', calId: selVM.id, calDuration: '1h', calTarget: 'Personal' }); this.afterOpen(); } else { this.approve(selVM.id); this.closeOverlay(); } },
+      onRejectSel: () => { if (selVM) this.reject(selVM.id); this.closeOverlay(); },
+      onDeleteSel: () => { if (selVM) this.deleteNote(selVM.id)(); },
+      openReminderSheet: this.openSheet('reminder'),
+      openNotif: this.openNotif,
+
+      // notes detail extra
+      selHasFields: selVM && selVM.fieldRows && selVM.fieldRows.length > 0,
+      selHasChecklist: selVM && selVM.checkItems && selVM.checkItems.length > 0,
+      selHasLinks: selVM && selVM.linkRows && selVM.linkRows.length > 0,
+      selHasPlace: selVM && !!selVM.place,
+      selHasConf: selVM && selVM.confPct != null,
+      selHasDue: selVM && !!selVM.due,
+      selHasCall: selVM && (selVM.linkRows || []).some(l => l.isCall),
+      selDoneLabel: selVM && selVM.done ? 'MARK ACTIVE' : 'MARK DONE',
+      onCompleteSel: () => { if (selVM) this.toggleNoteDone(selVM.id)(); this.closeOverlay(); },
+      approveFromNotif: () => { this.setState({ overlay: null, tab: 'inbox' }); this.showToast('Approved from notification', 'var(--tm-accent)', null); },
+      selIsSug: isSug,
+
+      // settings
+      scSettings: s.overlay === 'settings', openSettings: this.openSettings,
+      isDevice: s.provider === 'device', isCloud: s.provider === 'cloud',
+      provDeviceStyle: { flex: 1, height: 40, borderRadius: 10, border: '1px solid ' + (s.provider === 'device' ? 'transparent' : 'var(--tm-border2)'), background: s.provider === 'device' ? 'var(--tm-text)' : 'transparent', color: s.provider === 'device' ? 'var(--tm-bg)' : 'var(--tm-muted)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, letterSpacing: '.4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 },
+      provCloudStyle: { flex: 1, height: 40, borderRadius: 10, border: '1px solid ' + (s.provider === 'cloud' ? 'transparent' : 'var(--tm-border2)'), background: s.provider === 'cloud' ? 'var(--tm-text)' : 'transparent', color: s.provider === 'cloud' ? 'var(--tm-bg)' : 'var(--tm-muted)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, letterSpacing: '.4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 },
+      setProviderDevice: this.setProvider('device'), setProviderCloud: this.setProvider('cloud'),
+      scanFreqChips: [['15m', '15 min'], ['30m', '30 min'], ['1h', '1 hr'], ['3h', '3 hr'], ['6h', '6 hr']].map(([k, l]) => ({ label: l, onClick: this.setScanFreq(k), style: { height: 34, padding: '0 13px', borderRadius: 9, border: '1px solid ' + (s.scanFreq === k ? 'transparent' : 'var(--tm-border2)'), background: s.scanFreq === k ? 'var(--tm-accent)' : 'transparent', color: s.scanFreq === k ? 'var(--tm-accent-ink)' : 'var(--tm-muted)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: s.scanFreq === k ? 600 : 400, cursor: 'pointer' } })),
+      retentionChips: [['30d', '30 days'], ['90d', '90 days'], ['1y', '1 year'], ['forever', 'Forever']].map(([k, l]) => ({ label: l, onClick: this.setRetention(k), style: { height: 34, padding: '0 13px', borderRadius: 9, border: '1px solid ' + (s.retention === k ? 'transparent' : 'var(--tm-border2)'), background: s.retention === k ? 'var(--tm-accent)' : 'transparent', color: s.retention === k ? 'var(--tm-accent-ink)' : 'var(--tm-muted)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: s.retention === k ? 600 : 400, cursor: 'pointer' } })),
+      exportNotes: this.exportNotes, checkModel: this.checkModel,
+      editing: s.editing, notEditing: !s.editing, toggleEdit: this.toggleEdit,
+      editLabel: s.editing ? 'DONE' : 'EDIT',
+      editBtnStyle: { height: 34, padding: '0 13px', borderRadius: 10, border: '1px solid ' + (s.editing ? 'transparent' : 'var(--tm-border2)'), background: s.editing ? 'var(--tm-accent)' : 'transparent', color: s.editing ? 'var(--tm-accent-ink)' : 'var(--tm-muted)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600, letterSpacing: '.5px', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' },
+      onEditTitle: (isSug && sel) ? this.editSugField(sel.id, 'title') : null,
+      typeChips,
+      editTitleStyle: { width: '100%', fontFamily: "'Instrument Serif', serif", fontSize: 29, lineHeight: 1.15, color: 'var(--tm-text)', letterSpacing: '-.3px', background: 'var(--tm-bg2)', border: '1px solid var(--tm-border2)', borderRadius: 12, padding: '8px 13px', outline: 'none', boxSizing: 'border-box' },
+
+      // quick capture
+      scShowFab: !s.locked && s.tab === 'inbox' && !s.overlay && !s.sheet,
+      scCaptureSheet: s.sheet === 'capture',
+      openCapture: this.openCapture,
+      captureText: s.captureText, recording: s.recording, analysing: s.analysing,
+      onCaptureInput: this.onCaptureInput, toggleRecord: this.toggleRecord, analyseCapture: this.analyseCapture,
+      setCaptureType: this.setCaptureMode('type'), setCaptureSpeak: this.setCaptureMode('speak'),
+      isCapType: s.captureMode === 'type', isCapSpeak: s.captureMode === 'speak',
+      capTypeStyle: capModeBtn('type'), capSpeakStyle: capModeBtn('speak'),
+      hasCaptureText: s.captureText.trim().length > 0,
+      waveBars, recLabel: s.recording ? 'Listening… tap to stop' : 'Tap the mic to start',
+      recBtnStyle: { width: 88, height: 88, borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'grid', placeItems: 'center', background: s.recording ? 'var(--tm-danger)' : 'var(--tm-accent)', color: s.recording ? '#fff' : 'var(--tm-accent-ink)', transition: 'background .25s', boxShadow: s.recording ? '0 0 0 8px rgba(255,111,111,.18)' : '0 0 0 8px var(--tm-accent-soft)' },
+      analyseLabel: s.analysing ? 'ANALYSING ON-DEVICE…' : 'ANALYSE & ADD',
+      analyseBtnStyle: { width: '100%', height: 52, borderRadius: 15, border: 'none', background: 'var(--tm-accent)', color: 'var(--tm-accent-ink)', fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 600, letterSpacing: '.5px', marginTop: 18, cursor: canAnalyse ? 'pointer' : 'default', opacity: canAnalyse ? 1 : 0.4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 },
+
+      // snooze picker
+      scSnoozeSheet: s.sheet === 'snooze',
+      snoozeOpts, snoozeTitle: snoozeItem ? snoozeItem.title : '',
+
+      // calendar preview
+      scCalSheet: s.sheet === 'calendar',
+      calTitle: calItem ? calItem.title : '',
+      calWhenLabel: calWhen, calRangeLabel: calStart + ' – ' + calEnd,
+      calBlockStyle, calBlockTime: calStart + ' – ' + calEnd, calTicks,
+      calDurChips, calTargetChips, calTargetLabel: s.calTarget,
+      confirmCalAdd: this.confirmCalendar(true), confirmCalNote: this.confirmCalendar(false),
+
+      // capture anywhere
+      scAnywhere: s.overlay === 'anywhere', openAnywhere: this.openAnywhere,
+
+      // scanning pipeline
+      scanStage: s.scanStage,
+      pipe0Style: pipeRow(0), pipe1Style: pipeRow(1), pipe2Style: pipeRow(2),
+      pipe0Done: s.scanStage > 0, pipe1Done: s.scanStage > 1,
+      pipe0Active: s.scanStage === 0, pipe1Active: s.scanStage === 1, pipe2Active: s.scanStage === 2,
+      pipe1Pending: s.scanStage < 1, pipe2Pending: s.scanStage < 2,
+
+      // reminder sheet
+      scSheet: s.sheet === 'reminder',
+      ovIn: s.ovIn,
+      sheetStyle: { position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 65, background: 'var(--tm-card)', borderRadius: '26px 26px 0 0', borderTop: '1px solid var(--tm-border2)', padding: '10px 20px 22px', maxHeight: '92%', overflowY: 'auto', transform: s.ovIn ? 'translateY(0)' : 'translateY(100%)', transition: 'transform .4s cubic-bezier(.2,.85,.25,1)' },
+      backdropStyle: { position: 'absolute', inset: 0, zIndex: 64, background: 'rgba(0,0,0,.5)', opacity: s.ovIn ? 1 : 0, transition: 'opacity .3s ease' },
+      closeSheet: this.closeSheet, saveReminder: this.saveReminder,
+      remMode: rd.mode, remDate: rd.date, remTime: rd.time, remPlace: rd.place, remRadius: rd.radius,
+      modeOnce: modeBtn('once'), modeRepeat: modeBtn('repeat'), modeGeo: modeBtn('geo'),
+      setOnce: () => this.setRem('mode', 'once'), setRepeat: () => this.setRem('mode', 'repeat'), setGeo: () => this.setRem('mode', 'geo'),
+      isOnce: rd.mode === 'once', isRepeat: rd.mode === 'repeat', isGeo: rd.mode === 'geo',
+      repeats, days,
+    };
+  }
+
+  segStyle(active) {
+    return { flex: 1, height: 38, borderRadius: 10, border: 'none', background: active ? 'var(--tm-card)' : 'transparent', color: active ? 'var(--tm-text)' : 'var(--tm-muted)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, letterSpacing: '.4px', cursor: 'pointer', boxShadow: active ? '0 1px 4px rgba(0,0,0,.18)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 };
+  }
+}
+</script>
+</body>
+</html>
