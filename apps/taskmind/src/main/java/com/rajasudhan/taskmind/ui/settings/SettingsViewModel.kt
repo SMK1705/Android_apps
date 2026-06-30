@@ -57,12 +57,9 @@ class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    // ---- Appearance (theme + Material You / dynamic color) ----
+    // ---- Appearance (theme) ----
     val themeMode: StateFlow<ThemeMode> = settingsManager.themeModeFlow
     fun updateThemeMode(mode: ThemeMode) { settingsManager.themeMode = mode }
-
-    val dynamicColor: StateFlow<Boolean> = settingsManager.dynamicColorFlow
-    fun updateDynamicColor(enabled: Boolean) { settingsManager.dynamicColor = enabled }
 
     // ---- Security (app lock) ----
     val appLockEnabled: StateFlow<Boolean> = settingsManager.appLockEnabledFlow
