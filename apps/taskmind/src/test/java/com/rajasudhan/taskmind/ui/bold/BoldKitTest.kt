@@ -1,6 +1,9 @@
 package com.rajasudhan.taskmind.ui.bold
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -63,5 +66,14 @@ class BoldKitTest {
     fun sourcePill_showsTheSourceLabel() {
         compose.setContent { TaskMindTheme { BoldSourcePill("SMS from Amma") } }
         compose.onNodeWithText("SMS from Amma").assertIsDisplayed()
+    }
+
+    @Test
+    fun bottomNav_marksTheActiveTabAsSelectedForTalkBack() {
+        compose.setContent { TaskMindTheme { BoldBottomNav(currentRoute = "notes", onSelect = {}) } }
+
+        // Exactly one tab carries the selected state, and it's the active one (Notes).
+        compose.onAllNodes(isSelected()).assertCountEquals(1)
+        compose.onNode(isSelected()).assertTextContains("NOTES")
     }
 }

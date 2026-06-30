@@ -1967,7 +1967,7 @@ _Scope: TalkBack reaches every control with a meaningful label, headings are exp
 #### TM-A11Y-07 · Bottom nav items announce label + selected state — `P0` · positive
 - **Preconditions:** TalkBack ON. App unlocked.
 - **Steps:** 1. Focus each bottom-nav item: Inbox, Notes, Sources, Privacy. 2. Double-tap one to switch tabs.
-- **Expected:** Each item's icon carries `contentDescription = tab.label`, so TalkBack announces "Inbox", "Notes", "Sources", "Privacy". The visible label text (uppercased) is also present. Activating an item navigates to that tab. (Note: selected state is conveyed visually via tint/pill only; the route's "active" status is not added to the semantics tree — flag as a minor a11y gap that selection isn't spoken.)
+- **Expected:** Each item's icon carries `contentDescription = tab.label`, so TalkBack announces "Inbox", "Notes", "Sources", "Privacy". The visible label text (uppercased) is also present. Activating an item navigates to that tab. The active tab is exposed via `semantics { selected = active; role = Role.Tab }` (added in #53), so TalkBack announces it as **"selected"**.
 
 #### TM-A11Y-08 · Manual-add dialog is fully navigable under TalkBack — `P1` · positive
 - **Preconditions:** TalkBack ON. Inbox; open overflow → "Add item" (or empty-state "Add item").
@@ -1982,8 +1982,7 @@ _Scope: TalkBack reaches every control with a meaningful label, headings are exp
 #### TM-A11Y-10 · Minimum ~48dp touch targets — `P1` · edge
 - **Preconditions:** Accessibility Scanner installed (or manual measurement). Inbox with ≥1 suggestion.
 - **Steps:** 1. Run Accessibility Scanner on the Inbox screen (header + a card). 2. Note any "touch target" findings.
-- **Expected:** Primary actions (mic FAB, Keep/Dismiss buttons, bottom-nav items) meet ~48dp. 
-  > Note: the Inbox header overflow `IconButton` is constrained to `Modifier.size(28.dp)` and bottom-nav items have no explicit `defaultMinSize`/48dp floor, so the scanner is expected to flag these as below the 48dp target. Record them as real, low-severity a11y findings rather than passing the case silently.
+- **Expected:** Primary actions (mic FAB, Keep/Dismiss buttons, bottom-nav items) meet ~48dp. The Inbox header overflow `IconButton` now uses its default 48dp interactive size (the `Modifier.size(28.dp)` override was removed) and each bottom-nav item fills the 74dp nav row, so both clear the 48dp target (fixed in #53).
 
 #### TM-A11Y-11 · Large-font (200%) does not clip critical controls — `P0` · edge
 - **Preconditions:** One UI Display → Font size at max. TalkBack optional.
