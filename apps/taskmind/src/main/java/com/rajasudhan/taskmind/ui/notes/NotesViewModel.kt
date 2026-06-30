@@ -47,6 +47,12 @@ class NotesViewModel @Inject constructor(
             }
             .stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
 
+    /** Total completed notes — feeds the "Done · N" segment in the redesigned header. */
+    val completedCount: StateFlow<Int> =
+        dao.getCompletedNotes()
+            .map { it.size }
+            .stateIn(viewModelScope, SharingStarted.Lazily, 0)
+
     /**
      * The list to display, driven by the search box and the Active/Completed segment:
      *  - searching: matches within the current segment;

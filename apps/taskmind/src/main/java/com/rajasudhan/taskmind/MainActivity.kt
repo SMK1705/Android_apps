@@ -363,6 +363,8 @@ fun TaskMindAppContent(
             }
             composable("notes") {
                 com.rajasudhan.taskmind.ui.notes.NotesScreen(
+                    isDark = isDark,
+                    onToggleTheme = onToggleTheme,
                     onNoteClick = { id -> navController.navigate("notes/$id") { launchSingleTop = true } }
                 )
             }
