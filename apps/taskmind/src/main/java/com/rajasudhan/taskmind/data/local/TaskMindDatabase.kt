@@ -11,7 +11,7 @@ import com.rajasudhan.taskmind.data.model.Suggestion
 @Database(
     entities = [Note::class, Suggestion::class, RejectedPattern::class],
     version = 5,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class TaskMindDatabase : RoomDatabase() {
     abstract fun taskMindDao(): TaskMindDao

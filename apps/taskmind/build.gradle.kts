@@ -46,6 +46,27 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        unitTests {
+            // Robolectric needs merged Android resources/manifest on the unit-test classpath.
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+    }
+}
+
+// Export the current Room schema (schemas/<db>/5.json) so future migrations can be tested against
+// a committed baseline. Historical v1–v4 schemas predate this and aren't exported; the migration
+// test reconstructs v1 directly and lets Room validate the full chain.
+ksp {
+    arg("room.schemaLocation", "${projectDir}/schemas")
+}
+
+// Keep the forked unit-test JVM bounded (Robolectric loads a full Android runtime) and headless so
+// KSP/Robolectric don't spin up an AWT event thread. Bounds peak memory on constrained machines.
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    maxHeapSize = "1g"
+    jvmArgs("-Djava.awt.headless=true")
 }
 
 dependencies {
@@ -108,11 +129,24 @@ dependencies {
     testImplementation(libs.androidx.junit)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.mockk)
+    testImplementation(libs.turbine)
+    testImplementation(libs.androidx.arch.core.testing)
+    testImplementation(libs.androidx.room.testing)
+    testImplementation(libs.androidx.work.testing)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.runner)
+    androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.mockk.android)
+    androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.androidx.work.testing)
+    androidTestImplementation(libs.hilt.android.testing)
+    "kspAndroidTest"(libs.hilt.compiler)
+    androidTestUtil(libs.androidx.test.orchestrator)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
     "ksp"(libs.androidx.room.compiler)
