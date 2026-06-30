@@ -1,0 +1,82 @@
+name: Momentic E2E (Android)
+
+# Runs the Momentic mobile smoke test against Momentic's cloud emulator. It builds the debug APK and
+# the test (e2e/smoke.test.yaml) installs + launches it.
+#
+# Manual-only for now: the smoke test currently fails on the cloud emulator with an opaque "Unknown
+# error" that still needs debugging, so this is run on-demand (Actions tab -> Run workflow) rather
+# than auto-running red on every PR. Re-enable the pull_request trigger below once the test is green.
+on:
+  workflow_dispatch:
+  # pull_request:
+  #   types: [opened, synchronize, reopened]
+  #   paths:
+  #     - "apps/taskmind/**"
+  #     - "e2e/**"
+  #     - ".github/workflows/momentic.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: momentic-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-e2e:
+    name: Momentic Android smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Created from the Momentic dashboard and stored as a repo secret; see e2e/README.md.
+      MOMENTIC_API_KEY: ${{ secrets.MOMENTIC_API_KEY }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      # ---- Build the debug APK that the smoke test installs (Gradle needs JDK 21) ----
+      - name: Set up JDK 21 (Gradle)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Assemble debug APK
+        run: ./gradlew :apps:taskmind:assembleDebug --stacktrace
+
+      # ---- Run Momentic on Momentic's cloud emulator (the CLI wants Node 24+ and JDK 24+) ----
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Set up JDK 24 (Momentic CLI)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "24"
+
+      - name: Install Momentic CLI
+        working-directory: ./e2e
+        run: npm ci
+
+      - name: Install headless browsers (for any in-app webviews)
+        working-directory: ./e2e
+        run: npx momentic-mobile install-browsers chromium
+
+      - name: Run Momentic tests
+        working-directory: ./e2e
+        run: npx momentic-mobile run
+
+      - name: Upload results to Momentic
+        if: always()
+        working-directory: ./e2e
+        run: npx momentic-mobile results upload test-results

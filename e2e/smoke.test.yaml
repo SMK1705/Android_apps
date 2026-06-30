@@ -1,0 +1,15 @@
+fileType: momentic/mobile-test/v2
+id: taskmind-smoke-launch
+version: 0.0.1
+description: TaskMind installs and launches to its main screen without crashing.
+platform: android
+steps:
+  # Install the debug APK built by CI. The path is relative to this project directory (e2e/).
+  - installApp:
+      path: ../apps/taskmind/build/outputs/apk/debug/taskmind-debug.apk
+  - openApp:
+      package: com.rajasudhan.taskmind
+      activity: ""
+  - assert: >-
+      The TaskMind app is open and showing one of its own screens (for example the Inbox with its
+      bottom navigation bar, or an onboarding / permissions screen) and has not crashed.
