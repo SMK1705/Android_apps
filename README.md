@@ -51,7 +51,8 @@ uses an on-device LLM to extract action items. Nothing is saved or scheduled unt
 
 Current release: **Update 4** (`taskmind-v4`). Full setup, permissions, and model instructions are in
 [`apps/taskmind/README.md`](apps/taskmind/README.md); per-release history is in
-[`CHANGELOG.md`](CHANGELOG.md).
+[`CHANGELOG.md`](CHANGELOG.md). The manual functional test plan (27 suites / 325 cases) and the
+automated-suite buildout live in [`apps/taskmind/docs/`](apps/taskmind/docs/).
 
 ## Build / install
 
