@@ -28,6 +28,9 @@ data class BoldColors(
     val ink: Color,
     val ink2: Color,
     val ink3: Color,
+    /** Solid desaturated grey for secondary text/metadata (the design's --tm-muted), distinct from
+     *  the alpha-over-ink [ink2]/[ink3]. */
+    val muted: Color,
     val line: Color,
     val line2: Color,
     val accent: Color,
@@ -56,6 +59,7 @@ val BoldDarkColors = BoldColors(
     ink = Color(0xFFF4F3EE),
     ink2 = Color(0x8FF4F3EE),
     ink3 = Color(0x57F4F3EE),
+    muted = Color(0xFF9A988F),
     line = Color(0x17F4F3EE),
     line2 = Color(0x26F4F3EE),
     accent = Color(0xFFCFF54A),
@@ -84,6 +88,7 @@ val BoldLightColors = BoldColors(
     ink = Color(0xFF15150F),
     ink2 = Color(0x9415150F),
     ink3 = Color(0x6615150F),
+    muted = Color(0xFF6E6C63),
     line = Color(0x1A15150F),
     line2 = Color(0x2915150F),
     accent = Color(0xFFAAD400),

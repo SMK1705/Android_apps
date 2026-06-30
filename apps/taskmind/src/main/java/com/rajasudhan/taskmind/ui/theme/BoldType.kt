@@ -33,7 +33,7 @@ object BoldType {
     val sectionMono = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 0.5.sp)
     val loadedLabel = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.3.sp)
 
-    val kindChip = TextStyle(fontFamily = HankenGrotesk, fontWeight = FontWeight.Bold, fontSize = 10.5.sp)
+    val kindChip = TextStyle(fontFamily = HankenGrotesk, fontWeight = FontWeight.Bold, fontSize = 10.sp)
     val kindTag = TextStyle(fontFamily = HankenGrotesk, fontWeight = FontWeight.Bold, fontSize = 10.sp, letterSpacing = 0.2.sp)
     val filterChip = TextStyle(fontFamily = HankenGrotesk, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
     val body = TextStyle(fontFamily = HankenGrotesk, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 20.sp)

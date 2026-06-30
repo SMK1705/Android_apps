@@ -22,9 +22,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Tune
@@ -38,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
@@ -45,6 +48,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.rajasudhan.taskmind.ui.common.sourceVisual
 import com.rajasudhan.taskmind.ui.theme.BoldOnAccent
 import com.rajasudhan.taskmind.ui.theme.BoldTheme
@@ -123,9 +127,9 @@ fun BoldCard(
 fun BoldKindChip(kind: BoldKind, modifier: Modifier = Modifier) {
     Box(
         modifier
-            .clip(RoundedCornerShape(7.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(kind.soft())
-            .padding(horizontal = 9.dp, vertical = 3.dp)
+            .padding(horizontal = 8.dp, vertical = 3.dp)
     ) { Text(kind.label, style = BoldType.kindChip, color = kind.color()) }
 }
 
@@ -261,4 +265,82 @@ private fun RowScope.BoldNavItem(tab: BoldTab, active: Boolean, onClick: () -> U
 @Composable
 private fun rememberMutableInteraction(): MutableInteractionSource {
     return androidx.compose.runtime.remember { MutableInteractionSource() }
+}
+
+// ── Redesigned page header ─────────────────────────────────────────────────────
+/** 38dp visual chip inside a 48dp touch target — the design's rounded square header buttons. */
+@Composable
+fun BoldHeaderIconButton(
+    onClick: () -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val c = BoldTheme.colors
+    Box(
+        modifier
+            .size(48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = label; role = Role.Button },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(c.surface)
+                .border(1.dp, c.line, RoundedCornerShape(12.dp)),
+            contentAlignment = Alignment.Center,
+        ) { content() }
+    }
+}
+
+/** Sun/moon toggle that flips the app between an explicit Light and Dark theme. */
+@Composable
+fun BoldThemeToggle(isDark: Boolean, onToggleTheme: () -> Unit, modifier: Modifier = Modifier) {
+    val c = BoldTheme.colors
+    BoldHeaderIconButton(
+        onClick = onToggleTheme,
+        label = if (isDark) "Switch to light theme" else "Switch to dark theme",
+        modifier = modifier,
+    ) {
+        Icon(
+            if (isDark) Icons.Outlined.LightMode else Icons.Outlined.DarkMode,
+            contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+/**
+ * The redesigned per-screen header: serif title + a mono subtitle on the left, with the theme
+ * toggle (and any [trailing] actions before it) on the right. Used by Notes / Sources / Privacy /
+ * Settings; the Inbox keeps its own header (count subtitle + scan + overflow).
+ */
+@Composable
+fun BoldPageHeader(
+    title: String,
+    subtitle: String,
+    isDark: Boolean,
+    onToggleTheme: () -> Unit,
+    modifier: Modifier = Modifier,
+    trailing: @Composable RowScope.() -> Unit = {},
+) {
+    val c = BoldTheme.colors
+    Row(
+        modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top,
+    ) {
+        Column(Modifier.weight(1f).padding(end = 8.dp)) {
+            Text(title, style = BoldType.screenTitle, color = c.ink, modifier = Modifier.semantics { heading() })
+            Spacer(Modifier.height(6.dp))
+            Text(
+                subtitle,
+                style = BoldType.srcLabel.copy(fontSize = 11.5.sp, letterSpacing = 0.3.sp),
+                color = c.muted,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy((-4).dp), verticalAlignment = Alignment.CenterVertically) {
+            trailing()
+            BoldThemeToggle(isDark, onToggleTheme)
+        }
+    }
 }
