@@ -65,6 +65,7 @@ import com.rajasudhan.taskmind.ui.theme.ShapeField
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.ZoneId
+import kotlin.math.roundToInt
 
 /** "In 1 hour / This evening / Tomorrow" snooze targets as (label, epochMillis). */
 private fun snoozeOptions(): List<Pair<String, Long>> {
@@ -439,23 +440,40 @@ private fun InboxEmpty(modifier: Modifier, isRefreshing: Boolean, onRefresh: () 
         verticalArrangement = Arrangement.Center
     ) {
         Box(
-            Modifier.size(80.dp).clip(RoundedCornerShape(24.dp)).background(c.accent),
+            Modifier.size(76.dp).clip(CircleShape).background(c.surface).border(1.dp, c.line, CircleShape),
             contentAlignment = Alignment.Center
-        ) { Icon(Icons.Outlined.AutoAwesome, contentDescription = null, tint = BoldOnAccent, modifier = Modifier.size(34.dp)) }
-        Spacer(Modifier.height(22.dp))
-        Text("All clear.", style = BoldType.emptyTitle, color = c.ink)
-        Spacer(Modifier.height(8.dp))
+        ) { Icon(Icons.Default.Check, contentDescription = null, tint = c.accent, modifier = Modifier.size(30.dp)) }
+        Spacer(Modifier.height(20.dp))
+        Text("Inbox zero", style = BoldType.emptyTitle.copy(fontSize = 28.sp), color = c.ink)
+        Spacer(Modifier.height(6.dp))
         Text(
-            "You've triaged everything. New action items surface here the moment TaskMind reads them on your phone.",
+            "You've reviewed everything. TaskMind keeps watching your sources in the background.",
             style = BoldType.body,
             color = c.ink2,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
         Spacer(Modifier.height(22.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            BoldPillButton(text = if (isRefreshing) "Refreshing…" else "Refresh", onClick = onRefresh, icon = Icons.Default.Refresh, filled = false)
-            BoldPillButton(text = "Add item", onClick = onAdd, icon = Icons.Default.Add, filled = true)
+        Row(
+            Modifier.clip(RoundedCornerShape(14.dp)).background(c.accentGlow)
+                .border(1.dp, c.accent, RoundedCornerShape(14.dp)).clickable { onRefresh() }
+                .padding(horizontal = 22.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(Icons.Default.Refresh, contentDescription = null, tint = c.accent, modifier = Modifier.size(16.dp))
+            Text(
+                if (isRefreshing) "SCANNING…" else "SCAN NOW",
+                style = BoldType.confBadge.copy(fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 0.6.sp),
+                color = c.accent
+            )
         }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "Add an item",
+            style = BoldType.detailMeta,
+            color = c.ink3,
+            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onAdd() }.padding(horizontal = 10.dp, vertical = 6.dp)
+        )
     }
 }
 
@@ -542,25 +560,70 @@ private fun BoldSuggestionCard(
                     }) { Text("Save") }
                 }
             } else {
-                // Meta row: source + confidence on the left, kind dot pinned right.
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        BoldSourcePill(suggestion.source, modifier = Modifier.weight(1f, fill = false))
-                        BoldConfidenceChip(suggestion.confidence)
-                    }
+                // Meta row: kind pill + source (matches the design handoff's suggestion card).
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BoldKindChip(kind)
+                    BoldSourcePill(suggestion.source, modifier = Modifier.weight(1f, fill = false))
                     BoldKindDot(kind)
                 }
                 Spacer(Modifier.height(11.dp))
                 Text(
                     suggestion.extractedTitle,
-                    style = BoldType.cardTitle,
+                    style = BoldType.sugTitle,
                     color = c.ink,
                     modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }
                 )
-                Spacer(Modifier.height(11.dp))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BoldKindChip(kind)
-                    Text(rowDetail(suggestion), style = BoldType.detailMeta, color = c.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (preview.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        preview,
+                        style = BoldType.body.copy(fontSize = 13.5.sp, lineHeight = 19.sp),
+                        color = c.ink2,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+                // Confidence read-out + inline reject / snooze / approve.
+                val confFrac = suggestion.confidence.coerceIn(0.0, 1.0).toFloat()
+                val confColor = if (suggestion.confidence >= 0.6) c.accent else c.amber
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Text("CONF", style = BoldType.detailMeta.copy(letterSpacing = 0.5.sp), color = c.ink3)
+                        Box(Modifier.width(46.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(c.line2)) {
+                            Box(Modifier.fillMaxHeight().fillMaxWidth(confFrac).clip(RoundedCornerShape(2.dp)).background(confColor))
+                        }
+                        Text("${(confFrac * 100).roundToInt()}%", style = BoldType.confBadge.copy(fontWeight = FontWeight.Bold), color = confColor)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Box(
+                        Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
+                            .border(1.dp, c.line2, RoundedCornerShape(10.dp)).clickable { onReject(suggestion) },
+                        contentAlignment = Alignment.Center
+                    ) { Icon(Icons.Default.Close, contentDescription = "Reject", tint = c.ink2, modifier = Modifier.size(15.dp)) }
+                    Spacer(Modifier.width(8.dp))
+                    Box {
+                        Box(
+                            Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
+                                .border(1.dp, c.line2, RoundedCornerShape(10.dp)).clickable { snoozeMenu = true },
+                            contentAlignment = Alignment.Center
+                        ) { Icon(Icons.Outlined.Schedule, contentDescription = "Snooze", tint = c.ink2, modifier = Modifier.size(15.dp)) }
+                        DropdownMenu(expanded = snoozeMenu, onDismissRequest = { snoozeMenu = false }) {
+                            snoozeOptions().forEach { (label, until) ->
+                                DropdownMenuItem(text = { Text(label) }, onClick = { snoozeMenu = false; onSnooze(until) })
+                            }
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Row(
+                        Modifier.height(34.dp).clip(RoundedCornerShape(10.dp)).background(c.accent)
+                            .clickable { onApprove(suggestion) }.padding(horizontal = 15.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = null, tint = BoldOnAccent, modifier = Modifier.size(14.dp))
+                        Text("OK", style = BoldType.confBadge.copy(fontWeight = FontWeight.Bold, fontSize = 12.sp), color = BoldOnAccent)
+                    }
                 }
 
                 AnimatedVisibility(
@@ -572,31 +635,14 @@ private fun BoldSuggestionCard(
                         Spacer(Modifier.height(14.dp))
                         HorizontalDivider(color = c.line)
                         Spacer(Modifier.height(12.dp))
-                        if (preview.isNotBlank()) {
-                            Text("\"$preview\"", style = BoldType.body, fontStyle = FontStyle.Italic, color = c.ink2)
-                            Spacer(Modifier.height(12.dp))
-                        }
                         // Reassign the kind.
                         Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                             KindPickerChip("Task", suggestion.type == "todo") { onEdit(suggestion.copy(type = "todo")) }
                             KindPickerChip("Reminder", suggestion.type == "reminder") { onEdit(suggestion.copy(type = "reminder")) }
                             KindPickerChip("Note", suggestion.type == "note") { onEdit(suggestion.copy(type = "note")) }
                         }
-                        Spacer(Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                            DismissButton(Modifier.weight(1f)) { onReject(suggestion) }
-                            KeepButton(Modifier.weight(1f)) { onApprove(suggestion) }
-                        }
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(10.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box {
-                                CardTextAction("Snooze", Icons.Outlined.Schedule) { snoozeMenu = true }
-                                DropdownMenu(expanded = snoozeMenu, onDismissRequest = { snoozeMenu = false }) {
-                                    snoozeOptions().forEach { (label, until) ->
-                                        DropdownMenuItem(text = { Text(label) }, onClick = { snoozeMenu = false; onSnooze(until) })
-                                    }
-                                }
-                            }
                             callNumber?.let { num -> CardTextAction("Call", Icons.Outlined.Call) { dialNumber(context, num) } }
                             place?.let { p -> CardTextAction("Directions", Icons.Outlined.Directions) { openDirections(context, p, null, null) } }
                             CardTextAction("Edit", Icons.Outlined.Edit) { isEditing = true }
