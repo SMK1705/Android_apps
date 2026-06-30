@@ -32,13 +32,21 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                for (id in ids) {
-                    val note = dao.getNoteByIdNow(id) ?: continue
-                    notify(context, id, note.locationLabel ?: "a saved place", note.title)
-                }
+                notifyEntered(context, ids)
             } finally {
                 pending.finish()
             }
+        }
+    }
+
+    /**
+     * Posts an arrival notification for each entered geofence's note. Extracted from [onReceive] so
+     * it's unit-testable without the Play-services GeofencingEvent / goAsync plumbing.
+     */
+    internal suspend fun notifyEntered(context: Context, ids: List<Int>) {
+        for (id in ids) {
+            val note = dao.getNoteByIdNow(id) ?: continue
+            notify(context, id, note.locationLabel ?: "a saved place", note.title)
         }
     }
 

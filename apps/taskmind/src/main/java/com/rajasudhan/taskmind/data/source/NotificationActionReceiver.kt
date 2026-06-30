@@ -31,21 +31,29 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val suggestion = dao.getSuggestionById(id)
-                if (suggestion != null && suggestion.status == "pending") {
-                    when (action) {
-                        ACTION_APPROVE -> approver.approve(suggestion)
-                        ACTION_REJECT -> {
-                            dao.updateSuggestion(suggestion.copy(status = "rejected"))
-                            rejectionLearner.recordRejection(suggestion)
-                        }
-                    }
-                }
-                notifier.notifyPending()
+                handle(action, id)
             } finally {
                 pendingResult.finish()
             }
         }
+    }
+
+    /**
+     * Applies the notification action and refreshes the prompt. Extracted from [onReceive] so it's
+     * unit-testable without the broadcast/goAsync plumbing.
+     */
+    internal suspend fun handle(action: String, id: Int) {
+        val suggestion = dao.getSuggestionById(id)
+        if (suggestion != null && suggestion.status == "pending") {
+            when (action) {
+                ACTION_APPROVE -> approver.approve(suggestion)
+                ACTION_REJECT -> {
+                    dao.updateSuggestion(suggestion.copy(status = "rejected"))
+                    rejectionLearner.recordRejection(suggestion)
+                }
+            }
+        }
+        notifier.notifyPending()
     }
 
     companion object {

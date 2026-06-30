@@ -33,26 +33,33 @@ class BootReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val now = LocalDateTime.now()
-                for (note in dao.getReminderNotes()) {
-                    val date = note.dueDate ?: continue
-                    val time = note.dueTime ?: continue
-                    // A time we can't parse can't be scheduled anyway; skip it rather than advance and
-                    // persist a date derived from a midnight fallback.
-                    if (RecurrenceUtil.parseTime(time) == null) continue
-                    if (!note.recurrence.isNullOrBlank()) {
-                        // Recurring: land on the next slot that's actually in the future.
-                        val next = RecurrenceUtil.firstFutureOccurrence(date, time, note.recurrence, now) ?: continue
-                        if (next != date) dao.updateNoteDueDate(note.id, next)
-                        alarmScheduler.schedule(note.id, note.title, next, time, note.recurrence)
-                    } else {
-                        // One-shot: re-arm as stored. The scheduler drops it if it's already past
-                        // (it fired, or was missed, while the device was off), which is correct.
-                        alarmScheduler.schedule(note.id, note.title, date, time, null)
-                    }
-                }
+                rearm()
             } finally {
                 pending.finish()
+            }
+        }
+    }
+
+    /**
+     * Re-arms every active timed reminder. Extracted from [onReceive] so it's unit-testable without
+     * the broadcast/goAsync plumbing; [now] is injectable to make the recurrence advance deterministic.
+     */
+    internal suspend fun rearm(now: LocalDateTime = LocalDateTime.now()) {
+        for (note in dao.getReminderNotes()) {
+            val date = note.dueDate ?: continue
+            val time = note.dueTime ?: continue
+            // A time we can't parse can't be scheduled anyway; skip it rather than advance and
+            // persist a date derived from a midnight fallback.
+            if (RecurrenceUtil.parseTime(time) == null) continue
+            if (!note.recurrence.isNullOrBlank()) {
+                // Recurring: land on the next slot that's actually in the future.
+                val next = RecurrenceUtil.firstFutureOccurrence(date, time, note.recurrence, now) ?: continue
+                if (next != date) dao.updateNoteDueDate(note.id, next)
+                alarmScheduler.schedule(note.id, note.title, next, time, note.recurrence)
+            } else {
+                // One-shot: re-arm as stored. The scheduler drops it if it's already past
+                // (it fired, or was missed, while the device was off), which is correct.
+                alarmScheduler.schedule(note.id, note.title, date, time, null)
             }
         }
     }
