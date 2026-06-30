@@ -1,0 +1,10 @@
+# Momentic mobile project for the TaskMind Android app.
+# Tests run on Momentic's cloud emulators (x86_64); each test installs the freshly built debug APK.
+name: taskmind-android
+fileFormat: v2
+include:
+  - "**/*.test.yaml"
+  - "**/*.module.yaml"
+emulator:
+  # Auto-grant runtime permissions so first-launch permission dialogs don't block the smoke test.
+  autoGrantPermissions: true
