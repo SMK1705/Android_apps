@@ -55,6 +55,10 @@ class InboxViewModel @Inject constructor(
     fun approveSuggestion(suggestion: Suggestion) {
         viewModelScope.launch {
             val noteId = approver.approve(suggestion)
+            // Undo re-pends the suggestion and drops the note, but deliberately does not roll back the
+            // rejection-learning decrement from approve() — same as reject's undo, which doesn't roll
+            // back its increment. The penalty is a soft, self-correcting nudge, so the tiny asymmetry
+            // isn't worth threading the prior count through the undo.
             lastUndo = {
                 dao.updateSuggestion(suggestion.copy(status = "pending", snoozedUntil = null))
                 dao.deleteNoteById(noteId.toInt())

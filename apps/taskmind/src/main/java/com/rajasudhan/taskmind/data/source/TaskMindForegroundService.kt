@@ -140,7 +140,7 @@ class TaskMindForegroundService : Service() {
         val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle("TaskMind is active")
             .setContentText("Monitoring enabled data sources")
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(pendingIntent)
             .build()
 

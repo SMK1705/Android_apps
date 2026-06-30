@@ -23,4 +23,12 @@ class RejectionLearnerTest {
         assertNull(RejectionLearner.senderKey("Manual entry"))
         assertNull(RejectionLearner.senderKey("Shared"))
     }
+
+    @Test
+    fun approvalWalksTheRejectionCountDownAndNeverGoesNegative() {
+        // One approval forgives one rejection; the penalty (>= REJECT_THRESHOLD) clears as it recovers.
+        assertEquals(2, RejectionLearner.countAfterApproval(3)) // at threshold -> below it
+        assertEquals(0, RejectionLearner.countAfterApproval(1)) // last one -> row gets dropped
+        assertEquals(0, RejectionLearner.countAfterApproval(0)) // floor at zero
+    }
 }

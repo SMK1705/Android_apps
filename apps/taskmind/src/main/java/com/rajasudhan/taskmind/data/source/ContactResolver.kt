@@ -15,24 +15,38 @@ import kotlinx.coroutines.withContext
  */
 object ContactResolver {
     suspend fun lookupNumber(context: Context, name: String): String? {
-        if (name.isBlank()) return null
+        val term = name.trim()
+        if (term.isBlank()) return null
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS)
             != PackageManager.PERMISSION_GRANTED
         ) return null
         return withContext(Dispatchers.IO) {
-            runCatching {
-                context.contentResolver.query(
-                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                    arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
-                    "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?",
-                    arrayOf("%${name.trim()}%"),
-                    null
-                )?.use { cursor ->
-                    if (cursor.moveToFirst()) cursor.getString(0)?.let(PhoneUtil::normalize) else null
-                }
-            }.getOrNull()
+            // Match most-specific first so "Sam" prefers an exact "Sam" over "Samantha"/"Samuel", only
+            // falling back to a looser match when there's no better one. LIKE (not =) keeps every tier
+            // case-insensitive, matching the old behaviour; the wildcards are what narrow each tier.
+            val esc = term.escapeLike()
+            queryNumber(context, esc) // exact (case-insensitive)
+                ?: queryNumber(context, "$esc%") // prefix
+                ?: queryNumber(context, "%$esc%") // substring (original loose behaviour)
         }
     }
+
+    /** First contact number whose display name matches [likePattern]; null on no match/permission/error. */
+    private fun queryNumber(context: Context, likePattern: String): String? = runCatching {
+        context.contentResolver.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+            "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ? ESCAPE '\\'",
+            arrayOf(likePattern),
+            null
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0)?.let(PhoneUtil::normalize) else null
+        }
+    }.getOrNull()
+
+    /** Escapes LIKE metacharacters so a name containing % or _ matches literally (ESCAPE '\'). */
+    private fun String.escapeLike(): String =
+        replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 }
 
 /**

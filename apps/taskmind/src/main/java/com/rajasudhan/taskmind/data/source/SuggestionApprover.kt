@@ -33,6 +33,7 @@ class SuggestionApprover @Inject constructor(
     private val alarmScheduler: AlarmScheduler,
     private val placeGeocoder: PlaceGeocoder,
     private val geofenceManager: GeofenceManager,
+    private val rejectionLearner: RejectionLearner,
     @ApplicationContext private val context: Context
 ) {
     /**
@@ -41,6 +42,9 @@ class SuggestionApprover @Inject constructor(
      */
     suspend fun approve(suggestion: Suggestion): Long {
         dao.updateSuggestion(suggestion.copy(status = "approved"))
+        // Approving forgives a rejection for this sender, so a previously down-ranked sender can
+        // recover once the user starts accepting their items again.
+        rejectionLearner.recordApproval(suggestion)
 
         val isReminder = suggestion.type == "reminder" && suggestion.dueTime != null
         val noteType = if (isReminder) "reminder" else suggestion.type

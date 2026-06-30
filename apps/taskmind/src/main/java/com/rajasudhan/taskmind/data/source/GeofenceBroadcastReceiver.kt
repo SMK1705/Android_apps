@@ -49,7 +49,7 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
         val notification = NotificationCompat.Builder(context, TaskMindForegroundService.NOTIFICATION_CHANNEL_ID)
             .setContentTitle("You're near $place")
             .setContentText(title)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(tapIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

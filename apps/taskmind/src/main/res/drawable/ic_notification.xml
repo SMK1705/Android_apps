@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Monochrome status-bar notification icon: the TaskMind "spark" mark. White on a transparent
+     background so Android can tint it for the status bar; a colored mipmap launcher icon renders as
+     an ugly white square there (Android 5.0+). A straight-edged four-point star so the arms keep real
+     width (triangular, not hair-thin) and stay legible when downscaled to status-bar size. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,2 L14.33,9.67 L22,12 L14.33,14.33 L12,22 L9.67,14.33 L2,12 L9.67,9.67 Z" />
+</vector>
