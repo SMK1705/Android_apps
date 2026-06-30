@@ -61,7 +61,7 @@ class SuggestionNotifier @Inject constructor(
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(if (count == 1) "1 suggestion to review" else "$count suggestions to review")
             .setContentText(top.extractedTitle)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(tapIntent)
             .setAutoCancel(true)
             .addAction(android.R.drawable.ic_menu_send, "Approve", action(NotificationActionReceiver.ACTION_APPROVE, top.id))
