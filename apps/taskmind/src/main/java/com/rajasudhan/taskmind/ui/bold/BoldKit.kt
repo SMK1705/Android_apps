@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
@@ -341,6 +343,30 @@ fun BoldPageHeader(
         Row(horizontalArrangement = Arrangement.spacedBy((-4).dp), verticalAlignment = Alignment.CenterVertically) {
             trailing()
             BoldThemeToggle(isDark, onToggleTheme)
+        }
+    }
+}
+
+/** The handoff's pill toggle: a 46×28 track (accent on / line2 off) with a 22dp knob, inside a
+ *  48dp-tall touch target with proper Switch semantics. */
+@Composable
+fun BoldSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    val c = BoldTheme.colors
+    Box(
+        modifier
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+            .padding(vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier.size(width = 46.dp, height = 28.dp).clip(RoundedCornerShape(14.dp))
+                .background(if (checked) c.accent else c.line2).padding(3.dp),
+            contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart,
+        ) {
+            Box(
+                Modifier.size(22.dp).shadow(1.dp, CircleShape).clip(CircleShape)
+                    .background(if (checked) BoldOnAccent else c.surface)
+            )
         }
     }
 }

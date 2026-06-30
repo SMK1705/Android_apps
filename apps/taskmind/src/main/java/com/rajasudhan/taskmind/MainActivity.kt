@@ -376,7 +376,9 @@ fun TaskMindAppContent(
                     onBack = { navController.popBackStack() }
                 )
             }
-            composable("sources") { com.rajasudhan.taskmind.ui.sources.SourcesScreen() }
+            composable("sources") {
+                com.rajasudhan.taskmind.ui.sources.SourcesScreen(isDark = isDark, onToggleTheme = onToggleTheme)
+            }
             composable("settings") { com.rajasudhan.taskmind.ui.settings.SettingsScreen() }
         }
     }
