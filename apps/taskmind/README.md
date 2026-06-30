@@ -307,6 +307,13 @@ chosen interval (default 30 min) — both it and the manual **↻** scan *since 
 
 ---
 
+## Testing
+
+- **Manual QA** — [`docs/FUNCTIONAL_TEST_PLAN.md`](docs/FUNCTIONAL_TEST_PLAN.md): a comprehensive on-device functional test plan (27 suites / 325 cases) with a P0 smoke set, a prerequisites checklist, and a defect-log template. Every case is grounded in the current source and cites its source-of-truth file.
+- **Automation** — [`docs/AUTOMATED_TEST_PLAN.md`](docs/AUTOMATED_TEST_PLAN.md): the planned unit / Room-migration / Compose-UI / integration suite, the tooling to add, and CI wiring. Run today's pure-logic unit tests with `./gradlew :apps:taskmind:testDebugUnitTest`.
+
+---
+
 ## Not yet implemented
 
 - Gemma **3n** is supported but not yet loaded by default
