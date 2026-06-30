@@ -24,7 +24,6 @@ class SettingsManager @Inject constructor(
         private const val KEY_RETENTION_DAYS = "retention_days"
         private const val KEY_SCAN_FREQUENCY_MINUTES = "scan_frequency_minutes"
         private const val KEY_LAST_SCAN_AT = "last_scan_at"
-        private const val KEY_DYNAMIC_COLOR = "dynamic_color"
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
         private const val KEY_THEME_MODE = "theme_mode"
 
@@ -105,19 +104,6 @@ class SettingsManager @Inject constructor(
         get() = encryptedPrefs.getLong(KEY_LAST_SCAN_AT, 0L)
         set(value) = encryptedPrefs.edit().putLong(KEY_LAST_SCAN_AT, value).apply()
 
-    // ---- Material You (dynamic color) ----
-    // Off by default to keep the brand violet identity; exposed as a StateFlow so the theme in
-    // MainActivity re-themes live the moment the Settings toggle flips.
-    private val _dynamicColor = MutableStateFlow(encryptedPrefs.getBoolean(KEY_DYNAMIC_COLOR, false))
-    val dynamicColorFlow: StateFlow<Boolean> = _dynamicColor.asStateFlow()
-
-    var dynamicColor: Boolean
-        get() = _dynamicColor.value
-        set(value) {
-            encryptedPrefs.edit().putBoolean(KEY_DYNAMIC_COLOR, value).apply()
-            _dynamicColor.value = value
-        }
-
     // ---- Theme (follow system / light / dark) ----
     // SYSTEM by default so we follow the OS day-night setting until the user chooses otherwise.
     // Exposed as a StateFlow so MainActivity re-themes live the moment the choice changes.
@@ -163,11 +149,9 @@ class SettingsManager @Inject constructor(
             .remove(KEY_GMAIL_ACCOUNTS)
             .remove(KEY_RETENTION_DAYS)
             .remove(KEY_SCAN_FREQUENCY_MINUTES)
-            .remove(KEY_DYNAMIC_COLOR)
             .remove(KEY_APP_LOCK_ENABLED)
             .remove(KEY_THEME_MODE)
             .apply()
-        _dynamicColor.value = false
         // Wiping data re-asserts the secure default: the lock comes back on.
         _appLockEnabled.value = true
         _themeMode.value = ThemeMode.SYSTEM

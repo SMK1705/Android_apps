@@ -65,10 +65,9 @@ private fun boldColorScheme(c: BoldColors): ColorScheme {
 
 @Composable
 fun TaskMindTheme(
+    // The Bold direction is a fixed brand identity in both light and dark, so wallpaper-based
+    // dynamic color (Material You) is intentionally not applied.
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // The Bold direction is a fixed brand identity, so wallpaper-based dynamic color is intentionally
-    // not applied. The parameter is kept so existing call sites compile unchanged.
-    @Suppress("UNUSED_PARAMETER") dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val bold = if (darkTheme) BoldDarkColors else BoldLightColors

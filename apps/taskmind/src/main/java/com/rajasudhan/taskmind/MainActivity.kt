@@ -62,7 +62,6 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
 
         setContent {
-            val dynamicColor by settingsManager.dynamicColorFlow.collectAsState()
             val themeMode by settingsManager.themeModeFlow.collectAsState()
             val darkTheme = when (themeMode) {
                 ThemeMode.LIGHT -> false
@@ -80,7 +79,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            TaskMindTheme(darkTheme = darkTheme, dynamicColor = dynamicColor) {
+            TaskMindTheme(darkTheme = darkTheme) {
                 // The app lock is optional (Settings → Security). When off, the app opens straight to
                 // its content; the database stays encrypted at rest regardless.
                 val lockEnabled by settingsManager.appLockEnabledFlow.collectAsState()

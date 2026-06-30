@@ -1776,10 +1776,10 @@ _Scope: durable preferences. Source of truth: `apps/taskmind/src/main/java/com/r
 - **Steps:** 1. Security → toggle "App lock (biometric)" OFF. 2. Leave the app and return (or lock/unlock the device). 3. Toggle it back ON and return again.
 - **Expected:** `appLockEnabledFlow` flips live. With lock OFF, returning opens straight to data (no biometric prompt). With lock ON, returning shows the biometric/credential prompt. No restart needed.
 
-#### TM-SETTINGS-08 · Dynamic color toggle applies live — `P1` · positive
+#### TM-SETTINGS-08 · No dynamic-color (Material You) control — `P2` · negative
 - **Preconditions:** Android 12+ (S25 Ultra qualifies).
-- **Steps:** 1. Appearance → toggle dynamic color on/off (if surfaced) — or set via the engine; observe palette. 
-- **Expected:** `dynamicColorFlow` re-themes live; OFF keeps the brand violet, ON applies Material You wallpaper colors. Persists across restart (default OFF).
+- **Steps:** 1. Open Privacy → Appearance and inspect the controls.
+- **Expected:** There is NO dynamic-color / Material You toggle (only the System/Light/Dark theme chips). The app keeps its fixed Bold brand palette regardless of wallpaper. (The dead `dynamicColor` plumbing was removed in #52.)
 
 #### TM-SETTINGS-09 · App-lock "ON but no credential" warning — `P1` · edge
 - **Preconditions:** A device with NO screen lock / biometric enrolled; app lock toggle ON.
@@ -2034,7 +2034,7 @@ File confirmed bugs as GitHub issues and cross-reference the BUG id. Suspected b
 
 The drafting pass flagged these against current source — confirm whether each is a bug or an intended/doc change, since they affect several cases:
 
-- **Material You / dynamic color is effectively dead UI:** `TaskMindTheme` ignores the `dynamicColor` param and there is **no dynamic-color toggle in Settings** (the `dynamicColor` flow in `SettingsManager` is unused by the UI). The suite 3 / suite 24 "dynamic color" cases assert this gap — decide whether to wire it up or drop the claim from the README/CHANGELOG.
+- **Material You / dynamic color — RESOLVED (#52):** the Bold redesign intentionally drops wallpaper-based dynamic color, so the dead `dynamicColor` plumbing (`SettingsManager` flow, `SettingsViewModel` accessor, `MainActivity` wiring, `TaskMindTheme` param) and the false CHANGELOG "Material You toggle" claim were removed. The app keeps a fixed brand palette in both light and dark; see TM-NAV-09 / TM-SETTINGS-08.
 - Additional per-case `> Note:` flags appear throughout (e.g. accessibility gaps in suite 27, self-heal paths in suite 26). Each should be triaged before sign-off.
 
 ## Traceability
