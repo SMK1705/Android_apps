@@ -3,6 +3,45 @@
 All notable changes to **TaskMind** — the private, 100% on-device assistant — are documented here.
 Versions follow the in-app `versionName`; release tags use `taskmind-v<update>`.
 
+## [5.0] — Update 5 (`taskmind-v5`)
+
+A ground-up visual redesign and a much quieter, sharper understanding engine. TaskMind now looks
+like an editorial app — and, just as importantly, stops turning shipping updates, receipts, promos,
+and verification codes into to-dos.
+
+### Added
+- **"Bold" editorial redesign** — every screen rebuilt on a new design system (Instrument Serif
+  headlines, Hanken Grotesk body, JetBrains Mono labels): Inbox, Notes, Note detail, Sources,
+  Settings, Privacy, and the first-run guide, with a live light/dark toggle.
+- **Quick-capture sheet** — a single **+** button opens a TYPE / SPEAK sheet: paste or jot text and
+  "Analyse on-device", or record a voice note transcribed on the phone.
+- **Bottom sheets** for the common actions — **snooze**, **add to calendar** (with an event
+  duration), and **set a reminder** (one-off, repeating, or location-based).
+- **Act from outside the app** — **Call** and **Get-directions** actions now appear on the
+  **home-screen widget** (which surfaces the top item to review) and on the **review notification**.
+- **Notes kind filter** — All / Tasks / Reminders / Notes chips, with live counts, are back above the
+  active list.
+- **"Needs setup" hint** — the audio and screenshot sources flag when their on-device model (Vosk /
+  Tesseract) hasn't been downloaded yet.
+
+### Changed
+- **Far less noise** — the extraction prompt was rewritten around a single principle: extract only
+  when *you* must act. Automated, informational, and promotional notifications — shipping/delivery
+  updates, payment and autopay receipts, statements, subscription renewals, low-balance and
+  transaction alerts, sign-in/security notices, marketing and "last chance" deadlines, verification
+  codes — no longer become suggestions, even when they carry a date or an amount. Genuine invites,
+  bills you must pay yourself, info to keep, and trips you'll attend are preserved.
+
+### Internal
+- **Extraction eval harness** — `tools/prompt_eval/` grew to a 166-case, web-grounded golden set and
+  now reports a per-type **confusion matrix**, recall/precision, and field accuracy to
+  `EVAL_REPORT.md` (measured on the cloud model: overall pass 85% → 98%, noise-rejection recall
+  82% → 99%).
+- **Automated test suite** — unit tests for the DAO and Room migrations, the extraction pipeline,
+  approval and rejection learning, every ViewModel, the receivers and workers, plus JVM/Robolectric
+  **Compose UI tests** for the redesigned screens.
+- License changed to **All Rights Reserved** (proprietary); the unused Momentic E2E harness was removed.
+
 ## [4.0] — Update 4 (`taskmind-v4`)
 
 Calls, places, and a sharper extraction engine. TaskMind can now actually *make the call* it
