@@ -1,0 +1,59 @@
+package com.rajasudhan.taskmind.ui.notes
+
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import com.rajasudhan.taskmind.testutil.FakeTaskMindDao
+import com.rajasudhan.taskmind.testutil.MainDispatcherRule
+import com.rajasudhan.taskmind.testutil.aNote
+import com.rajasudhan.taskmind.ui.theme.TaskMindTheme
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.runBlocking
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.RuleChain
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.GraphicsMode
+
+/**
+ * Compose UI tests for the redesigned Notes list, on the JVM via Robolectric. Renders the real screen
+ * with a fake-DAO-backed [NotesViewModel]: the header, an active note card, and the empty state.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class NotesScreenTest {
+
+    private val mainRule = MainDispatcherRule()
+    private val composeRule = createComposeRule()
+
+    @get:Rule
+    val rules: RuleChain = RuleChain.outerRule(mainRule).around(composeRule)
+
+    private val dao = FakeTaskMindDao()
+    private fun viewModel() = NotesViewModel(dao)
+
+    @Test
+    fun header_isShown() {
+        composeRule.setContent { TaskMindTheme { NotesScreen(viewModel = viewModel()) } }
+
+        composeRule.onNodeWithText("Notes").assertIsDisplayed()
+        composeRule.onNodeWithText("Approved · encrypted at rest").assertIsDisplayed()
+    }
+
+    @Test
+    fun activeNote_isRendered() {
+        runBlocking { dao.insertNote(aNote(title = "Buy oat milk", type = "todo")) }
+        composeRule.setContent { TaskMindTheme { NotesScreen(viewModel = viewModel()) } }
+
+        composeRule.onNodeWithText("Buy oat milk").assertIsDisplayed()
+    }
+
+    @Test
+    fun emptyState_isShownWhenNoNotes() {
+        composeRule.setContent { TaskMindTheme { NotesScreen(viewModel = viewModel()) } }
+
+        composeRule.onNodeWithText("Nothing here yet").assertIsDisplayed()
+    }
+}
