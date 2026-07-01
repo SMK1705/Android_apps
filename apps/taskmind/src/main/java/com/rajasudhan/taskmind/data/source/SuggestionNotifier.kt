@@ -5,11 +5,13 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.rajasudhan.taskmind.MainActivity
 import com.rajasudhan.taskmind.R
 import com.rajasudhan.taskmind.data.local.TaskMindDao
+import com.rajasudhan.taskmind.ui.capture.QuickAddWidget
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
@@ -28,6 +30,10 @@ class SuggestionNotifier @Inject constructor(
     companion object {
         const val CHANNEL_ID = "taskmind_suggestions"
         const val NOTIFICATION_ID = 42
+        // High request-code bases so Call/Directions PendingIntents never collide with the
+        // Approve/Reject broadcasts (which use id*2 + 0/1).
+        private const val CALL_RC_BASE = 1_000_000
+        private const val DIRECTIONS_RC_BASE = 2_000_000
     }
 
     private val manager: NotificationManager? =
@@ -58,17 +64,49 @@ class SuggestionNotifier @Inject constructor(
         val tapIntent = PendingIntent.getActivity(
             context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
         )
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(if (count == 1) "1 suggestion to review" else "$count suggestions to review")
             .setContentText(top.extractedTitle)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(tapIntent)
             .setAutoCancel(true)
+
+        // A contextual first action — Call when the item has a dialable number, else Directions when it
+        // names a place — so it can be acted on straight from the shade, mirroring the in-app cards. The
+        // shade shows ~3 actions, so we add at most one contextual action alongside Approve + Reject.
+        val number = runCatching {
+            resolveCallNumber(context, top.extractedTitle, top.summary, top.rawSnippet, top.source)
+        }.getOrNull()
+        val place = top.location?.trim()?.takeUnless { it.isBlank() }
+        when {
+            number != null -> builder.addAction(
+                android.R.drawable.ic_menu_call, "Call",
+                activityAction(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number")), top.id + CALL_RC_BASE)
+            )
+            place != null -> builder.addAction(
+                android.R.drawable.ic_menu_directions, "Directions",
+                activityAction(directionsIntent(place), top.id + DIRECTIONS_RC_BASE)
+            )
+        }
+        builder
             .addAction(android.R.drawable.ic_menu_send, "Approve", action(NotificationActionReceiver.ACTION_APPROVE, top.id))
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Reject", action(NotificationActionReceiver.ACTION_REJECT, top.id))
-            .build()
-        manager?.notify(NOTIFICATION_ID, notification)
+        manager?.notify(NOTIFICATION_ID, builder.build())
+        QuickAddWidget.refresh(context)
     }
+
+    /** A PendingIntent that launches [intent] (dialer / Maps) straight from the notification action. */
+    private fun activityAction(intent: Intent, rc: Int): PendingIntent =
+        PendingIntent.getActivity(
+            context, rc, intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+    /** Maps directions to a named place (mirrors [com.rajasudhan.taskmind.ui.common.openDirections]). */
+    private fun directionsIntent(place: String): Intent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse("https://www.google.com/maps/dir/?api=1&destination=${Uri.encode(place)}")
+    )
 
     private fun action(action: String, id: Int): PendingIntent {
         val intent = Intent(context, NotificationActionReceiver::class.java).apply {
@@ -84,5 +122,6 @@ class SuggestionNotifier @Inject constructor(
 
     fun cancel() {
         manager?.cancel(NOTIFICATION_ID)
+        QuickAddWidget.refresh(context)
     }
 }

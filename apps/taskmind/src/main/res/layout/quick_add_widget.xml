@@ -5,15 +5,38 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="12dp"
+    android:padding="14dp"
     android:background="@drawable/widget_background">
 
+    <!-- App name normally; "N to review" when items are pending (set in QuickAddWidget). -->
     <TextView
+        android:id="@+id/widget_header"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/app_name"
         android:textColor="#FFFFFF"
         android:textStyle="bold" />
+
+    <!-- Top pending suggestion; GONE until there is one to review. -->
+    <TextView
+        android:id="@+id/widget_suggestion_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:textColor="#FFFFFF"
+        android:textSize="15sp"
+        android:visibility="gone" />
+
+    <!-- Contextual Call / Directions for the top item; GONE when it has neither. -->
+    <Button
+        android:id="@+id/widget_action_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:visibility="gone" />
 
     <Button
         android:id="@+id/widget_add_button"
