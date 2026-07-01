@@ -4,7 +4,10 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.DragHandle
@@ -27,15 +31,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -52,16 +62,22 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
 import com.rajasudhan.taskmind.data.source.RecurrenceUtil
 import com.rajasudhan.taskmind.data.source.resolveCallNumber
-import com.rajasudhan.taskmind.ui.common.CategoryBadge
-import com.rajasudhan.taskmind.ui.common.accent
-import com.rajasudhan.taskmind.ui.common.categoryFor
+import com.rajasudhan.taskmind.ui.bold.BoldFilterChip
+import com.rajasudhan.taskmind.ui.bold.BoldKindChip
+import com.rajasudhan.taskmind.ui.bold.boldKindFor
+import com.rajasudhan.taskmind.ui.bold.color
 import com.rajasudhan.taskmind.ui.common.dialNumber
 import com.rajasudhan.taskmind.ui.common.openDirections
+import com.rajasudhan.taskmind.ui.theme.BoldOnAccent
+import com.rajasudhan.taskmind.ui.theme.BoldTheme
+import com.rajasudhan.taskmind.ui.theme.BoldType
+import com.rajasudhan.taskmind.ui.theme.ShapeCard
 import sh.calvin.reorderable.ReorderableColumn
 
 /**
- * Full view of a single approved item: heading, summary, the complete body, and metadata.
- * Reached by tapping a row in [NotesScreen]. [onBack] is invoked after a delete to pop the screen.
+ * Full view of a single approved item — to the Bold handoff: kind pill + serif title, the body and
+ * metadata in editorial cards, with a Call / Complete action bar pinned to the bottom. Reached by
+ * tapping a row in [NotesScreen]; [onBack] is invoked after a delete to pop the screen.
  */
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -69,6 +85,7 @@ fun NoteDetailScreen(
     onBack: () -> Unit,
     viewModel: NoteDetailViewModel = hiltViewModel()
 ) {
+    val c = BoldTheme.colors
     val note by viewModel.note.collectAsState()
     val n = note
     var deleting by remember { mutableStateOf(false) }
@@ -94,214 +111,200 @@ fun NoteDetailScreen(
         // A delete makes the note flow emit null; render nothing until we pop, rather than
         // flashing a "not found" error in the brief window before navigation completes.
         if (!deleting) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Note not found.", style = MaterialTheme.typography.bodyLarge)
+            Box(Modifier.fillMaxSize().background(c.screen), contentAlignment = Alignment.Center) {
+                Text("Note not found.", style = BoldType.body, color = c.ink2)
             }
         }
         return
     }
 
-    val category = categoryFor(n.type, n.dueDate, n.dueTime)
+    val kind = boldKindFor(n.type, n.dueDate != null)
+    val kindColor = kind.color()
+    val completable = n.type == "todo" || n.type == "reminder"
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            CategoryBadge(category)
+    // Call shortcut for "call X / call me back" items: prefer a number named in the message, else
+    // resolve the named contact's number. Resolution can touch contacts, so it runs off-thread.
+    val rawSnippet = remember(n.body) { n.body.substringAfter("\n\n", n.body) }
+    val callNumber by produceState<String?>(null, n.id, n.body, n.title, n.summary, n.source) {
+        value = resolveCallNumber(context, n.title, n.summary, rawSnippet, n.source)
+    }
+    val hasActionBar = completable || callNumber != null
+
+    Box(Modifier.fillMaxSize().background(c.screen)) {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                .padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = if (hasActionBar) 96.dp else 24.dp)
+        ) {
+            // ── Kind + source ──
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                BoldKindChip(kind)
+                Text("from ${n.source}", style = BoldType.noteSrcMeta.copy(fontSize = 11.sp), color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+
+            Spacer(Modifier.height(14.dp))
+            InlineEditableText(
+                value = n.title,
+                onSave = { viewModel.updateTitle(it) },
+                textStyle = BoldType.emptyTitle.copy(fontSize = 31.sp, lineHeight = 34.sp, letterSpacing = (-0.3).sp),
+                color = c.ink,
+                showEditHint = true
+            )
+
             if (n.dueDate != null) {
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.height(10.dp))
                 Text(
-                    text = "${n.dueDate} ${n.dueTime ?: ""}".trim(),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = category.accent(),
-                    fontWeight = FontWeight.SemiBold
+                    "${n.dueDate} ${n.dueTime ?: ""}".trim(),
+                    style = BoldType.detailMeta.copy(fontSize = 11.sp, letterSpacing = 0.3.sp),
+                    color = c.reminder
                 )
             }
-        }
 
-        Spacer(Modifier.height(12.dp))
-        InlineEditableText(
-            value = n.title,
-            onSave = { viewModel.updateTitle(it) },
-            textStyle = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-            showEditHint = true
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = "from ${n.source}",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        // Call shortcut for "call X / call me back" items: prefer a number named in the message,
-        // else resolve the named contact's number from the device. Opens the dialer pre-filled.
-        // Resolution can touch contacts, so it runs off the main thread via produceState.
-        val rawSnippet = remember(n.body) { n.body.substringAfter("\n\n", n.body) }
-        val callNumber by produceState<String?>(null, n.id, n.body, n.title, n.summary, n.source) {
-            value = resolveCallNumber(context, n.title, n.summary, rawSnippet, n.source)
-        }
-        callNumber?.let { number ->
-            Spacer(Modifier.height(12.dp))
-            FilledTonalButton(
-                onClick = { dialNumber(context, number) }
-            ) {
-                Icon(Icons.Default.Call, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Call $number", maxLines = 1)
+            if (n.summary.isNotBlank()) {
+                Spacer(Modifier.height(14.dp))
+                InlineEditableText(
+                    value = n.summary,
+                    onSave = { viewModel.updateSummary(it) },
+                    textStyle = BoldType.body.copy(fontSize = 15.sp, lineHeight = 23.sp),
+                    color = c.muted
+                )
             }
-        }
 
-        Spacer(Modifier.height(12.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = n.completed, onCheckedChange = { viewModel.setCompleted(it) })
-            Text(
-                text = if (n.completed) "Completed" else "Mark complete",
-                style = MaterialTheme.typography.bodyMedium
-            )
-        }
-
-        if (n.summary.isNotBlank()) {
-            Spacer(Modifier.height(16.dp))
-            InlineEditableText(
-                value = n.summary,
-                onSave = { viewModel.updateSummary(it) },
-                textStyle = MaterialTheme.typography.bodyLarge
-            )
-        }
-
-        // Checklist: shown for to-dos whose content is list-like; ticks persist to the note.
-        val checklistItems = if (!n.checklist.isNullOrBlank()) Checklist.decode(n.checklist!!)
-            else if (n.type == "todo") Checklist.derive(n.summary) else emptyList()
-        if (checklistItems.isNotEmpty()) {
-            Spacer(Modifier.height(16.dp))
-            Text("Checklist", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            // Drag the handle to reorder; ticks and order both persist to the note.
-            var items by remember(n.checklist, n.summary) { mutableStateOf(checklistItems) }
-            ReorderableColumn(
-                list = items,
-                onSettle = { from, to ->
-                    items = items.toMutableList().apply { add(to, removeAt(from)) }
-                    viewModel.updateChecklist(Checklist.encode(items))
-                }
-            ) { index, item, _ ->
-                key(item.text) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = item.checked,
-                            onCheckedChange = {
-                                items = items.toMutableList().also { it[index] = it[index].copy(checked = !it[index].checked) }
-                                viewModel.updateChecklist(Checklist.encode(items))
+            // ── Checklist ──
+            val checklistItems = if (!n.checklist.isNullOrBlank()) Checklist.decode(n.checklist!!)
+                else if (n.type == "todo") Checklist.derive(n.summary) else emptyList()
+            if (checklistItems.isNotEmpty()) {
+                Spacer(Modifier.height(22.dp))
+                SectionLabel("Checklist")
+                Spacer(Modifier.height(10.dp))
+                var items by remember(n.checklist, n.summary) { mutableStateOf(checklistItems) }
+                ReorderableColumn(
+                    list = items,
+                    onSettle = { from, to ->
+                        items = items.toMutableList().apply { add(to, removeAt(from)) }
+                        viewModel.updateChecklist(Checklist.encode(items))
+                    }
+                ) { index, item, _ ->
+                    key(item.text) {
+                        val itemShape = RoundedCornerShape(12.dp)
+                        Row(
+                            Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(itemShape).background(c.surface)
+                                .border(1.dp, c.line, itemShape)
+                                .clickable {
+                                    items = items.toMutableList().also { it[index] = it[index].copy(checked = !it[index].checked) }
+                                    viewModel.updateChecklist(Checklist.encode(items))
+                                }
+                                .semantics { role = Role.Checkbox; selected = item.checked }
+                                .padding(horizontal = 14.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            BoldCheckSquare(item.checked, size = 20.dp)
+                            Spacer(Modifier.width(11.dp))
+                            Text(
+                                item.text,
+                                style = BoldType.body.copy(fontSize = 14.sp),
+                                color = if (item.checked) c.ink3 else c.ink,
+                                textDecoration = if (item.checked) TextDecoration.LineThrough else null,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(modifier = Modifier.draggableHandle().size(28.dp), onClick = {}) {
+                                Icon(Icons.Default.DragHandle, contentDescription = "Reorder", tint = c.ink3, modifier = Modifier.size(18.dp))
                             }
-                        )
-                        Text(
-                            text = item.text,
-                            style = MaterialTheme.typography.bodyMedium,
-                            textDecoration = if (item.checked) TextDecoration.LineThrough else null,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(modifier = Modifier.draggableHandle(), onClick = {}) {
-                            Icon(Icons.Default.DragHandle, contentDescription = "Reorder", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
             }
-        }
 
-        // ---- Reminder scheduling: repeat + location ----
-        if (n.type == "reminder" || n.type == "todo") {
-            Spacer(Modifier.height(16.dp))
-            HorizontalDivider()
-            Spacer(Modifier.height(12.dp))
-            Text("Reminder", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // ── Reminder: repeat + location ──
+            if (completable) {
+                Spacer(Modifier.height(22.dp))
+                SectionLabel("Reminder")
 
-            if (n.type == "reminder") {
-                Spacer(Modifier.height(8.dp))
-                var repeatExpanded by remember { mutableStateOf(false) }
-                val currentRepeat = (n.recurrence ?: "None").replaceFirstChar { it.uppercase() }
-                ExposedDropdownMenuBox(expanded = repeatExpanded, onExpandedChange = { repeatExpanded = it }) {
-                    OutlinedTextField(
-                        value = currentRepeat,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Repeat") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = repeatExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
-                    )
-                    ExposedDropdownMenu(expanded = repeatExpanded, onDismissRequest = { repeatExpanded = false }) {
+                if (n.type == "reminder") {
+                    Spacer(Modifier.height(10.dp))
+                    val current = (n.recurrence ?: "None").replaceFirstChar { it.uppercase() }
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScrollSafe(),
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
                         RecurrenceUtil.OPTIONS.forEach { option ->
-                            DropdownMenuItem(
-                                text = { Text(option) },
-                                onClick = { repeatExpanded = false; viewModel.updateRecurrence(option) }
+                            BoldFilterChip(option, current.equals(option, ignoreCase = true), { viewModel.updateRecurrence(option) })
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+                if (n.locationLabel != null) {
+                    val lat = n.locationLat
+                    val lng = n.locationLng
+                    DetailCard {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).background(kindColor.copy(alpha = 0.16f)),
+                                contentAlignment = Alignment.Center
+                            ) { Icon(Icons.Default.Place, contentDescription = null, tint = kindColor, modifier = Modifier.size(19.dp)) }
+                            Spacer(Modifier.width(13.dp))
+                            Text(n.locationLabel!!, style = BoldType.body.copy(fontSize = 14.sp), color = c.ink, modifier = Modifier.weight(1f))
+                            Text(
+                                "REMOVE",
+                                style = BoldType.detailMeta.copy(fontSize = 10.sp, letterSpacing = 0.5.sp),
+                                color = c.ink3,
+                                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { viewModel.clearLocationReminder() }.padding(horizontal = 8.dp, vertical = 6.dp)
                             )
                         }
+                        if (lat != null && lng != null) {
+                            Spacer(Modifier.height(12.dp))
+                            LocationMapCard(lat = lat, lng = lng, radiusMeters = n.locationRadius ?: 150.0, accent = c.accent)
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        BoldActionButton("Get directions", Icons.Default.Directions, filled = false) {
+                            openDirections(context, n.locationLabel, lat, lng)
+                        }
+                    }
+                } else {
+                    BoldActionButton("Remind me at a place", Icons.Default.Place, filled = false) {
+                        locationLabel = ""; showLocationDialog = true
                     }
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
-            if (n.locationLabel != null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Place, contentDescription = null, tint = category.accent())
-                    Spacer(Modifier.width(4.dp))
-                    Text(n.locationLabel!!, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { viewModel.clearLocationReminder() }) { Text("Remove") }
-                }
-                // Mini map of the place (when it geocoded) + a shortcut to navigate there.
-                val lat = n.locationLat
-                val lng = n.locationLng
-                if (lat != null && lng != null) {
-                    Spacer(Modifier.height(8.dp))
-                    LocationMapCard(
-                        lat = lat,
-                        lng = lng,
-                        radiusMeters = n.locationRadius ?: 150.0,
-                        accent = category.accent()
-                    )
-                }
-                // Directions resolve from the coordinates, or the place name itself, so they work
-                // (and point at the named venue) even when the embedded map couldn't render it.
-                Spacer(Modifier.height(8.dp))
-                Button(
-                    onClick = { openDirections(context, n.locationLabel, lat, lng) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Directions, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Get directions")
-                }
-            } else {
-                OutlinedButton(onClick = { locationLabel = ""; showLocationDialog = true }) {
-                    Icon(Icons.Default.Place, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Remind me at a place")
-                }
+            // ── Details (full body, linkified) ──
+            Spacer(Modifier.height(22.dp))
+            SectionLabel("Details")
+            Spacer(Modifier.height(10.dp))
+            DetailCard {
+                Text(
+                    linkifyNoteBody(n.body, c.accent),
+                    style = BoldType.body.copy(fontSize = 14.sp, lineHeight = 21.sp),
+                    color = c.ink2
+                )
+            }
+
+            Spacer(Modifier.height(20.dp))
+            BoldActionButton("Delete", Icons.Default.DeleteOutline, filled = false, danger = true) {
+                deleting = true; viewModel.deleteNote(onBack)
             }
         }
 
-        Spacer(Modifier.height(16.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(16.dp))
-
-        Text(
-            text = "Details",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = linkifyNoteBody(n.body, MaterialTheme.colorScheme.primary),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-
-        Spacer(Modifier.height(24.dp))
-        OutlinedButton(onClick = { deleting = true; viewModel.deleteNote(onBack) }) {
-            Icon(Icons.Default.DeleteOutline, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Delete")
+        // ── Bottom action bar: Call + Complete ──
+        if (hasActionBar) {
+            Row(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .background(Brush.verticalGradient(colorStops = arrayOf(0f to Color.Transparent, 0.35f to c.screen, 1f to c.screen)))
+                    .padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 18.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                callNumber?.let { number ->
+                    BoldBarButton("CALL", Icons.Default.Call, modifier = Modifier.weight(1f), filled = false) { dialNumber(context, number) }
+                }
+                if (completable) {
+                    BoldBarButton(
+                        if (n.completed) "COMPLETED" else "MARK COMPLETE",
+                        Icons.Default.Check,
+                        modifier = Modifier.weight(2f),
+                        filled = true
+                    ) { viewModel.setCompleted(!n.completed) }
+                }
+            }
         }
     }
 
@@ -336,6 +339,84 @@ fun NoteDetailScreen(
     }
 }
 
+/** Mono uppercase section label (matches the rest of the redesign). */
+@Composable
+private fun SectionLabel(text: String) {
+    Text(text.uppercase(), style = BoldType.sectionMono, color = BoldTheme.colors.ink3)
+}
+
+/** A flat editorial card wrapping a section's content. */
+@Composable
+private fun DetailCard(content: @Composable ColumnScope.() -> Unit) {
+    val c = BoldTheme.colors
+    Column(
+        Modifier.fillMaxWidth().clip(ShapeCard).background(c.surface).border(1.dp, c.line, ShapeCard)
+            .padding(16.dp),
+        content = content
+    )
+}
+
+/** Read-only checkbox visual (the row owns the click) — accent fill + tick when checked. */
+@Composable
+private fun BoldCheckSquare(checked: Boolean, size: androidx.compose.ui.unit.Dp) {
+    val c = BoldTheme.colors
+    val base = Modifier.size(size).clip(RoundedCornerShape(7.dp))
+    Box(
+        if (checked) base.background(c.accent) else base.border(1.5.dp, c.line2, RoundedCornerShape(7.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        if (checked) Icon(Icons.Default.Check, contentDescription = null, tint = BoldOnAccent, modifier = Modifier.size(size * 0.62f))
+    }
+}
+
+/** Full-width Bold button used inside the scroll content. */
+@Composable
+private fun BoldActionButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    filled: Boolean,
+    danger: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val c = BoldTheme.colors
+    val fg = when { danger -> c.skip; filled -> BoldOnAccent; else -> c.ink }
+    val base = Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick)
+        .semantics { role = Role.Button }
+    Row(
+        if (filled) base.background(c.accent) else base.border(1.dp, if (danger) c.skip else c.line2, RoundedCornerShape(14.dp)),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(label, style = BoldType.button.copy(fontSize = 13.sp), color = fg)
+    }
+}
+
+/** A button for the bottom action bar (52dp, weighted). */
+@Composable
+private fun BoldBarButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier,
+    filled: Boolean,
+    onClick: () -> Unit,
+) {
+    val c = BoldTheme.colors
+    val fg = if (filled) BoldOnAccent else c.ink
+    val base = modifier.height(52.dp).clip(RoundedCornerShape(15.dp)).clickable(onClick = onClick)
+        .semantics { role = Role.Button }
+    Row(
+        if (filled) base.background(c.accent) else base.background(c.surface).border(1.dp, c.line2, RoundedCornerShape(15.dp)),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(label, style = BoldType.monoBtn, color = fg, maxLines = 1)
+    }
+}
+
 @SuppressLint("MissingPermission")
 private fun captureCurrentLocation(context: Context, onResult: (Double, Double) -> Unit) {
     val client = LocationServices.getFusedLocationProviderClient(context)
@@ -357,10 +438,7 @@ private fun LocationMapCard(lat: Double, lng: Double, radiusMeters: Double, acce
         position = CameraPosition.fromLatLngZoom(target, 15f)
     }
     GoogleMap(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(180.dp)
-            .clip(RoundedCornerShape(12.dp)),
+        modifier = Modifier.fillMaxWidth().height(160.dp).clip(RoundedCornerShape(16.dp)),
         cameraPositionState = cameraPositionState,
         // A static preview: gestures off so it never fights the page's vertical scroll.
         uiSettings = MapUiSettings(
@@ -384,6 +462,11 @@ private fun LocationMapCard(lat: Double, lng: Double, radiusMeters: Double, acce
     }
 }
 
+/** Lays chips in a horizontally-scrollable row so a long recurrence set never overflows. */
+@Composable
+private fun Modifier.horizontalScrollSafe(): Modifier =
+    this.horizontalScroll(rememberScrollState())
+
 /**
  * A text block you tap to edit in place: shows [value] (optionally with an edit hint), and on tap
  * swaps to a borderless editor; the IME "Done" action saves via [onSave].
@@ -393,9 +476,11 @@ private fun InlineEditableText(
     value: String,
     onSave: (String) -> Unit,
     textStyle: TextStyle,
+    color: Color,
     modifier: Modifier = Modifier,
     showEditHint: Boolean = false
 ) {
+    val c = BoldTheme.colors
     var editing by remember(value) { mutableStateOf(false) }
     if (editing) {
         var draft by remember { mutableStateOf(value) }
@@ -404,8 +489,8 @@ private fun InlineEditableText(
         BasicTextField(
             value = draft,
             onValueChange = { draft = it },
-            textStyle = textStyle.copy(color = MaterialTheme.colorScheme.onSurface),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            textStyle = textStyle.copy(color = color),
+            cursorBrush = SolidColor(c.accent),
             keyboardOptions = KeyboardOptions(
                 capitalization = KeyboardCapitalization.Sentences,
                 imeAction = ImeAction.Done
@@ -423,18 +508,13 @@ private fun InlineEditableText(
         LaunchedEffect(Unit) { focusRequester.requestFocus() }
     } else {
         Row(
-            modifier = modifier.fillMaxWidth().clickable { editing = true },
-            verticalAlignment = Alignment.CenterVertically
+            modifier = modifier.fillMaxWidth().clickable { editing = true }.semantics { role = Role.Button },
+            verticalAlignment = Alignment.Top
         ) {
-            Text(text = value, style = textStyle, modifier = Modifier.weight(1f))
+            Text(text = value, style = textStyle, color = color, modifier = Modifier.weight(1f))
             if (showEditHint) {
                 Spacer(Modifier.width(6.dp))
-                Icon(
-                    Icons.Default.Edit,
-                    contentDescription = "Edit",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp)
-                )
+                Icon(Icons.Default.Edit, contentDescription = "Edit", tint = c.ink3, modifier = Modifier.size(18.dp).padding(top = 4.dp))
             }
         }
     }
