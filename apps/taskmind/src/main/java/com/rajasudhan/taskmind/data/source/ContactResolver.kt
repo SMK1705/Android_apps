@@ -5,7 +5,12 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.ContactsContract
 import androidx.core.content.ContextCompat
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 /**
@@ -69,5 +74,19 @@ suspend fun resolveCallNumber(
 
     if (!PhoneUtil.isCallIntent(title, summary, rawSnippet)) return null
     val name = PhoneUtil.personName(source, title) ?: return null
+    if (!contactsLookupEnabled(context)) return null
     return ContactResolver.lookupNumber(context, name)
 }
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+internal interface ContactsSettingEntryPoint {
+    fun sourceManager(): SourceManager
+}
+
+/** Whether the user allows resolving a name to a number via Contacts (the Sources -> Contacts toggle). */
+private suspend fun contactsLookupEnabled(context: Context): Boolean = runCatching {
+    EntryPointAccessors
+        .fromApplication(context.applicationContext, ContactsSettingEntryPoint::class.java)
+        .sourceManager().isContactsEnabled.first()
+}.getOrDefault(true)

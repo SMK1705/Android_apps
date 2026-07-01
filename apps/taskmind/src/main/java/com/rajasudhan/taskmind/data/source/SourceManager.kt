@@ -27,6 +27,9 @@ class SourceManager @Inject constructor(
         val KEY_CALENDAR_ENABLED = booleanPreferencesKey("calendar_enabled")
         val KEY_APP_USAGE_ENABLED = booleanPreferencesKey("app_usage_enabled")
         val KEY_EMAIL_ENABLED = booleanPreferencesKey("email_enabled")
+        // Contacts is an enrichment (resolve a name -> number for the Call button), not a scanned
+        // source. It defaults ON (opt-out) so upgrades keep working; READ_CONTACTS still gates it.
+        val KEY_CONTACTS_ENABLED = booleanPreferencesKey("contacts_enabled")
         
         val KEY_CALL_RECORDING_PATH = stringPreferencesKey("call_recording_path")
         val KEY_VOICE_RECORDING_PATH = stringPreferencesKey("voice_recording_path")
@@ -68,6 +71,7 @@ class SourceManager @Inject constructor(
     val isCalendarEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_CALENDAR_ENABLED] ?: false }
     val isAppUsageEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_APP_USAGE_ENABLED] ?: false }
     val isEmailEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_EMAIL_ENABLED] ?: false }
+    val isContactsEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_CONTACTS_ENABLED] ?: true }
 
     val callRecordingPath: Flow<String> = context.dataStore.data.map { it[KEY_CALL_RECORDING_PATH] ?: DEFAULT_CALL_RECORDING_PATH }
     val voiceRecordingPath: Flow<String> = context.dataStore.data.map { it[KEY_VOICE_RECORDING_PATH] ?: DEFAULT_VOICE_RECORDING_PATH }

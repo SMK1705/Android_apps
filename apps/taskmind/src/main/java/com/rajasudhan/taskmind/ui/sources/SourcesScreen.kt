@@ -53,6 +53,7 @@ fun SourcesScreen(
     val calendarEnabled by viewModel.isCalendarEnabled.collectAsState()
     val appUsageEnabled by viewModel.isAppUsageEnabled.collectAsState()
     val emailEnabled by viewModel.isEmailEnabled.collectAsState()
+    val contactsEnabled by viewModel.isContactsEnabled.collectAsState()
     val gmailAccounts by viewModel.gmailAccounts.collectAsState()
     val gmailStatus by viewModel.gmailStatus.collectAsState()
 
@@ -185,10 +186,10 @@ fun SourcesScreen(
                     name = "SMS Messages",
                     desc = "Read incoming & recent texts",
                     meta = "READ_SMS",
-                    checked = smsEnabled,
+                    checked = smsEnabled && smsPermissionState.status.isGranted,
                     onCheckedChange = {
+                        viewModel.toggleSms(it)
                         if (it && !smsPermissionState.status.isGranted) smsPermissionState.launchPermissionRequest()
-                        else viewModel.toggleSms(it)
                     }
                 )
             }
@@ -198,10 +199,10 @@ fun SourcesScreen(
                     name = "Call Logs",
                     desc = "Missed calls → \"Call back\"",
                     meta = "READ_CALL_LOG",
-                    checked = callLogEnabled,
+                    checked = callLogEnabled && callLogPermissionState.status.isGranted,
                     onCheckedChange = {
+                        viewModel.toggleCallLog(it)
                         if (it && !callLogPermissionState.status.isGranted) callLogPermissionState.launchPermissionRequest()
-                        else viewModel.toggleCallLog(it)
                     }
                 )
             }
@@ -212,8 +213,12 @@ fun SourcesScreen(
                     name = "Contacts",
                     desc = "Match a name in a message to a number so \"Call\" can dial",
                     meta = "READ_CONTACTS",
-                    checked = contactsGranted,
-                    onCheckedChange = { if (it && !contactsGranted) contactsPermissionState.launchPermissionRequest() }
+                    // On only when the user allows it AND the permission is granted, so it can be turned off.
+                    checked = contactsEnabled && contactsGranted,
+                    onCheckedChange = {
+                        viewModel.toggleContacts(it)
+                        if (it && !contactsGranted) contactsPermissionState.launchPermissionRequest()
+                    }
                 )
             }
 
@@ -265,10 +270,10 @@ fun SourcesScreen(
                     name = "Calendar",
                     desc = "Dedupe + add events on approve",
                     meta = "Calendar access",
-                    checked = calendarEnabled,
+                    checked = calendarEnabled && calendarPermissionState.allPermissionsGranted,
                     onCheckedChange = {
+                        viewModel.toggleCalendar(it)
                         if (it && !calendarPermissionState.allPermissionsGranted) calendarPermissionState.launchMultiplePermissionRequest()
-                        else viewModel.toggleCalendar(it)
                     }
                 )
             }
@@ -280,11 +285,11 @@ fun SourcesScreen(
                     name = "Voice / Call recordings",
                     desc = "Watch folders for new audio to transcribe",
                     meta = if (voskPresent) "On-device (Vosk)" else "Model not downloaded — get it in Settings",
-                    checked = audioEnabled,
-                    warn = audioEnabled && !voskPresent,
+                    checked = audioEnabled && audioPermissionState.status.isGranted,
+                    warn = audioEnabled && audioPermissionState.status.isGranted && !voskPresent,
                     onCheckedChange = {
+                        viewModel.toggleAudio(it)
                         if (it && !audioPermissionState.status.isGranted) audioPermissionState.launchPermissionRequest()
-                        else viewModel.toggleAudio(it)
                     }
                 )
                 if (audioEnabled) {
@@ -308,11 +313,11 @@ fun SourcesScreen(
                     name = "Screenshots (OCR)",
                     desc = "Read text from new screenshots, on-device",
                     meta = if (ocrPresent) "On-device (Tesseract)" else "Model not downloaded — get it in Settings",
-                    checked = imagesEnabled,
-                    warn = imagesEnabled && !ocrPresent,
+                    checked = imagesEnabled && imagesPermissionState.status.isGranted,
+                    warn = imagesEnabled && imagesPermissionState.status.isGranted && !ocrPresent,
                     onCheckedChange = {
+                        viewModel.toggleImages(it)
                         if (it && !imagesPermissionState.status.isGranted) imagesPermissionState.launchPermissionRequest()
-                        else viewModel.toggleImages(it)
                     }
                 )
             }
