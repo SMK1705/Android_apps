@@ -117,18 +117,27 @@ class NotesViewModel @Inject constructor(
         viewModelScope.launch { dao.deleteNote(note) }
     }
 
-    // Priority order (research-backed: overdue → soonest due → type → recency). Bucket 0 overdue,
-    // 1 upcoming-dated, 2 undated; within dated buckets by due (ascending), then type
-    // (reminder → todo → note), then most-recently-created first.
+    // Priority order (research-backed: overdue → soonest due → priority → type → recency). Bucket 0
+    // overdue, 1 upcoming-dated, 2 undated; within dated buckets by due (ascending), then the priority
+    // flag (high first — the lead signal for undated items), then type, then most-recently-created.
     private fun prioritise(list: List<Note>) =
         list.sortedWith(
-            compareBy({ dueBucket(it) }, { dueSortKey(it) }, { typeRank(it.type) }, { -it.createdDate })
+            compareBy(
+                { dueBucket(it) }, { dueSortKey(it) }, { priorityRank(it.priority) },
+                { typeRank(it.type) }, { -it.createdDate }
+            )
         )
 
     private fun dueBucket(note: Note): Int = when {
         isOverdue(note.dueDate, note.dueTime) -> 0
         note.dueDate != null -> 1
         else -> 2
+    }
+
+    private fun priorityRank(priority: String): Int = when (priority) {
+        "high" -> 0
+        "low" -> 2
+        else -> 1 // normal
     }
 
     private fun typeRank(type: String): Int = when (type) {

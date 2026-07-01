@@ -10,7 +10,7 @@ import com.rajasudhan.taskmind.data.model.Suggestion
 
 @Database(
     entities = [Note::class, Suggestion::class, RejectedPattern::class],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 abstract class TaskMindDatabase : RoomDatabase() {
@@ -60,6 +60,13 @@ abstract class TaskMindDatabase : RoomDatabase() {
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE suggestions ADD COLUMN recurrence TEXT")
+            }
+        }
+
+        /** v6 adds a `priority` column to notes ("low"/"normal"/"high"); existing rows default to normal. */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE notes ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'")
             }
         }
     }

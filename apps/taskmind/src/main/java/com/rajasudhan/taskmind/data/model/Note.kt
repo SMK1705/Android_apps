@@ -25,5 +25,7 @@ data class Note(
     val locationLat: Double? = null,
     val locationLng: Double? = null,
     val locationRadius: Double? = null, // metres
-    val locationLabel: String? = null
+    val locationLabel: String? = null,
+    // v6 (MIGRATION_5_6): "low" | "normal" | "high" — the priority sort key after due date.
+    @ColumnInfo(defaultValue = "'normal'") val priority: String = "normal"
 )

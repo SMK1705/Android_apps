@@ -225,6 +225,14 @@ private fun BoldNoteCard(
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         BoldKindChip(kind)
+                        if (note.priority == "high") {
+                            Box(
+                                Modifier.clip(RoundedCornerShape(4.dp)).background(c.skipBg)
+                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                            ) {
+                                Text("HIGH", style = BoldType.detailMeta.copy(fontSize = 8.5.sp, letterSpacing = 0.5.sp), color = c.skip)
+                            }
+                        }
                         Text(
                             note.source,
                             style = BoldType.noteSrcMeta.copy(fontSize = 10.sp),

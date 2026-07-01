@@ -276,6 +276,19 @@ fun NoteDetailScreen(
                 )
             }
 
+            // ── Priority (low / normal / high) ──
+            Spacer(Modifier.height(22.dp))
+            SectionLabel("Priority")
+            Spacer(Modifier.height(10.dp))
+            DetailCard {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Low", "Normal", "High").forEach { level ->
+                        val value = level.lowercase()
+                        BoldFilterChip(level, n.priority == value, { viewModel.updatePriority(value) })
+                    }
+                }
+            }
+
             Spacer(Modifier.height(20.dp))
             BoldActionButton("Delete", Icons.Default.DeleteOutline, filled = false, danger = true) {
                 deleting = true; viewModel.deleteNote(onBack)
