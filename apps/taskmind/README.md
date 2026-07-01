@@ -8,7 +8,7 @@ them as notes / to-dos or schedules reminders (one-off, recurring, or location-b
 It is a personal app you sideload on your own device (not for the Play Store). All understanding
 runs on-device by default; nothing leaves the phone unless you explicitly enable a cloud provider.
 
-- **Version:** Update 4 — latest release (tag `taskmind-v4`, `versionName` 4.0)
+- **Version:** Update 5 — latest release (tag `taskmind-v5`, `versionName` 5.0)
 - **Target device:** Samsung Galaxy S25 Ultra, One UI, Android 16
 - **Package:** `com.rajasudhan.taskmind`
 - **Stack:** Kotlin, Jetpack Compose (Material 3), Hilt, Room + SQLCipher (`net.zetetic:sqlcipher-android`,

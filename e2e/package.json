@@ -1,9 +1,0 @@
-{
-  "name": "taskmind-e2e",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Momentic mobile (Android) end-to-end tests for the TaskMind app.",
-  "devDependencies": {
-    "momentic-mobile": "^1.3.5"
-  }
-}
