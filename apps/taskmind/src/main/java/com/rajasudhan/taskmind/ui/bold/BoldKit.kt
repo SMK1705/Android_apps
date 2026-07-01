@@ -31,8 +31,10 @@ import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -344,6 +346,40 @@ fun BoldPageHeader(
         Row(horizontalArrangement = Arrangement.spacedBy((-4).dp), verticalAlignment = Alignment.CenterVertically) {
             trailing()
             BoldThemeToggle(isDark, onToggleTheme)
+        }
+    }
+}
+
+/**
+ * The handoff's bottom sheet: a screen-coloured modal with a drag handle, a serif title and an
+ * optional muted subtitle, then [content]. Used for the snooze / reminder / calendar pickers.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BoldBottomSheet(
+    title: String,
+    onDismiss: () -> Unit,
+    subtitle: String? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val c = BoldTheme.colors
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = c.screen,
+        dragHandle = {
+            Box(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 2.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.width(38.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(c.line2))
+            }
+        },
+    ) {
+        Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 28.dp)) {
+            Text(title, style = BoldType.emptyTitle.copy(fontSize = 26.sp), color = c.ink)
+            if (subtitle != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(subtitle, style = BoldType.body.copy(fontSize = 13.sp, lineHeight = 19.sp), color = c.muted)
+            }
+            Spacer(Modifier.height(18.dp))
+            content()
         }
     }
 }

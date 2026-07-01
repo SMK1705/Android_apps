@@ -85,16 +85,24 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.math.roundToInt
 
-/** "In 1 hour / This evening / Tomorrow" snooze targets as (label, epochMillis). */
-private fun snoozeOptions(): List<Pair<String, Long>> {
+/** A snooze target: a friendly [label], the concrete [whenText] it resolves to, and the [until] epoch. */
+private data class SnoozeChoice(val label: String, val whenText: String, val until: Long)
+
+private fun snoozeOptions(): List<SnoozeChoice> {
     val zone = ZoneId.systemDefault()
     val now = LocalDateTime.now()
     fun millis(dt: LocalDateTime) = dt.atZone(zone).toInstant().toEpochMilli()
+    val fmt = java.time.format.DateTimeFormatter.ofPattern("EEE h:mm a")
+    fun choice(label: String, dt: LocalDateTime) = SnoozeChoice(label, dt.format(fmt), millis(dt))
     val eveningDay = if (now.hour < 18) now.toLocalDate() else now.toLocalDate().plusDays(1)
+    val tomorrow = now.toLocalDate().plusDays(1)
     return listOf(
-        "In 1 hour" to System.currentTimeMillis() + 60 * 60 * 1000,
-        "This evening" to millis(eveningDay.atTime(18, 0)),
-        "Tomorrow" to millis(now.toLocalDate().plusDays(1).atTime(9, 0))
+        choice("In 30 minutes", now.plusMinutes(30)),
+        choice("In 1 hour", now.plusHours(1)),
+        choice("This evening", eveningDay.atTime(18, 0)),
+        choice("Tomorrow morning", tomorrow.atTime(9, 0)),
+        choice("Tomorrow evening", tomorrow.atTime(18, 0)),
+        choice("Next week", now.toLocalDate().plusDays(7).atTime(9, 0)),
     )
 }
 
@@ -122,6 +130,8 @@ fun InboxScreen(
     var manualText by remember { mutableStateOf("") }
     // When approving a dated item that has no time, ask for one before it lands on the calendar.
     var timePickerFor by remember { mutableStateOf<Suggestion?>(null) }
+    // The suggestion whose snooze sheet is open (null = closed).
+    var snoozeFor by remember { mutableStateOf<Suggestion?>(null) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -276,7 +286,7 @@ fun InboxScreen(
                                 onApprove = { doApprove(it) },
                                 onReject = { doReject(it) },
                                 onEdit = { viewModel.updateSuggestion(it) },
-                                onSnooze = { until -> doSnooze(suggestion, until) }
+                                onSnoozeClick = { snoozeFor = suggestion }
                             )
                         }
                     }
@@ -348,6 +358,13 @@ fun InboxScreen(
                     timePickerFor = null
                 },
                 onDismiss = { timePickerFor = null }
+            )
+        }
+
+        snoozeFor?.let { s ->
+            BoldSnoozeSheet(
+                onDismiss = { snoozeFor = null },
+                onPick = { until -> doSnooze(s, until); snoozeFor = null }
             )
         }
 
@@ -662,18 +679,53 @@ private fun ApproveTimePickerDialog(
     )
 }
 
+/** The handoff's "Snooze until" bottom sheet — friendly options, each with the time it resolves to. */
+@Composable
+private fun BoldSnoozeSheet(onDismiss: () -> Unit, onPick: (Long) -> Unit) {
+    val c = BoldTheme.colors
+    BoldBottomSheet(
+        title = "Snooze until",
+        onDismiss = onDismiss,
+        subtitle = "It comes back to your Inbox then — nothing is saved yet."
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            snoozeOptions().forEach { opt ->
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.bg2)
+                        .border(1.dp, c.line, RoundedCornerShape(14.dp)).clickable { onPick(opt.until) }
+                        .semantics { role = Role.Button }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(13.dp)
+                ) {
+                    Box(
+                        Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(c.reminderSoft),
+                        contentAlignment = Alignment.Center
+                    ) { Icon(Icons.Outlined.Schedule, contentDescription = null, tint = c.reminder, modifier = Modifier.size(17.dp)) }
+                    Text(
+                        opt.label,
+                        style = BoldType.body.copy(fontSize = 15.sp, fontWeight = FontWeight.Medium),
+                        color = c.ink,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(opt.whenText, style = BoldType.detailMeta.copy(fontSize = 11.5.sp), color = c.muted)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun BoldSuggestionCard(
     suggestion: Suggestion,
     onApprove: (Suggestion) -> Unit,
     onReject: (Suggestion) -> Unit,
     onEdit: (Suggestion) -> Unit,
-    onSnooze: (Long) -> Unit
+    onSnoozeClick: () -> Unit
 ) {
     val c = BoldTheme.colors
     var expanded by remember { mutableStateOf(false) }
     var isEditing by remember { mutableStateOf(false) }
-    var snoozeMenu by remember { mutableStateOf(false) }
     var editedTitle by remember { mutableStateOf(suggestion.extractedTitle) }
     var editedDueDate by remember { mutableStateOf(suggestion.dueDate ?: "") }
     var editedDueTime by remember { mutableStateOf(suggestion.dueTime ?: "") }
@@ -760,18 +812,11 @@ private fun BoldSuggestionCard(
                         contentAlignment = Alignment.Center
                     ) { Icon(Icons.Default.Close, contentDescription = "Reject", tint = c.ink2, modifier = Modifier.size(15.dp)) }
                     Spacer(Modifier.width(8.dp))
-                    Box {
-                        Box(
-                            Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
-                                .border(1.dp, c.line2, RoundedCornerShape(10.dp)).clickable { snoozeMenu = true },
-                            contentAlignment = Alignment.Center
-                        ) { Icon(Icons.Outlined.Schedule, contentDescription = "Snooze", tint = c.ink2, modifier = Modifier.size(15.dp)) }
-                        DropdownMenu(expanded = snoozeMenu, onDismissRequest = { snoozeMenu = false }) {
-                            snoozeOptions().forEach { (label, until) ->
-                                DropdownMenuItem(text = { Text(label) }, onClick = { snoozeMenu = false; onSnooze(until) })
-                            }
-                        }
-                    }
+                    Box(
+                        Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
+                            .border(1.dp, c.line2, RoundedCornerShape(10.dp)).clickable { onSnoozeClick() },
+                        contentAlignment = Alignment.Center
+                    ) { Icon(Icons.Outlined.Schedule, contentDescription = "Snooze", tint = c.ink2, modifier = Modifier.size(15.dp)) }
                     Spacer(Modifier.width(8.dp))
                     Row(
                         Modifier.height(34.dp).clip(RoundedCornerShape(10.dp)).background(c.accent)
