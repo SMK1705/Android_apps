@@ -38,6 +38,8 @@ object BoldType {
     val filterChip = TextStyle(fontFamily = HankenGrotesk, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
     val body = TextStyle(fontFamily = HankenGrotesk, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 20.sp)
     val button = TextStyle(fontFamily = HankenGrotesk, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+    /** Monospace CTA label (the handoff's primary action buttons): JetBrains Mono semibold, tracked. */
+    val monoBtn = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, letterSpacing = 0.5.sp)
     val sourceName = TextStyle(fontFamily = HankenGrotesk, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp)
     val sourceMeta = TextStyle(fontFamily = HankenGrotesk, fontWeight = FontWeight.Normal, fontSize = 11.5.sp)
     val stayChip = TextStyle(fontFamily = HankenGrotesk, fontWeight = FontWeight.Medium, fontSize = 12.sp)
