@@ -83,6 +83,20 @@ class NoteDetailViewModel @Inject constructor(
         }
     }
 
+    /** Set the item's one-off date + time (the sheet's "Once" mode); (re)schedules or cancels the alarm. */
+    fun updateSchedule(dueDate: String?, dueTime: String?) {
+        val current = note.value ?: return
+        viewModelScope.launch {
+            val type = if (dueTime != null) "reminder" else current.type
+            dao.updateNote(current.copy(dueDate = dueDate, dueTime = dueTime, type = type))
+            if (dueTime != null) {
+                alarmScheduler.schedule(current.id, current.title, dueDate, dueTime, current.recurrence)
+            } else {
+                alarmScheduler.cancel(current.id)
+            }
+        }
+    }
+
     /** Attach a place reminder (caller must already hold fine + background location). */
     fun setLocationReminder(lat: Double, lng: Double, label: String) {
         val current = note.value ?: return

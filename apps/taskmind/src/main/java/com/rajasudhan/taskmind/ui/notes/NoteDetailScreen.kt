@@ -16,18 +16,21 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -40,6 +43,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextDecoration
@@ -60,8 +64,10 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberMarkerState
+import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.source.RecurrenceUtil
 import com.rajasudhan.taskmind.data.source.resolveCallNumber
+import com.rajasudhan.taskmind.ui.bold.BoldBottomSheet
 import com.rajasudhan.taskmind.ui.bold.BoldFilterChip
 import com.rajasudhan.taskmind.ui.bold.BoldKindChip
 import com.rajasudhan.taskmind.ui.bold.boldKindFor
@@ -95,6 +101,7 @@ fun NoteDetailScreen(
     val fineLocation = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
     val backgroundLocation = rememberPermissionState(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
     var showLocationDialog by remember { mutableStateOf(false) }
+    var showReminderSheet by remember { mutableStateOf(false) }
     var locationLabel by remember { mutableStateOf("") }
     var pendingLabel by remember { mutableStateOf<String?>(null) }
 
@@ -218,19 +225,9 @@ fun NoteDetailScreen(
             if (completable) {
                 Spacer(Modifier.height(22.dp))
                 SectionLabel("Reminder")
-
-                if (n.type == "reminder") {
-                    Spacer(Modifier.height(10.dp))
-                    val current = (n.recurrence ?: "None").replaceFirstChar { it.uppercase() }
-                    Row(
-                        Modifier.fillMaxWidth().horizontalScrollSafe(),
-                        horizontalArrangement = Arrangement.spacedBy(7.dp)
-                    ) {
-                        RecurrenceUtil.OPTIONS.forEach { option ->
-                            BoldFilterChip(option, current.equals(option, ignoreCase = true), { viewModel.updateRecurrence(option) })
-                        }
-                    }
-                }
+                Spacer(Modifier.height(10.dp))
+                // A tappable summary that opens the reminder sheet (Once / Repeat / Location).
+                ReminderScheduleCard(note = n, onClick = { showReminderSheet = true })
 
                 Spacer(Modifier.height(10.dp))
                 if (n.locationLabel != null) {
@@ -337,12 +334,167 @@ fun NoteDetailScreen(
             }
         )
     }
+
+    if (showReminderSheet) {
+        ReminderSheet(
+            note = n,
+            onDismiss = { showReminderSheet = false },
+            onSchedule = { date, time -> viewModel.updateSchedule(date, time); showReminderSheet = false },
+            onSetRecurrence = { viewModel.updateRecurrence(it) },
+            onUseLocation = { showReminderSheet = false; locationLabel = ""; showLocationDialog = true }
+        )
+    }
 }
 
 /** Mono uppercase section label (matches the rest of the redesign). */
 @Composable
 private fun SectionLabel(text: String) {
     Text(text.uppercase(), style = BoldType.sectionMono, color = BoldTheme.colors.ink3)
+}
+
+/** A tappable summary of the current schedule (due + repeat) that opens the reminder sheet. */
+@Composable
+private fun ReminderScheduleCard(note: Note, onClick: () -> Unit) {
+    val c = BoldTheme.colors
+    val due = listOfNotNull(note.dueDate, note.dueTime).joinToString(" · ").ifBlank { "Not scheduled" }
+    val repeat = note.recurrence?.replaceFirstChar { it.uppercase() }
+    Row(
+        Modifier.fillMaxWidth().clip(ShapeCard).background(c.surface).border(1.dp, c.line, ShapeCard)
+            .clickable(onClick = onClick).semantics { role = Role.Button }
+            .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(13.dp)
+    ) {
+        Box(
+            Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).background(c.reminderSoft),
+            contentAlignment = Alignment.Center
+        ) { Icon(Icons.Outlined.Schedule, contentDescription = null, tint = c.reminder, modifier = Modifier.size(19.dp)) }
+        Column(Modifier.weight(1f)) {
+            Text(due, style = BoldType.body.copy(fontSize = 14.sp), color = c.ink)
+            Text(
+                if (repeat != null) "Repeats $repeat · tap to change" else "Tap to set date, repeat or place",
+                style = BoldType.body.copy(fontSize = 12.sp), color = c.muted
+            )
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = c.ink3, modifier = Modifier.size(18.dp))
+    }
+}
+
+/**
+ * The handoff's "Set a reminder" sheet: a mode toggle (Once / Repeat / Location). Once picks a date +
+ * time; Repeat sets the recurrence; Location hands off to the current-place capture.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReminderSheet(
+    note: Note,
+    onDismiss: () -> Unit,
+    onSchedule: (String?, String?) -> Unit,
+    onSetRecurrence: (String) -> Unit,
+    onUseLocation: () -> Unit,
+) {
+    val c = BoldTheme.colors
+    var mode by remember { mutableStateOf(if (note.locationLabel != null) 2 else 0) }
+    val timeState = rememberTimePickerState(
+        initialHour = note.dueTime?.substringBefore(":")?.trim()?.toIntOrNull() ?: 9,
+        initialMinute = note.dueTime?.substringAfter(":")?.trim()?.toIntOrNull() ?: 0,
+        is24Hour = false
+    )
+    var pickedDate by remember { mutableStateOf(note.dueDate) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    BoldBottomSheet(
+        title = "Set a reminder",
+        onDismiss = onDismiss,
+        subtitle = "Scheduled with an exact alarm — fires even in Doze."
+    ) {
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp)).background(c.bg2)
+                .border(1.dp, c.line, RoundedCornerShape(13.dp)).padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            listOf("ONCE", "REPEAT", "LOCATION").forEachIndexed { i, label ->
+                Box(
+                    Modifier.weight(1f).height(36.dp)
+                        .shadow(if (mode == i) 3.dp else 0.dp, RoundedCornerShape(10.dp), clip = false)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (mode == i) c.surface else Color.Transparent).clickable { mode = i }
+                        .semantics { role = Role.Button; selected = mode == i },
+                    contentAlignment = Alignment.Center
+                ) { Text(label, style = BoldType.detailMeta.copy(fontSize = 11.sp, letterSpacing = 0.4.sp), color = if (mode == i) c.ink else c.muted) }
+            }
+        }
+        Spacer(Modifier.height(18.dp))
+
+        when (mode) {
+            0 -> {
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.bg2)
+                        .border(1.dp, c.line, RoundedCornerShape(14.dp)).clickable { showDatePicker = true }.padding(14.dp)
+                ) {
+                    Text("DATE", style = BoldType.detailMeta.copy(fontSize = 10.sp, letterSpacing = 0.5.sp), color = c.ink3)
+                    Spacer(Modifier.height(6.dp))
+                    Text(pickedDate ?: "Pick a date", style = BoldType.body.copy(fontSize = 16.sp, fontWeight = FontWeight.Medium), color = if (pickedDate != null) c.ink else c.muted)
+                }
+                Spacer(Modifier.height(12.dp))
+                Text("TIME", style = BoldType.detailMeta.copy(fontSize = 10.sp, letterSpacing = 0.5.sp), color = c.ink3)
+                Spacer(Modifier.height(6.dp))
+                TimeInput(state = timeState)
+            }
+            1 -> {
+                Text("FREQUENCY", style = BoldType.detailMeta.copy(fontSize = 10.sp, letterSpacing = 0.5.sp), color = c.ink3)
+                Spacer(Modifier.height(10.dp))
+                val current = (note.recurrence ?: "None").replaceFirstChar { it.uppercase() }
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    RecurrenceUtil.OPTIONS.forEach { option ->
+                        BoldFilterChip(option, current.equals(option, ignoreCase = true), { onSetRecurrence(option) })
+                    }
+                }
+            }
+            else -> {
+                Text(
+                    if (note.locationLabel != null) "Reminding you at ${note.locationLabel}."
+                        else "Save your current place and get reminded when you return.",
+                    style = BoldType.body.copy(fontSize = 13.sp), color = c.muted
+                )
+                Spacer(Modifier.height(14.dp))
+                BoldActionButton(if (note.locationLabel != null) "Change place" else "Use current location", Icons.Default.Place, filled = false) { onUseLocation() }
+            }
+        }
+
+        if (mode != 2) {
+            Spacer(Modifier.height(22.dp))
+            Row(
+                Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(15.dp)).background(c.accent)
+                    .clickable {
+                        if (mode == 0) {
+                            val time = String.format(java.util.Locale.US, "%02d:%02d", timeState.hour, timeState.minute)
+                            onSchedule(pickedDate, time)
+                        } else onDismiss()
+                    }.semantics { role = Role.Button },
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
+            ) { Text(if (mode == 0) "SCHEDULE REMINDER" else "DONE", style = BoldType.monoBtn, color = BoldOnAccent) }
+        }
+    }
+
+    if (showDatePicker) {
+        val initMillis = pickedDate?.let {
+            runCatching { java.time.LocalDate.parse(it).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli() }.getOrNull()
+        }
+        val dateState = rememberDatePickerState(initialSelectedDateMillis = initMillis)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dateState.selectedDateMillis?.let {
+                        pickedDate = java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()
+                    }
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } }
+        ) { DatePicker(state = dateState) }
+    }
 }
 
 /** A flat editorial card wrapping a section's content. */
@@ -461,11 +613,6 @@ private fun LocationMapCard(lat: Double, lng: Double, radiusMeters: Double, acce
         )
     }
 }
-
-/** Lays chips in a horizontally-scrollable row so a long recurrence set never overflows. */
-@Composable
-private fun Modifier.horizontalScrollSafe(): Modifier =
-    this.horizontalScroll(rememberScrollState())
 
 /**
  * A text block you tap to edit in place: shows [value] (optionally with an edit hint), and on tap
