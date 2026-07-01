@@ -72,6 +72,25 @@ fun isOverdue(dueDate: String?, dueTime: String?): Boolean {
     }
 }
 
+/** For an overdue item: how long ago it was due — "2d" / "yesterday" / "3h" / "5m". Null if not overdue. */
+fun overdueLabel(dueDate: String?, dueTime: String?): String? {
+    val date = dueDate ?: return null
+    return try {
+        val due = if (dueTime != null) LocalDateTime.of(LocalDate.parse(date), LocalTime.parse(dueTime))
+        else LocalDate.parse(date).atTime(23, 59)
+        val mins = java.time.Duration.between(due, LocalDateTime.now()).toMinutes()
+        when {
+            mins < 1 -> null
+            mins < 60 -> "${mins}m"
+            mins < 1440 -> "${mins / 60}h"
+            mins < 2880 -> "yesterday"
+            else -> "${mins / 1440}d"
+        }
+    } catch (e: Exception) {
+        null
+    }
+}
+
 /** Maps an item's type + due date to its color category (overdue reminders/todos escalate). */
 fun categoryFor(type: String, dueDate: String?, dueTime: String?): Category = when {
     (type == "reminder" || type == "todo") && isOverdue(dueDate, dueTime) -> OverdueCategory

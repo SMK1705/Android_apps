@@ -5,10 +5,12 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
+import com.rajasudhan.taskmind.data.source.AlarmScheduler
 import com.rajasudhan.taskmind.testutil.FakeTaskMindDao
 import com.rajasudhan.taskmind.testutil.MainDispatcherRule
 import com.rajasudhan.taskmind.testutil.aNote
 import com.rajasudhan.taskmind.ui.theme.TaskMindTheme
+import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
@@ -34,7 +36,7 @@ class NotesScreenTest {
     val rules: RuleChain = RuleChain.outerRule(mainRule).around(composeRule)
 
     private val dao = FakeTaskMindDao()
-    private fun viewModel() = NotesViewModel(dao)
+    private fun viewModel() = NotesViewModel(dao, mockk<AlarmScheduler>(relaxed = true))
 
     @Test
     fun header_isShown() {
