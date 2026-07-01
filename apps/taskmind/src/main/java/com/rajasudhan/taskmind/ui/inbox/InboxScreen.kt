@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -48,16 +49,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -128,8 +132,8 @@ fun InboxScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     var showApproveAllDialog by remember { mutableStateOf(false) }
     var overflowMenu by remember { mutableStateOf(false) }
-    var showManualDialog by remember { mutableStateOf(false) }
-    var manualText by remember { mutableStateOf("") }
+    // Quick-capture sheet (Type / Speak) — the single entry point for adding an item by hand.
+    var showCaptureSheet by remember { mutableStateOf(false) }
     // When approving a dated item that has no time, ask for one before it lands on the calendar.
     var timePickerFor by remember { mutableStateOf<Suggestion?>(null) }
     // The suggestion whose snooze sheet is open (null = closed).
@@ -207,14 +211,14 @@ fun InboxScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { onMicClick() },
+                onClick = { showCaptureSheet = true },
                 containerColor = c.accent,
                 contentColor = BoldOnAccent
             ) {
                 if (isProcessingVoice) {
                     CircularProgressIndicator(modifier = Modifier.size(22.dp), color = BoldOnAccent, strokeWidth = 2.dp)
                 } else {
-                    Icon(Icons.Default.Mic, contentDescription = "Add by voice")
+                    Icon(Icons.Default.Add, contentDescription = "Capture")
                 }
             }
         }
@@ -239,7 +243,7 @@ fun InboxScreen(
                             onOverflowToggle = { overflowMenu = it },
                             isRefreshing = isRefreshing,
                             onRefresh = { viewModel.refreshRecentData() },
-                            onAdd = { showManualDialog = true },
+                            onAdd = { showCaptureSheet = true },
                             onApproveAll = { showApproveAllDialog = true },
                             onRejectAll = { viewModel.rejectAll() }
                         )
@@ -252,7 +256,7 @@ fun InboxScreen(
                             InboxEmptyBlock(
                                 isRefreshing = isRefreshing,
                                 onRefresh = { viewModel.refreshRecentData() },
-                                onAdd = { showManualDialog = true }
+                                onAdd = { showCaptureSheet = true }
                             )
                         }
                     }
@@ -319,30 +323,17 @@ fun InboxScreen(
             )
         }
 
-        if (showManualDialog) {
-            AlertDialog(
-                onDismissRequest = { showManualDialog = false },
-                title = { Text("Add an item") },
-                text = {
-                    OutlinedTextField(
-                        value = manualText,
-                        onValueChange = { manualText = it },
-                        label = { Text("Type a note, task or reminder") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+        if (showCaptureSheet) {
+            BoldCaptureSheet(
+                isRecording = isRecording,
+                isProcessingVoice = isProcessingVoice,
+                onDismiss = { recorder.cancel(); isRecording = false; showCaptureSheet = false },
+                onSubmitText = { text ->
+                    showCaptureSheet = false
+                    viewModel.addManualEntry(text) { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } }
                 },
-                confirmButton = {
-                    TextButton(
-                        enabled = manualText.isNotBlank(),
-                        onClick = {
-                            val t = manualText.trim()
-                            manualText = ""
-                            showManualDialog = false
-                            viewModel.addManualEntry(t) { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } }
-                        }
-                    ) { Text("Add") }
-                },
-                dismissButton = { TextButton(onClick = { showManualDialog = false; manualText = "" }) { Text("Cancel") } }
+                onStartRecording = { onMicClick() },
+                onStopRecording = { finishRecording(); showCaptureSheet = false }
             )
         }
 
@@ -371,21 +362,6 @@ fun InboxScreen(
             )
         }
 
-        if (isRecording) {
-            AlertDialog(
-                onDismissRequest = { recorder.cancel(); isRecording = false },
-                title = { Text("Listening…") },
-                text = { Text("Speak your note, then tap Stop. It's transcribed on-device and added to your inbox to review.") },
-                confirmButton = {
-                    Button(onClick = { finishRecording() }) {
-                        Icon(Icons.Default.Stop, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Stop")
-                    }
-                },
-                dismissButton = { TextButton(onClick = { recorder.cancel(); isRecording = false }) { Text("Cancel") } }
-            )
-        }
     }
 }
 
@@ -746,6 +722,102 @@ private fun BoldSnoozeSheet(onDismiss: () -> Unit, onPick: (Long) -> Unit) {
                     )
                     Text(opt.whenText, style = BoldType.detailMeta.copy(fontSize = 11.5.sp), color = c.muted)
                 }
+            }
+        }
+    }
+}
+
+/** The handoff's "Quick capture" sheet: type a note or speak it — both run through the pipeline. */
+@Composable
+private fun BoldCaptureSheet(
+    isRecording: Boolean,
+    isProcessingVoice: Boolean,
+    onDismiss: () -> Unit,
+    onSubmitText: (String) -> Unit,
+    onStartRecording: () -> Unit,
+    onStopRecording: () -> Unit,
+) {
+    val c = BoldTheme.colors
+    var mode by remember { mutableStateOf(0) } // 0 = type, 1 = speak
+    var text by remember { mutableStateOf("") }
+    BoldBottomSheet(
+        title = "Quick capture",
+        onDismiss = onDismiss,
+        subtitle = "Type it or speak it — understood on-device, then sent to your Inbox to approve."
+    ) {
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp)).background(c.bg2)
+                .border(1.dp, c.line, RoundedCornerShape(13.dp)).padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            listOf("TYPE", "SPEAK").forEachIndexed { i, label ->
+                Box(
+                    Modifier.weight(1f).height(36.dp)
+                        .shadow(if (mode == i) 3.dp else 0.dp, RoundedCornerShape(10.dp), clip = false)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (mode == i) c.surface else Color.Transparent).clickable { mode = i }
+                        .semantics { role = Role.Button; selected = mode == i },
+                    contentAlignment = Alignment.Center
+                ) { Text(label, style = BoldType.detailMeta.copy(fontSize = 11.sp, letterSpacing = 0.4.sp), color = if (mode == i) c.ink else c.muted) }
+            }
+        }
+        Spacer(Modifier.height(18.dp))
+
+        if (mode == 0) {
+            Box(
+                Modifier.fillMaxWidth().heightIn(min = 110.dp).clip(RoundedCornerShape(14.dp)).background(c.bg2)
+                    .border(1.dp, c.line, RoundedCornerShape(14.dp)).padding(14.dp)
+            ) {
+                if (text.isEmpty()) {
+                    Text(
+                        "Paste a message, or jot a task — “Renew passport before August”…",
+                        style = BoldType.body.copy(fontSize = 14.5.sp, lineHeight = 21.sp), color = c.ink3
+                    )
+                }
+                BasicTextField(
+                    value = text, onValueChange = { text = it },
+                    textStyle = BoldType.body.copy(fontSize = 14.5.sp, lineHeight = 21.sp, color = c.ink),
+                    cursorBrush = SolidColor(c.accent),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            Spacer(Modifier.height(18.dp))
+            val enabled = text.isNotBlank()
+            Row(
+                Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(15.dp))
+                    .background(if (enabled) c.accent else c.surface2)
+                    .then(if (enabled) Modifier.clickable { onSubmitText(text.trim()) } else Modifier)
+                    .semantics { role = Role.Button },
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
+            ) { Text("ANALYSE ON-DEVICE", style = BoldType.monoBtn, color = if (enabled) BoldOnAccent else c.ink3) }
+        } else {
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    Modifier.size(84.dp).clip(CircleShape)
+                        .background(if (isRecording) c.skipBg else c.accentGlow)
+                        .border(1.5.dp, if (isRecording) c.skip else c.accent, CircleShape)
+                        .clickable(enabled = !isProcessingVoice) { if (isRecording) onStopRecording() else onStartRecording() }
+                        .semantics { role = Role.Button },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isProcessingVoice) {
+                        CircularProgressIndicator(Modifier.size(30.dp), color = c.accent, strokeWidth = 2.dp)
+                    } else {
+                        Icon(
+                            if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
+                            contentDescription = null, tint = if (isRecording) c.skip else c.accent, modifier = Modifier.size(34.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    when {
+                        isProcessingVoice -> "Transcribing on-device…"
+                        isRecording -> "Listening… tap to stop"
+                        else -> "Tap to record a voice note"
+                    },
+                    style = BoldType.detailMeta.copy(fontSize = 11.5.sp, letterSpacing = 0.5.sp), color = c.muted
+                )
             }
         }
     }
