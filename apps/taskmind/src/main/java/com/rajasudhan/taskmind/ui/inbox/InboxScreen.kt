@@ -18,7 +18,9 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -345,19 +347,20 @@ fun InboxScreen(
         }
 
         timePickerFor?.let { suggestion ->
-            ApproveTimePickerDialog(
-                onSetTime = { hour, minute ->
+            BoldCalendarSheet(
+                suggestion = suggestion,
+                onDismiss = { timePickerFor = null },
+                onNoteOnly = {
+                    viewModel.approveSuggestion(suggestion, addCalendar = false)
+                    showUndo("Kept as note")
+                    timePickerFor = null
+                },
+                onAddToCalendar = { hour, minute, duration ->
                     val time = String.format(java.util.Locale.US, "%02d:%02d", hour, minute)
-                    viewModel.approveSuggestion(suggestion.copy(dueTime = time, type = "reminder"))
-                    showUndo("Kept")
+                    viewModel.approveSuggestion(suggestion.copy(dueTime = time, type = "reminder"), durationMinutes = duration)
+                    showUndo("Added to calendar")
                     timePickerFor = null
-                },
-                onKeepAllDay = {
-                    viewModel.approveSuggestion(suggestion)
-                    showUndo("Kept")
-                    timePickerFor = null
-                },
-                onDismiss = { timePickerFor = null }
+                }
             )
         }
 
@@ -656,27 +659,60 @@ private fun InboxEmptyBlock(isRefreshing: Boolean, onRefresh: () -> Unit, onAdd:
  * Asked when approving a dated item that has no time. "Set time" turns it into a timed reminder;
  * "Keep as all-day" approves it unchanged (the all-day calendar entry).
  */
+/**
+ * The handoff's "Add to calendar" sheet, shown when approving a dated item that still needs a time.
+ * Pick the time + event duration, then either keep it as a plain note or schedule it (timed reminder
+ * + calendar event). The day-timeline preview and calendar-target picker from the mock are deferred.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ApproveTimePickerDialog(
-    onSetTime: (Int, Int) -> Unit,
-    onKeepAllDay: () -> Unit,
-    onDismiss: () -> Unit
+private fun BoldCalendarSheet(
+    suggestion: Suggestion,
+    onDismiss: () -> Unit,
+    onNoteOnly: () -> Unit,
+    onAddToCalendar: (Int, Int, Int) -> Unit,
 ) {
+    val c = BoldTheme.colors
     val state = rememberTimePickerState(initialHour = 9, initialMinute = 0, is24Hour = false)
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Set a time?") },
-        text = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("No time was detected. Pick a time to add a timed reminder, or keep it as an all-day item.")
-                Spacer(Modifier.height(16.dp))
-                TimeInput(state = state)
+    var duration by remember { mutableStateOf(30) }
+    val kind = boldKindFor(suggestion.type, suggestion.dueDate != null)
+    BoldBottomSheet(
+        title = "Add to calendar",
+        onDismiss = onDismiss,
+        subtitle = "Check the time before it's scheduled — an exact alarm that fires even in Doze."
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            BoldKindDot(kind, size = 10.dp)
+            Text(suggestion.extractedTitle, style = BoldType.heroTitle, color = c.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("TIME", style = BoldType.sectionMono, color = c.ink3)
+        Spacer(Modifier.height(8.dp))
+        TimeInput(state = state)
+        Spacer(Modifier.height(6.dp))
+        Text("DURATION", style = BoldType.sectionMono, color = c.ink3)
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            listOf(15, 30, 45, 60, 90).forEach { m ->
+                BoldFilterChip("$m min", duration == m, { duration = m })
             }
-        },
-        confirmButton = { TextButton(onClick = { onSetTime(state.hour, state.minute) }) { Text("Set time") } },
-        dismissButton = { TextButton(onClick = onKeepAllDay) { Text("Keep as all-day") } }
-    )
+        }
+        Spacer(Modifier.height(22.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(15.dp))
+                    .border(1.dp, c.line2, RoundedCornerShape(15.dp)).clickable { onNoteOnly() }
+                    .semantics { role = Role.Button },
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
+            ) { Text("NOTE ONLY", style = BoldType.monoBtn, color = c.ink) }
+            Row(
+                Modifier.weight(1.6f).height(52.dp).clip(RoundedCornerShape(15.dp)).background(c.accent)
+                    .clickable { onAddToCalendar(state.hour, state.minute, duration) }
+                    .semantics { role = Role.Button },
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
+            ) { Text("ADD TO CALENDAR", style = BoldType.monoBtn, color = BoldOnAccent) }
+        }
+    }
 }
 
 /** The handoff's "Snooze until" bottom sheet — friendly options, each with the time it resolves to. */
