@@ -4,6 +4,8 @@ import android.content.Context
 import com.rajasudhan.taskmind.data.source.SourceManager
 import com.rajasudhan.taskmind.data.source.email.GmailAuth
 import com.rajasudhan.taskmind.data.source.email.GmailCollector
+import com.rajasudhan.taskmind.data.source.ocr.OcrEngine
+import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
 import com.rajasudhan.taskmind.testutil.MainDispatcherRule
 import io.mockk.coVerify
 import io.mockk.every
@@ -27,7 +29,10 @@ class SourcesViewModelTest {
 
     private fun vm(): SourcesViewModel {
         every { gmailAuth.connectedAccounts } returns emptySet()
-        return SourcesViewModel(sourceManager, gmailAuth, gmailCollector, context)
+        return SourcesViewModel(
+            sourceManager, gmailAuth, gmailCollector,
+            mockk<VoskTranscriber>(relaxed = true), mockk<OcrEngine>(relaxed = true), context
+        )
     }
 
     @Test

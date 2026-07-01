@@ -10,6 +10,8 @@ import com.rajasudhan.taskmind.data.source.SourceManager
 import com.rajasudhan.taskmind.data.source.email.GmailAuth
 import com.rajasudhan.taskmind.data.source.email.GmailAuthState
 import com.rajasudhan.taskmind.data.source.email.GmailCollector
+import com.rajasudhan.taskmind.data.source.ocr.OcrEngine
+import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +32,8 @@ class SourcesViewModel @Inject constructor(
     private val sourceManager: SourceManager,
     private val gmailAuth: GmailAuth,
     private val gmailCollector: GmailCollector,
+    private val voskTranscriber: VoskTranscriber,
+    private val ocrEngine: OcrEngine,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -59,6 +63,24 @@ class SourcesViewModel @Inject constructor(
     fun setAppMonitored(packageName: String, enabled: Boolean) {
         viewModelScope.launch { sourceManager.setNotificationAppEnabled(packageName, enabled) }
     }
+
+    // On-device model presence for the "needs setup" hint (audio → Vosk, images → Tesseract). Optimistic
+    // (true) until the first check so the amber flag never flashes on open. Models are downloaded from
+    // Settings, so this is re-checked whenever the Sources screen is (re)entered.
+    private val _voskModelPresent = MutableStateFlow(true)
+    val voskModelPresent: StateFlow<Boolean> = _voskModelPresent
+    private val _ocrModelPresent = MutableStateFlow(true)
+    val ocrModelPresent: StateFlow<Boolean> = _ocrModelPresent
+
+    /** Re-checks whether the on-device transcription / OCR models are downloaded (file checks off-main). */
+    fun refreshModelStatus() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _voskModelPresent.value = voskTranscriber.isModelPresent()
+            _ocrModelPresent.value = ocrEngine.isModelPresent()
+        }
+    }
+
+    init { refreshModelStatus() }
 
     val isNotificationsEnabled = sourceManager.isNotificationsEnabled.stateIn(viewModelScope, SharingStarted.Lazily, false)
     val isSmsEnabled = sourceManager.isSmsEnabled.stateIn(viewModelScope, SharingStarted.Lazily, false)

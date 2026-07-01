@@ -3,7 +3,9 @@ package com.rajasudhan.taskmind.ui.notes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,6 +59,7 @@ fun NotesScreen(
     val showCompleted by viewModel.showCompleted.collectAsState()
     val counts by viewModel.kindCounts.collectAsState()
     val completedCount by viewModel.completedCount.collectAsState()
+    val kindFilter by viewModel.kindFilter.collectAsState()
 
     Column(Modifier.fillMaxSize().background(c.screen)) {
         // Header / search / segment share the spec's 22dp inset; the card list uses 16dp.
@@ -76,6 +79,11 @@ fun NotesScreen(
                 completedCount = completedCount,
                 onSelect = { viewModel.setShowCompleted(it) }
             )
+            // Kind filter applies to the Active list only; the Done view is unfiltered.
+            if (!showCompleted) {
+                Spacer(Modifier.height(12.dp))
+                NotesKindFilter(kind = kindFilter, counts = counts, onSelect = viewModel::setKindFilter)
+            }
             Spacer(Modifier.height(14.dp))
         }
 
@@ -136,6 +144,20 @@ private fun NotesSegment(showCompleted: Boolean, activeCount: Int, completedCoun
     ) {
         SegTab("Active · $activeCount", selected = !showCompleted, modifier = Modifier.weight(1f)) { onSelect(false) }
         SegTab("Done · $completedCount", selected = showCompleted, modifier = Modifier.weight(1f)) { onSelect(true) }
+    }
+}
+
+/** All / Tasks / Reminders / Notes chips that filter the Active list by kind (design's filter row). */
+@Composable
+private fun NotesKindFilter(kind: String?, counts: Map<String, Int>, onSelect: (String?) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        BoldFilterChip("All", kind == null, { onSelect(null) }, count = counts["all"] ?: 0)
+        BoldFilterChip("Tasks", kind == "todo", { onSelect("todo") }, count = counts["todo"] ?: 0)
+        BoldFilterChip("Reminders", kind == "reminder", { onSelect("reminder") }, count = counts["reminder"] ?: 0)
+        BoldFilterChip("Notes", kind == "note", { onSelect("note") }, count = counts["note"] ?: 0)
     }
 }
 

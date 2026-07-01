@@ -2,6 +2,8 @@ package com.rajasudhan.taskmind.ui.notes
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import com.rajasudhan.taskmind.testutil.FakeTaskMindDao
 import com.rajasudhan.taskmind.testutil.MainDispatcherRule
@@ -38,7 +40,8 @@ class NotesScreenTest {
     fun header_isShown() {
         composeRule.setContent { TaskMindTheme { NotesScreen(viewModel = viewModel()) } }
 
-        composeRule.onNodeWithText("Notes").assertIsDisplayed()
+        // "Notes" now appears twice — the page title and the kind-filter chip; the title is first.
+        composeRule.onAllNodesWithText("Notes").onFirst().assertIsDisplayed()
         composeRule.onNodeWithText("Approved · encrypted at rest").assertIsDisplayed()
     }
 

@@ -63,9 +63,14 @@ fun SourcesScreen(
     val installedApps by viewModel.installedApps.collectAsState()
     var appSearch by remember { mutableStateOf("") }
 
+    val voskPresent by viewModel.voskModelPresent.collectAsState()
+    val ocrPresent by viewModel.ocrModelPresent.collectAsState()
+
     LaunchedEffect(notificationsEnabled) {
         if (notificationsEnabled) viewModel.loadInstalledApps()
     }
+    // Re-check on entry so a model downloaded in Settings clears the warning on return.
+    LaunchedEffect(Unit) { viewModel.refreshModelStatus() }
     val filteredApps = remember(appSearch, installedApps) {
         if (appSearch.isBlank()) installedApps
         else installedApps.filter {
@@ -274,8 +279,9 @@ fun SourcesScreen(
                 BoldSourceRow(
                     name = "Voice / Call recordings",
                     desc = "Watch folders for new audio to transcribe",
-                    meta = "On-device (Vosk)",
+                    meta = if (voskPresent) "On-device (Vosk)" else "Model not downloaded — get it in Settings",
                     checked = audioEnabled,
+                    warn = audioEnabled && !voskPresent,
                     onCheckedChange = {
                         if (it && !audioPermissionState.status.isGranted) audioPermissionState.launchPermissionRequest()
                         else viewModel.toggleAudio(it)
@@ -301,8 +307,9 @@ fun SourcesScreen(
                 BoldSourceRow(
                     name = "Screenshots (OCR)",
                     desc = "Read text from new screenshots, on-device",
-                    meta = "On-device (Tesseract)",
+                    meta = if (ocrPresent) "On-device (Tesseract)" else "Model not downloaded — get it in Settings",
                     checked = imagesEnabled,
+                    warn = imagesEnabled && !ocrPresent,
                     onCheckedChange = {
                         if (it && !imagesPermissionState.status.isGranted) imagesPermissionState.launchPermissionRequest()
                         else viewModel.toggleImages(it)

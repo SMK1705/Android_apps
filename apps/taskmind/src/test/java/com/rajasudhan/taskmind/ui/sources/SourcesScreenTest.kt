@@ -7,6 +7,8 @@ import androidx.compose.ui.test.onNodeWithText
 import com.rajasudhan.taskmind.data.source.SourceManager
 import com.rajasudhan.taskmind.data.source.email.GmailAuth
 import com.rajasudhan.taskmind.data.source.email.GmailCollector
+import com.rajasudhan.taskmind.data.source.ocr.OcrEngine
+import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
 import com.rajasudhan.taskmind.testutil.MainDispatcherRule
 import com.rajasudhan.taskmind.ui.theme.TaskMindTheme
 import io.mockk.every
@@ -41,7 +43,10 @@ class SourcesScreenTest {
 
     private fun viewModel(): SourcesViewModel {
         every { gmailAuth.connectedAccounts } returns emptySet()
-        return SourcesViewModel(sourceManager, gmailAuth, gmailCollector, context)
+        return SourcesViewModel(
+            sourceManager, gmailAuth, gmailCollector,
+            mockk<VoskTranscriber>(relaxed = true), mockk<OcrEngine>(relaxed = true), context
+        )
     }
 
     @Test
