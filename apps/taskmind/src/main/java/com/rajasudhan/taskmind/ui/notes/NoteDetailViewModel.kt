@@ -73,6 +73,13 @@ class NoteDetailViewModel @Inject constructor(
         viewModelScope.launch { dao.updateNote(current.copy(summary = summary)) }
     }
 
+    /** Set the item's priority flag ("low" / "normal" / "high"). */
+    fun updatePriority(priority: String) {
+        val current = note.value ?: return
+        if (priority == current.priority) return
+        viewModelScope.launch { dao.updateNotePriority(current.id, priority) }
+    }
+
     /** Set/clear how a reminder repeats; reschedules the alarm so the next fire reflects it. */
     fun updateRecurrence(option: String) {
         val current = note.value ?: return

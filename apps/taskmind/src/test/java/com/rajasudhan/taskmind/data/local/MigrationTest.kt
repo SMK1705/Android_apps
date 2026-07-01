@@ -10,6 +10,7 @@ import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_1
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_2_3
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_3_4
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_4_5
+import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_5_6
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -21,14 +22,14 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * Exercises the real MIGRATION_1_2 … MIGRATION_4_5 chain end to end.
+ * Exercises the real MIGRATION_1_2 … MIGRATION_5_6 chain end to end.
  *
  * There are no exported schemas for v1–v4 (export was only enabled at v5), so instead of
- * MigrationTestHelper we create a genuine v1 database with raw SQL (the v5 columns minus everything
- * the migrations add), seed a row in each table, then open it through Room with all four migrations.
- * Opening triggers the migration chain **and** Room's own schema validation against the current
- * entities — a wrong migration throws here — and we assert the seeded rows survive with the new
- * columns defaulted as designed.
+ * MigrationTestHelper we create a genuine v1 database with raw SQL (the original columns minus
+ * everything the migrations add), seed a row in each table, then open it through Room with every
+ * migration. Opening triggers the migration chain **and** Room's own schema validation against the
+ * current entities — a wrong migration throws here — and we assert the seeded rows survive with the
+ * new columns defaulted as designed.
  */
 @RunWith(RobolectricTestRunner::class)
 class MigrationTest {
@@ -84,14 +85,14 @@ class MigrationTest {
     }
 
     @Test
-    fun migrate1To5_preservesData_andRoomValidatesSchema() = runTest {
+    fun migrate1To6_preservesData_andRoomValidatesSchema() = runTest {
         createV1Database()
 
         val db = Room.databaseBuilder(context, TaskMindDatabase::class.java, testDb)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .allowMainThreadQueries()
             .build()
-        // Opening runs the 1→5 chain and validates the resulting schema against the current entities.
+        // Opening runs the 1→6 chain and validates the resulting schema against the current entities.
         db.openHelper.writableDatabase
 
         val dao = db.taskMindDao()
@@ -102,6 +103,7 @@ class MigrationTest {
         assertEquals("", notes[0].summary)   // added in v2 with DEFAULT ''
         assertFalse(notes[0].completed)      // added in v3 with DEFAULT 0
         assertNull(notes[0].recurrence)      // added in v3, nullable
+        assertEquals("normal", notes[0].priority) // added in v6 with DEFAULT 'normal'
 
         val sug = dao.getSuggestionById(1)
         assertNotNull(sug)

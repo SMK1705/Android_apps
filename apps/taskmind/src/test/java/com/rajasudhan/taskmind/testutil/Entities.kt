@@ -25,12 +25,13 @@ fun aNote(
     locationLng: Double? = null,
     locationRadius: Double? = null,
     locationLabel: String? = null,
+    priority: String = "normal",
 ) = Note(
     id = id, title = title, summary = summary, body = body, dueDate = dueDate, dueTime = dueTime,
     source = source, createdDate = createdDate, type = type, completed = completed,
     completedDate = completedDate, recurrence = recurrence, checklist = checklist,
     locationLat = locationLat, locationLng = locationLng, locationRadius = locationRadius,
-    locationLabel = locationLabel,
+    locationLabel = locationLabel, priority = priority,
 )
 
 fun aSuggestion(
