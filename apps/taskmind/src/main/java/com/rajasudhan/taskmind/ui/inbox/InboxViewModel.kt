@@ -52,9 +52,9 @@ class InboxViewModel @Inject constructor(
     // The most recent reversible action (approve/reject), for the "Undo" snackbar.
     private var lastUndo: (suspend () -> Unit)? = null
 
-    fun approveSuggestion(suggestion: Suggestion) {
+    fun approveSuggestion(suggestion: Suggestion, durationMinutes: Int? = null, addCalendar: Boolean = true) {
         viewModelScope.launch {
-            val noteId = approver.approve(suggestion)
+            val noteId = approver.approve(suggestion, durationMinutes, addCalendar)
             // Undo re-pends the suggestion and drops the note, but deliberately does not roll back the
             // rejection-learning decrement from approve() — same as reject's undo, which doesn't roll
             // back its increment. The penalty is a soft, self-correcting nudge, so the tiny asymmetry

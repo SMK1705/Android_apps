@@ -40,7 +40,7 @@ class SuggestionApprover @Inject constructor(
      * Persists [suggestion] as approved, creates the Note, and schedules alarm/calendar if dated.
      * Returns the new note's id so the caller can offer an undo (delete that note + restore pending).
      */
-    suspend fun approve(suggestion: Suggestion): Long {
+    suspend fun approve(suggestion: Suggestion, durationMinutes: Int? = null, addCalendar: Boolean = true): Long {
         dao.updateSuggestion(suggestion.copy(status = "approved"))
         // Approving forgives a rejection for this sender, so a previously down-ranked sender can
         // recover once the user starts accepting their items again.
@@ -91,9 +91,9 @@ class SuggestionApprover @Inject constructor(
 
         if (isReminder) {
             alarmScheduler.schedule(noteId.toInt(), suggestion.extractedTitle, suggestion.dueDate, suggestion.dueTime, suggestion.recurrence)
-            addToCalendar(suggestion.extractedTitle, note.body, suggestion.dueDate, suggestion.dueTime)
+            if (addCalendar) addToCalendar(suggestion.extractedTitle, note.body, suggestion.dueDate, suggestion.dueTime, durationMinutes)
         } else if (suggestion.type == "todo" && suggestion.dueDate != null) {
-            addToCalendar(suggestion.extractedTitle, note.body, suggestion.dueDate, null)
+            if (addCalendar) addToCalendar(suggestion.extractedTitle, note.body, suggestion.dueDate, null, durationMinutes)
         }
         return noteId
     }
@@ -102,7 +102,7 @@ class SuggestionApprover @Inject constructor(
      * Inserts an event into the user's default calendar. Timed event if [dueTime] is set, otherwise
      * all-day on [dueDate]. No-ops if WRITE_CALENDAR isn't granted or no writable calendar exists.
      */
-    private fun addToCalendar(title: String, description: String?, dueDate: String?, dueTime: String?) {
+    private fun addToCalendar(title: String, description: String?, dueDate: String?, dueTime: String?, durationMinutes: Int? = null) {
         if (dueDate == null) return
         if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.WRITE_CALENDAR)
             != PackageManager.PERMISSION_GRANTED
@@ -121,7 +121,7 @@ class SuggestionApprover @Inject constructor(
                 val time = RecurrenceUtil.parseTime(dueTime) ?: return
                 startMs = LocalDateTime.of(LocalDate.parse(dueDate), time)
                     .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                endMs = startMs + settingsManager.eventDurationMinutes.toLong() * 60 * 1000
+                endMs = startMs + (durationMinutes ?: settingsManager.eventDurationMinutes).toLong() * 60 * 1000
                 timeZone = TimeZone.getDefault().id
                 allDay = false
             } else {
