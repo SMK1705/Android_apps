@@ -90,6 +90,7 @@ class SourcesViewModel @Inject constructor(
     val isCalendarEnabled = sourceManager.isCalendarEnabled.stateIn(viewModelScope, SharingStarted.Lazily, false)
     val isAppUsageEnabled = sourceManager.isAppUsageEnabled.stateIn(viewModelScope, SharingStarted.Lazily, false)
     val isEmailEnabled = sourceManager.isEmailEnabled.stateIn(viewModelScope, SharingStarted.Lazily, false)
+    val isContactsEnabled = sourceManager.isContactsEnabled.stateIn(viewModelScope, SharingStarted.Lazily, true)
     
     val callRecordingPath = sourceManager.callRecordingPath.stateIn(viewModelScope, SharingStarted.Lazily, SourceManager.DEFAULT_CALL_RECORDING_PATH)
     val voiceRecordingPath = sourceManager.voiceRecordingPath.stateIn(viewModelScope, SharingStarted.Lazily, SourceManager.DEFAULT_VOICE_RECORDING_PATH)
@@ -116,6 +117,10 @@ class SourcesViewModel @Inject constructor(
 
     fun toggleCalendar(enabled: Boolean) {
         viewModelScope.launch { sourceManager.setSourceEnabled(SourceManager.KEY_CALENDAR_ENABLED, enabled) }
+    }
+
+    fun toggleContacts(enabled: Boolean) {
+        viewModelScope.launch { sourceManager.setSourceEnabled(SourceManager.KEY_CONTACTS_ENABLED, enabled) }
     }
 
     fun toggleAppUsage(enabled: Boolean) {
