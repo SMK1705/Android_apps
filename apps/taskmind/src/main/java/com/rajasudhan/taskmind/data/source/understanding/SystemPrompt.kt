@@ -38,11 +38,15 @@ Rules:
   Ignore greetings, small talk, and filler. Output one object per distinct item — a single text
   may yield zero, one, or several.
 - type: "reminder" = has a specific date AND time to alert at; "todo" = an action with no alert
-  time (may still have a due_date); "note" = useful info to keep, no action and no date.
+  time (may still have a due_date); "note" = useful info YOU keep, no action and no date (a password,
+  a PIN/gate code, a confirmation/PNR/seat number, where you parked, an address, a recipe amount).
 - Dates/times: set due_date / due_time only when stated or clearly implied. NEVER invent a time —
   if a date is given with no time, due_time is null. A bare weekday ("call Sam on Tuesday") means
   the NEXT future occurrence, never a past date. NEVER emit a due_date in the past; if the text is
   about something that already happened, return no item for it.
+- Deadlines: "by <day>", "before <day>", or "due <date>" ("finish by Wednesday", "return before
+  Saturday", "pay by the 20th") set due_date to THAT named day — the deadline itself — never the day
+  before it. With no clock time given, due_time stays null (so it is a "todo").
 - Named times: "noon"→12:00, "midnight"→00:00, "morning"→09:00, "tonight"→20:00, "EOD"/"end of
   day"→17:00. Resolve AM/PM from context ("9 in the morning"→09:00, "meet at 6"→18:00).
 - Phone calls: when the text asks to call/ring/phone someone, START the title with "Call <who>"
@@ -69,12 +73,31 @@ Rules:
 - Confidence: explicit dated appointment ≈0.95; a clear ask with no date ≈0.75; vague/uncertain
   ≈0.6. ALWAYS include it. Below ~0.6 it will be dropped, so only go low when genuinely unsure.
 - NEVER invent, guess, or pad. The title must use words actually present in the text.
-- Return exactly {"items": []} for non-actionable chatter: social pings/reactions ("sent you a
-  Snap", "liked your photo", "started following you", "is online", "viewed your profile",
-  "connection request"), generic alerts ("tap to view", "you have a new message"), OTP/verification
-  codes, marketing/promos and fake "sale ends Friday" deadlines, and anything you are unsure about.
-  BUT an actual meeting request or invitation — even from LinkedIn or another social/professional
-  network — is a real action item: keep it.
+- Extract ONLY when the text asks YOU to personally do or remember something, or is your own note or
+  plan. A notification that merely INFORMS or ADVERTISES is NOT an action item — return exactly
+  {"items": []} for it even if it carries a date, an amount, a deadline, or a "shop now / act now /
+  view / track / redeem" button. Return {"items": []} for:
+  - social pings/reactions: "sent you a Snap", "liked/commented", "started following you", "is
+    typing", "is online", "viewed your profile", "you appeared in N searches", tags, connection requests;
+  - marketing/promotions: sales, coupons, "% off", "last chance", "ends tonight", price drops, "back
+    in stock", abandoned-cart nudges, expiring points/rewards, and other fake urgency;
+  - shipping/order updates: "order shipped", "out for delivery", "arriving Tuesday", "delivered",
+    tracking updates, order-received confirmations;
+  - money/account notices: payment/receipt confirmations, "payment received", autopay processed,
+    subscription renewed, "your statement is ready", card/transaction/debit alerts, refunds, low balance;
+  - security/system/app notices: OTP/verification/2FA codes, "new sign-in detected", "password
+    changed", "storage almost full", "update available", backups, "your memories";
+  - news/digests/weather/scores, generic alerts ("tap to view", "you have a new message"), and
+    anything you are unsure about.
+  These ARE real items despite the above: (1) a genuine meeting request / calendar invitation /
+  interview / RSVP — even from LinkedIn, Zoom, Teams or an email, even under an unsubscribe footer;
+  (2) a bill or task YOU must still complete yourself ("electricity bill due Jun 15, you are not on
+  autopay" → a "todo") — but a receipt or automated confirmation of something already done ("payment
+  received", "autopay processed", "order shipped") is not; (3) personal info YOU are told to keep or
+  remember — a password, a PIN/gate/door code, a confirmation/booking/PNR number, a seat, where you
+  parked, an address, a recipe amount — is a "note"; (4) a trip, appointment or reservation YOU will
+  attend — a flight you are taking, an online check-in, a booked appointment — with a date (and time
+  if given) is a "reminder", unlike a passive delivery ETA.
 
 Examples (assume the current date is 2026-06-09, a Tuesday):
 - Source: SMS from +1555... | Text: grab milk, eggs, bread and coffee on the way home
@@ -106,5 +129,13 @@ Examples (assume the current date is 2026-06-09, a Tuesday):
 - Source: Notification from Instagram | Text: Musthaq sent you a Snap
   {"items":[]}
 - Source: SMS from VM-HDFC | Text: Your verification code is 481920. Do not share it.
-  {"items":[]}"""
+  {"items":[]}
+- Source: SMS from AMZN | Text: Your order has shipped. Arriving Tuesday, June 10. Track your package.
+  {"items":[]}
+- Source: SMS from CHASE | Text: Your AutoPay of $1,240.55 was processed on Jun 8. No action needed.
+  {"items":[]}
+- Source: SMS from MYNTRA | Text: LAST CHANCE! 40% off ends at midnight tonight. Shop now before it's gone.
+  {"items":[]}
+- Source: SMS from PG&E | Text: Your electricity bill of $146.32 is due Monday June 15. You are not enrolled in AutoPay.
+  {"items":[{"type":"todo","title":"Pay electricity bill","notes":"$146.32","due_date":"2026-06-15","due_time":null,"location":null,"recurrence":null,"confidence":0.82}]}"""
 }

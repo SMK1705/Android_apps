@@ -16,17 +16,39 @@ extraction prompt turns text into items, so prompt changes can be checked before
 
 It makes **real (paid) API calls**, so it is **manual — not wired into CI**.
 
-## Run
+## Dataset
+
+[`golden_set.jsonl`](golden_set.jsonl) holds 166 labelled cases spanning genuine reminders / to-dos /
+notes and — heavily — the **noise that must produce nothing**: social pings, promos & fake urgency,
+shipping/order updates, payment/account/subscription notices, OTP/security alerts, and app/system/news
+notifications. Many are drawn from real-world notification wording. Roughly half are `none`, so the
+report's **`none` recall** is the key "don't nag me" metric, and `todo`/`reminder` **precision**
+measures how often the model invents an item from noise.
 
 ```bash
 cd tools/prompt_eval
 GEMINI_API_KEY=your_key python evaluate.py        # all cases
 GEMINI_API_KEY=your_key python evaluate.py -v     # also print the model's raw items
 GEMINI_API_KEY=your_key python evaluate.py --only call   # only cases whose name contains "call"
+GEMINI_API_KEY=your_key python evaluate.py --report      # also write EVAL_REPORT.md
 ```
 
 The key may instead live in `local.properties` (repo root, gitignored) as `gemini.api.key=...`.
 Requires Python 3.9+ and network access. No `pip install` needed.
+
+## Report
+
+`--report [PATH]` writes a Markdown report (default [`EVAL_REPORT.md`](EVAL_REPORT.md)) with:
+
+- a **type confusion matrix** — expected `type` (rows) vs. the `type` Gemini returned (columns),
+  with `none` as a class for over/under-extraction, plus per-type **recall** and **precision**;
+- **field accuracy** for `due_date` / `due_time` / `recurrence` / `location`, graded on the
+  correctly-identified item; and
+- overall pass rate + a table of the failing cases.
+
+The checked-in `EVAL_REPORT.md` is a point-in-time snapshot; regenerate it after a prompt change.
+At `temperature 0.1` the model is near- but not fully deterministic, so a case on a genuinely
+ambiguous phrasing may flip between runs.
 
 ## Add a case
 
