@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
+import com.rajasudhan.taskmind.data.source.AlarmScheduler
+import com.rajasudhan.taskmind.ui.common.isOverdue
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +23,8 @@ import javax.inject.Inject
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class NotesViewModel @Inject constructor(
-    private val dao: TaskMindDao
+    private val dao: TaskMindDao,
+    private val alarmScheduler: AlarmScheduler
 ) : ViewModel() {
 
     private val _query = MutableStateFlow("")
@@ -42,7 +45,8 @@ class NotesViewModel @Inject constructor(
                     "all" to list.size,
                     "todo" to list.count { it.type == "todo" },
                     "reminder" to list.count { it.type == "reminder" },
-                    "note" to list.count { it.type == "note" }
+                    "note" to list.count { it.type == "note" },
+                    "overdue" to list.count { isOverdue(it.dueDate, it.dueTime) }
                 )
             }
             .stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
@@ -65,7 +69,11 @@ class NotesViewModel @Inject constructor(
     val notes: StateFlow<List<Note>?> =
         combine(_query, _showCompleted, _kindFilter) { q, c, k -> Triple(q, c, k) }
             .flatMapLatest { (q, completed, kind) ->
-                fun keep(n: Note) = kind == null || n.type == kind
+                fun keep(n: Note) = when (kind) {
+                    null -> true
+                    "overdue" -> isOverdue(n.dueDate, n.dueTime)
+                    else -> n.type == kind
+                }
                 when {
                     q.isNotBlank() ->
                         dao.searchNotes("%$q%").map { list ->
@@ -97,12 +105,31 @@ class NotesViewModel @Inject constructor(
         }
     }
 
+    /** Bump an overdue item's due date (keeping its time) and re-arm its alarm — one-tap triage. */
+    fun reschedule(note: Note, newDueDate: String) {
+        viewModelScope.launch {
+            dao.updateNoteDueDate(note.id, newDueDate)
+            alarmScheduler.schedule(note.id, note.title, newDueDate, note.dueTime, note.recurrence)
+        }
+    }
+
     fun deleteNote(note: Note) {
         viewModelScope.launch { dao.deleteNote(note) }
     }
 
+    // Priority order (research-backed: overdue → soonest due → type → recency). Bucket 0 overdue,
+    // 1 upcoming-dated, 2 undated; within dated buckets by due (ascending), then type
+    // (reminder → todo → note), then most-recently-created first.
     private fun prioritise(list: List<Note>) =
-        list.sortedWith(compareBy({ typeRank(it.type) }, { dueSortKey(it) }))
+        list.sortedWith(
+            compareBy({ dueBucket(it) }, { dueSortKey(it) }, { typeRank(it.type) }, { -it.createdDate })
+        )
+
+    private fun dueBucket(note: Note): Int = when {
+        isOverdue(note.dueDate, note.dueTime) -> 0
+        note.dueDate != null -> 1
+        else -> 2
+    }
 
     private fun typeRank(type: String): Int = when (type) {
         "reminder" -> 0

@@ -1,8 +1,10 @@
 package com.rajasudhan.taskmind.ui.notes
 
+import com.rajasudhan.taskmind.data.source.AlarmScheduler
 import com.rajasudhan.taskmind.testutil.FakeTaskMindDao
 import com.rajasudhan.taskmind.testutil.MainDispatcherRule
 import com.rajasudhan.taskmind.testutil.aNote
+import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -24,7 +26,7 @@ class NotesViewModelTest {
 
     @Before
     fun setUp() {
-        vm = NotesViewModel(dao)
+        vm = NotesViewModel(dao, mockk<AlarmScheduler>(relaxed = true))
     }
 
     private suspend fun seed() {
