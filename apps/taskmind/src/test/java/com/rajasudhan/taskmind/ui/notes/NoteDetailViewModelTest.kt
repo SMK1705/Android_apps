@@ -4,9 +4,12 @@ import androidx.lifecycle.SavedStateHandle
 import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.source.AlarmScheduler
 import com.rajasudhan.taskmind.data.source.GeofenceManager
+import com.rajasudhan.taskmind.data.source.understanding.OnDeviceLlmProvider
 import com.rajasudhan.taskmind.testutil.FakeTaskMindDao
 import com.rajasudhan.taskmind.testutil.MainDispatcherRule
 import com.rajasudhan.taskmind.testutil.aNote
+import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -29,11 +32,12 @@ class NoteDetailViewModelTest {
     private val dao = FakeTaskMindDao()
     private val alarms = mockk<AlarmScheduler>(relaxed = true)
     private val geofence = mockk<GeofenceManager>(relaxed = true)
+    private val onDeviceLlm = mockk<OnDeviceLlmProvider>(relaxed = true)
 
     /** Insert [note], build a VM bound to its id, and wait for the note flow to load. */
     private suspend fun vmFor(note: Note): Pair<NoteDetailViewModel, Int> {
         val id = dao.insertNote(note).toInt()
-        val vm = NoteDetailViewModel(dao, alarms, geofence, SavedStateHandle(mapOf("noteId" to id)))
+        val vm = NoteDetailViewModel(dao, alarms, geofence, onDeviceLlm, SavedStateHandle(mapOf("noteId" to id)))
         vm.note.filterNotNull().first()
         return vm to id
     }
@@ -61,6 +65,33 @@ class NoteDetailViewModelTest {
         vm.updateTitle("New")
 
         verify(exactly = 0) { alarms.schedule(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun breakDown_writesTheModelSteps_asAChecklist() = runTest {
+        every { onDeviceLlm.isModelPresent() } returns true
+        coEvery { onDeviceLlm.generate(any(), any()) } returns """["Gather documents", "Fill the form", "Submit online"]"""
+        val (vm, id) = vmFor(aNote(title = "Renew passport", type = "todo"))
+        var msg = ""
+
+        vm.breakDown { msg = it }
+
+        assertEquals("Broke it into 3 steps.", msg)
+        val items = com.rajasudhan.taskmind.ui.notes.Checklist.decode(dao.getNoteByIdNow(id)!!.checklist!!)
+        assertEquals(listOf("Gather documents", "Fill the form", "Submit online"), items.map { it.text })
+        assertFalse(vm.breakingDown.first())
+    }
+
+    @Test
+    fun breakDown_withNoModel_reportsAndLeavesTheNoteUntouched() = runTest {
+        every { onDeviceLlm.isModelPresent() } returns false
+        val (vm, id) = vmFor(aNote(title = "Vague task", type = "todo"))
+        var msg = ""
+
+        vm.breakDown { msg = it }
+
+        assertTrue(msg.contains("Add the on-device model"))
+        assertNull(dao.getNoteByIdNow(id)!!.checklist)
     }
 
     @Test

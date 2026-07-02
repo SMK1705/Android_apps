@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.outlined.Alarm
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
@@ -98,6 +99,8 @@ fun NoteDetailScreen(
     val note by viewModel.note.collectAsState()
     val n = note
     var deleting by remember { mutableStateOf(false) }
+
+    val breakingDown by viewModel.breakingDown.collectAsState()
 
     // ---- Location reminder plumbing (hooks must run before any early return) ----
     val context = LocalContext.current
@@ -220,6 +223,22 @@ fun NoteDetailScreen(
                                 Icon(Icons.Default.DragHandle, contentDescription = "Reorder", tint = c.ink3, modifier = Modifier.size(18.dp))
                             }
                         }
+                    }
+                }
+            }
+
+            // ── Magic Breakdown: split a vague task into steps (on-device), shown until there's a list ──
+            if (completable && checklistItems.isEmpty()) {
+                Spacer(Modifier.height(22.dp))
+                SectionLabel("Checklist")
+                Spacer(Modifier.height(10.dp))
+                BoldActionButton(
+                    if (breakingDown) "Breaking it down…" else "Break into steps",
+                    Icons.Outlined.AutoAwesome,
+                    filled = false
+                ) {
+                    if (!breakingDown) viewModel.breakDown { msg ->
+                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                     }
                 }
             }
