@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import java.time.LocalDateTime
 import javax.inject.Inject
 
@@ -62,6 +63,13 @@ class BootReceiver : BroadcastReceiver() {
                 // One-shot: re-arm as stored. The scheduler drops it if it's already past
                 // (it fired, or was missed, while the device was off), which is correct.
                 alarmScheduler.schedule(note.id, note.title, date, time, null)
+                // …unless it's a nag note that already fired but was never completed: its re-fire
+                // loop (a transient alarm) died with the reboot and schedule() just dropped the past
+                // slot, so restart the nag from the top of the ladder — "nag until done" must resume.
+                val slot = runCatching { LocalDateTime.of(LocalDate.parse(date), RecurrenceUtil.parseTime(time)) }.getOrNull()
+                if (note.nag && !note.completed && slot != null && slot.isBefore(now)) {
+                    alarmScheduler.snoozeReminder(note.id, note.title, AlarmReceiver.NAG_INTERVALS[0], 0)
+                }
             }
         }
 

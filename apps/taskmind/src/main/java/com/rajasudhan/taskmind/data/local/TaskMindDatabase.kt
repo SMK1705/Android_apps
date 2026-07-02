@@ -10,7 +10,7 @@ import com.rajasudhan.taskmind.data.model.Suggestion
 
 @Database(
     entities = [Note::class, Suggestion::class, RejectedPattern::class],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 abstract class TaskMindDatabase : RoomDatabase() {
@@ -77,6 +77,13 @@ abstract class TaskMindDatabase : RoomDatabase() {
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE suggestions ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'")
+            }
+        }
+
+        /** v8 adds a `nag` flag to notes (re-fire the reminder until done); existing rows default off. */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE notes ADD COLUMN nag INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

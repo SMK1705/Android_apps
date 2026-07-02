@@ -3,6 +3,8 @@ package com.rajasudhan.taskmind.ui.notes
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
+import android.provider.AlarmClock
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
@@ -228,6 +231,51 @@ fun NoteDetailScreen(
                 Spacer(Modifier.height(10.dp))
                 // A tappable summary that opens the reminder sheet (Once / Repeat / Location).
                 ReminderScheduleCard(note = n, onClick = { showReminderSheet = true })
+
+                // Escalation controls — only meaningful once a timed reminder exists.
+                if (n.dueTime != null) {
+                    Spacer(Modifier.height(10.dp))
+                    DetailCard {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Nag until done", style = BoldType.body.copy(fontSize = 14.sp), color = c.ink)
+                                Text(
+                                    "After it fires, re-rings every few minutes until completed",
+                                    style = BoldType.noteSrcMeta,
+                                    color = c.ink3
+                                )
+                            }
+                            Switch(checked = n.nag, onCheckedChange = { viewModel.setNag(it) })
+                        }
+                        // Alarm-grade handoff for the truly critical: sets a real Clock-app alarm at
+                        // the due time — full-screen, ringtone, unmissable by construction. Only for a
+                        // reminder due TODAY: AlarmClock.ACTION_SET_ALARM has no date extra, so it would
+                        // otherwise ring at the next occurrence of that wall-clock time — the wrong day.
+                        if (n.dueDate == java.time.LocalDate.now().toString()) {
+                            Spacer(Modifier.height(12.dp))
+                            BoldActionButton("Ring as system alarm", Icons.Outlined.Alarm, filled = false) {
+                                val time = RecurrenceUtil.parseTime(n.dueTime!!)
+                                if (time != null) {
+                                    val ok = runCatching {
+                                        context.startActivity(
+                                            Intent(AlarmClock.ACTION_SET_ALARM).apply {
+                                                putExtra(AlarmClock.EXTRA_HOUR, time.hour)
+                                                putExtra(AlarmClock.EXTRA_MINUTES, time.minute)
+                                                putExtra(AlarmClock.EXTRA_MESSAGE, n.title)
+                                                putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+                                            }
+                                        )
+                                    }.isSuccess
+                                    Toast.makeText(
+                                        context,
+                                        if (ok) "Alarm set in your Clock app for today at ${n.dueTime}" else "No clock app found",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        }
+                    }
+                }
 
                 Spacer(Modifier.height(10.dp))
                 if (n.locationLabel != null) {
