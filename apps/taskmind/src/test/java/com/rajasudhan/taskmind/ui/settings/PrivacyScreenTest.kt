@@ -66,6 +66,7 @@ class PrivacyScreenTest {
             mockk<BackupManager>(relaxed = true),
             mockk<Moshi>(relaxed = true),
             mockk<com.rajasudhan.taskmind.data.source.DailyBriefScheduler>(relaxed = true),
+            mockk<com.rajasudhan.taskmind.data.source.WeeklyWinsScheduler>(relaxed = true),
             ApplicationProvider.getApplicationContext<Context>(),
         )
     }
