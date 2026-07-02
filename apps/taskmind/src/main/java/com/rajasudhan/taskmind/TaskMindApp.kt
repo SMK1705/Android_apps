@@ -12,6 +12,7 @@ import com.rajasudhan.taskmind.data.source.DailyBriefScheduler
 import com.rajasudhan.taskmind.data.source.DataCollectionWorker
 import com.rajasudhan.taskmind.data.source.SettingsManager
 import com.rajasudhan.taskmind.data.source.TaskMindForegroundService
+import com.rajasudhan.taskmind.data.source.WeeklyWinsScheduler
 import dagger.hilt.android.HiltAndroidApp
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -27,6 +28,9 @@ class TaskMindApp : Application(), Configuration.Provider {
 
     @Inject
     lateinit var dailyBriefScheduler: DailyBriefScheduler
+
+    @Inject
+    lateinit var weeklyWinsScheduler: WeeklyWinsScheduler
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -45,6 +49,8 @@ class TaskMindApp : Application(), Configuration.Provider {
         dailyBriefScheduler.reschedule(
             settingsManager.dailyBriefEnabled, settingsManager.dailyBriefHour, settingsManager.dailyBriefMinute
         )
+        // Re-arm the weekly recap from the saved preference, for the same reason as the daily brief.
+        weeklyWinsScheduler.reschedule(settingsManager.weeklyWinsEnabled, settingsManager.weeklyWinsHour)
     }
 
     companion object {

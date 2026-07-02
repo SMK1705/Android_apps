@@ -56,6 +56,7 @@ class TaskMindForegroundService : Service() {
         const val NOTIFICATION_CHANNEL_ID = "taskmind_service_channel"
         const val REMINDER_CHANNEL_ID = "taskmind_reminders"
         const val DAILY_BRIEF_CHANNEL_ID = "taskmind_daily_brief"
+        const val WEEKLY_WINS_CHANNEL_ID = "taskmind_weekly_wins"
         const val NOTIFICATION_ID = 1
 
         /**
@@ -100,6 +101,13 @@ class TaskMindForegroundService : Service() {
                     NotificationChannel(
                         DAILY_BRIEF_CHANNEL_ID,
                         "Daily brief",
+                        NotificationManager.IMPORTANCE_DEFAULT
+                    )
+                )
+                manager.createNotificationChannel(
+                    NotificationChannel(
+                        WEEKLY_WINS_CHANNEL_ID,
+                        "Weekly wins",
                         NotificationManager.IMPORTANCE_DEFAULT
                     )
                 )
