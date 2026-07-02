@@ -81,6 +81,8 @@ fun SettingsScreen(
     val permissions by viewModel.permissions.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
     val appLockEnabled by viewModel.appLockEnabled.collectAsState()
+    val dailyBriefEnabled by viewModel.dailyBriefEnabled.collectAsState()
+    val dailyBriefHour by viewModel.dailyBriefHour.collectAsState()
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri -> uri?.let { viewModel.exportNotesToUri(it) } }
@@ -452,6 +454,36 @@ fun SettingsScreen(
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 scanOptions.forEach { (minutes, label) ->
                     BoldFilterChip(label, scanFrequencyMinutes == minutes, { viewModel.updateScanFrequency(minutes) })
+                }
+            }
+        }
+
+        SettingsSectionCard(accent = Color(0xFFEF6C00), title = "Daily Brief") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Morning brief", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "A once-a-day notification with what's overdue, due today, and waiting to review — " +
+                            "so TaskMind shows up for you instead of waiting to be opened.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                com.rajasudhan.taskmind.ui.bold.BoldSwitch(
+                    checked = dailyBriefEnabled,
+                    onCheckedChange = { viewModel.updateDailyBriefEnabled(it) }
+                )
+            }
+            if (dailyBriefEnabled) {
+                val hourOptions = listOf(6, 7, 8, 9, 10)
+                Text("DELIVER AT", style = BoldType.sectionMono, color = c.ink3)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    hourOptions.forEach { hour ->
+                        BoldFilterChip("%02d:00".format(hour), dailyBriefHour == hour, { viewModel.updateDailyBriefHour(hour) })
+                    }
                 }
             }
         }

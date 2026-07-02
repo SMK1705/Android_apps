@@ -26,10 +26,14 @@ class SettingsManager @Inject constructor(
         private const val KEY_LAST_SCAN_AT = "last_scan_at"
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
         private const val KEY_THEME_MODE = "theme_mode"
+        private const val KEY_DAILY_BRIEF_ENABLED = "daily_brief_enabled"
+        private const val KEY_DAILY_BRIEF_HOUR = "daily_brief_hour"
+        private const val KEY_DAILY_BRIEF_MINUTE = "daily_brief_minute"
 
         const val CALENDAR_ID_AUTO = -1L
         const val DEFAULT_EVENT_DURATION_MINUTES = 60
         const val DEFAULT_SCAN_FREQUENCY_MINUTES = 30
+        const val DEFAULT_DAILY_BRIEF_HOUR = 8
     }
 
     var llmApiKey: String
@@ -95,6 +99,21 @@ class SettingsManager @Inject constructor(
     var scanFrequencyMinutes: Int
         get() = encryptedPrefs.getInt(KEY_SCAN_FREQUENCY_MINUTES, DEFAULT_SCAN_FREQUENCY_MINUTES)
         set(value) = encryptedPrefs.edit().putInt(KEY_SCAN_FREQUENCY_MINUTES, value).apply()
+
+    /** Whether the once-a-day morning brief notification is enabled (default off). */
+    var dailyBriefEnabled: Boolean
+        get() = encryptedPrefs.getBoolean(KEY_DAILY_BRIEF_ENABLED, false)
+        set(value) = encryptedPrefs.edit().putBoolean(KEY_DAILY_BRIEF_ENABLED, value).apply()
+
+    /** Hour (0–23) the morning brief fires. */
+    var dailyBriefHour: Int
+        get() = encryptedPrefs.getInt(KEY_DAILY_BRIEF_HOUR, DEFAULT_DAILY_BRIEF_HOUR)
+        set(value) = encryptedPrefs.edit().putInt(KEY_DAILY_BRIEF_HOUR, value).apply()
+
+    /** Minute (0–59) the morning brief fires. */
+    var dailyBriefMinute: Int
+        get() = encryptedPrefs.getInt(KEY_DAILY_BRIEF_MINUTE, 0)
+        set(value) = encryptedPrefs.edit().putInt(KEY_DAILY_BRIEF_MINUTE, value).apply()
 
     /**
      * Watermark (epoch ms) of the last successful recent-data scan, so each scan only covers what
