@@ -83,6 +83,17 @@ class ExtractionHeuristicsTest {
         assertNull(ExtractionHeuristics.sanitizeRecurrence(null))
     }
 
+    @Test
+    fun sanitizePriorityOnlyKeepsHighFloorsEverythingElseToNormal() {
+        assertEquals("high", ExtractionHeuristics.sanitizePriority("high"))
+        assertEquals("high", ExtractionHeuristics.sanitizePriority("  High  ")) // trimmed + case-insensitive
+        assertEquals("normal", ExtractionHeuristics.sanitizePriority("normal"))
+        assertEquals("normal", ExtractionHeuristics.sanitizePriority("low")) // never low from text
+        assertEquals("normal", ExtractionHeuristics.sanitizePriority("urgent")) // unknown -> normal
+        assertEquals("normal", ExtractionHeuristics.sanitizePriority(""))
+        assertEquals("normal", ExtractionHeuristics.sanitizePriority(null))
+    }
+
     // ---------------- JSON fence stripping ----------------
 
     @Test

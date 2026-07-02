@@ -58,6 +58,16 @@ object ExtractionHeuristics {
     fun sanitizeRecurrence(raw: String?): String? =
         raw?.trim()?.lowercase()?.takeIf { it in RECURRENCE_VALUES }
 
+    /**
+     * Clamps a model-supplied priority to the two values extraction is allowed to produce: only an
+     * explicit `high` survives; everything else — null, blank, "normal", "low", or anything unknown —
+     * floors to `normal`. This is the safety net for the "never low from text, don't over-flag high"
+     * rule, independent of whether the prompt or schema behaved. Never returns null (the column is
+     * NOT NULL, default `normal`).
+     */
+    fun sanitizePriority(raw: String?): String =
+        if (raw?.trim()?.lowercase() == "high") "high" else "normal"
+
     /** Strips markdown code fences the LLM sometimes wraps JSON in, despite instructions. */
     fun stripJsonFences(json: String): String =
         json.removePrefix("```json").removePrefix("```").removeSuffix("```").trim()

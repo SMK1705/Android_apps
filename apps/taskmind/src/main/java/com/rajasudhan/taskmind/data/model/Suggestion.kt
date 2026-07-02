@@ -22,5 +22,8 @@ data class Suggestion(
     // v4 (MIGRATION_3_4): a place named in the source text (geocoded into the note on approval).
     val location: String? = null,
     // v5 (MIGRATION_4_5): "daily" | "weekly" | "monthly" for a repeating reminder, else null.
-    val recurrence: String? = null
+    val recurrence: String? = null,
+    // v7 (MIGRATION_6_7): the model's suggested priority — "normal" | "high" (extraction never emits
+    // "low"). Copied onto the created Note.priority on approval. Default mirrors MIGRATION_6_7.
+    @ColumnInfo(defaultValue = "'normal'") val priority: String = "normal"
 )

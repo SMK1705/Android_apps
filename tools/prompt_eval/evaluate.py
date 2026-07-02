@@ -41,6 +41,10 @@ ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:gen
 # The four classes of the type confusion matrix. "none" = the model extracted nothing for the case.
 TYPE_CLASSES = ["reminder", "todo", "note", "none"]
 
+# The priority confusion matrix classes. Extraction only ever produces normal/high; "none" = nothing
+# extracted. Only cases whose primary expectation pins a `priority` are scored here.
+PRIORITY_CLASSES = ["normal", "high", "none"]
+
 # Mirrors CloudLlmProvider.responseSchema() — keep in sync.
 RESPONSE_SCHEMA = {
     "type": "OBJECT",
@@ -57,10 +61,11 @@ RESPONSE_SCHEMA = {
                     "due_time": {"type": "STRING", "nullable": True},
                     "location": {"type": "STRING", "nullable": True},
                     "recurrence": {"type": "STRING", "nullable": True},
+                    "priority": {"type": "STRING", "enum": ["normal", "high"]},
                     "confidence": {"type": "NUMBER"},
                 },
                 "required": ["type", "title", "notes", "confidence"],
-                "propertyOrdering": ["type", "title", "notes", "due_date", "due_time", "location", "recurrence", "confidence"],
+                "propertyOrdering": ["type", "title", "notes", "due_date", "due_time", "location", "recurrence", "priority", "confidence"],
             },
         }
     },
@@ -145,6 +150,8 @@ def matches(item: dict, m: dict) -> bool:
         return False
     if "recurrence" in m and item.get("recurrence") != m["recurrence"]:
         return False
+    if "priority" in m and (item.get("priority") or "normal") != m["priority"]:
+        return False
     if "min_confidence" in m and float(item.get("confidence") or 0) < m["min_confidence"]:
         return False
     return True
@@ -198,6 +205,23 @@ def returned_type(expect, items: list) -> str:
         if identity_match(it, primary):
             return it.get("type", "note")
     return items[0].get("type", "note") if items else "none"
+
+
+def expected_priority(expect):
+    """The case's expected priority for the priority matrix, or None when the case doesn't pin one."""
+    if isinstance(expect, list) and expect and "priority" in expect[0]:
+        return expect[0]["priority"]
+    return None
+
+
+def returned_priority(expect, items: list) -> str:
+    """The priority on the item that answers the primary expectation (found by identity), defaulting
+    to 'normal' when the field is absent, or 'none' when nothing was extracted."""
+    primary = expect[0] if isinstance(expect, list) and expect else {}
+    for it in items:
+        if identity_match(it, primary):
+            return it.get("priority") or "normal"
+    return items[0].get("priority") or "normal" if items else "none"
 
 
 def field_scores(expect, items: list) -> dict:
@@ -263,6 +287,37 @@ def render_report(results: list, passed: int, ncases: int, runs: int) -> str:
         prec.append(pct(cm[c][c], col_total))
     w("| **precision** | " + " | ".join(prec) + " | | |")
     w("")
+
+    # Priority accuracy — only over cases that pin an expected `priority`. This is the guard against
+    # the model over-flagging "high" (noise): `high` precision below is the metric that must stay high.
+    pri = [r for r in results if r["exp_priority"] is not None]
+    if pri:
+        pcm = {e: collections.Counter() for e in PRIORITY_CLASSES}
+        for r in pri:
+            pcm[r["exp_priority"]][r["ret_priority"]] += 1
+        pdiag = sum(pcm[t][t] for t in PRIORITY_CLASSES)
+        w("## Priority accuracy")
+        w("")
+        w(f"Over the {len(pri)} priority-labelled {unit.lower()}. Expected priority (rows) vs. the "
+          "`priority` Gemini returned (columns); `none` = nothing extracted. **`high` precision** is "
+          "the anti-noise metric — it must stay high so routine items aren't wrongly flagged urgent.")
+        w("")
+        w(f"- **Priority accuracy:** {pdiag}/{len(pri)} ({pct(pdiag, len(pri))})")
+        w("")
+        w("| expected ↓ / returned → | " + " | ".join(PRIORITY_CLASSES) + " | total | recall |")
+        w("|" + "---|" * (len(PRIORITY_CLASSES) + 3))
+        for e in PRIORITY_CLASSES:
+            row_total = sum(pcm[e].values())
+            if not row_total:
+                continue
+            cells = [(f"**{pcm[e][c]}**" if e == c and pcm[e][c] else str(pcm[e][c])) for c in PRIORITY_CLASSES]
+            w(f"| **{e}** | " + " | ".join(cells) + f" | {row_total} | {pct(pcm[e][e], row_total)} |")
+        pprec = []
+        for c in PRIORITY_CLASSES:
+            col_total = sum(pcm[e][c] for e in PRIORITY_CLASSES)
+            pprec.append(pct(pcm[c][c], col_total))
+        w("| **precision** | " + " | ".join(pprec) + " | | |")
+        w("")
 
     fagg: dict = {}
     for r in results:
@@ -345,6 +400,8 @@ def main() -> int:
                 "name": c["name"],
                 "exp_type": expected_type(c["expect"]),
                 "ret_type": returned_type(c["expect"], items),
+                "exp_priority": expected_priority(c["expect"]),
+                "ret_priority": returned_priority(c["expect"], items),
                 "ok": ok,
                 "reason": reason,
                 "fields": field_scores(c["expect"], items),

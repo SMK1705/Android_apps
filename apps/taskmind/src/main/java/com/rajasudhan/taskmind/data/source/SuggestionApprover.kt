@@ -66,7 +66,8 @@ class SuggestionApprover @Inject constructor(
             createdDate = System.currentTimeMillis(),
             type = noteType,
             recurrence = suggestion.recurrence,
-            checklist = checklist
+            checklist = checklist,
+            priority = suggestion.priority
         )
         val noteId = dao.insertNote(note)
 
