@@ -1,5 +1,6 @@
 package com.rajasudhan.taskmind.data.source
 
+import android.app.NotificationManager
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -10,11 +11,14 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import java.time.LocalDateTime
 
 /** Alarm firing, tested via the extracted [AlarmReceiver.handle]. */
@@ -74,5 +78,34 @@ class AlarmReceiverTest {
 
         verify(exactly = 0) { alarms.schedule(any(), any(), any(), any(), any()) }
         verify(exactly = 0) { alarms.cancel(any()) }
+    }
+
+    @Test
+    fun completedNote_isSkipped_andItsAlarmCancelled() = runTest {
+        val id = dao.insertNote(
+            aNote(type = "reminder", title = "Already done", dueDate = "2026-07-01", dueTime = "09:00", completed = true)
+        ).toInt()
+
+        receiver().handle(context, id, "Already done", null, "2026-07-01", "09:00")
+
+        verify { alarms.cancel(id) }
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        assertTrue(shadowOf(manager).allNotifications.isEmpty())
+    }
+
+    @Test
+    fun firedReminder_isHighChannel_andActionable() = runTest {
+        val id = dao.insertNote(
+            aNote(type = "reminder", title = "Once", dueDate = "2026-07-01", dueTime = "09:00")
+        ).toInt()
+
+        receiver().handle(context, id, "Once", null, "2026-07-01", "09:00")
+
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val posted = shadowOf(manager).allNotifications.single()
+        // The dedicated HIGH-importance channel — posting to the LOW service channel made reminders silent.
+        assertEquals(TaskMindForegroundService.REMINDER_CHANNEL_ID, posted.channelId)
+        // Done + Snooze, so a fired reminder isn't a dead-end.
+        assertEquals(listOf("Done", "Snooze 1h"), posted.actions.map { it.title.toString() })
     }
 }

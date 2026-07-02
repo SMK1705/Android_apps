@@ -41,6 +41,12 @@ class NotificationActionReceiver : BroadcastReceiver() {
     /**
      * Applies the notification action and refreshes the prompt. Extracted from [onReceive] so it's
      * unit-testable without the broadcast/goAsync plumbing.
+     *
+     * [ACTION_RESURFACE] carries no mutation of its own — it's the alarm
+     * [SuggestionNotifier.scheduleResurface] sets for a snoozed suggestion's return time, and the
+     * shared notifyPending() below re-posts the review notification the moment the snooze expires
+     * (previously a snoozed item came back silently, so "snooze until morning" did nothing unless
+     * the app happened to be opened).
      */
     internal suspend fun handle(action: String, id: Int) {
         val suggestion = dao.getSuggestionById(id)
@@ -59,6 +65,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_APPROVE = "com.rajasudhan.taskmind.action.APPROVE"
         const val ACTION_REJECT = "com.rajasudhan.taskmind.action.REJECT"
+        const val ACTION_RESURFACE = "com.rajasudhan.taskmind.action.RESURFACE"
         const val EXTRA_ID = "suggestion_id"
     }
 }

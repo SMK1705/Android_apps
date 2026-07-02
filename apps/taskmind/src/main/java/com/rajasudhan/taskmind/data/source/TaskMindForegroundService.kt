@@ -54,23 +54,38 @@ class TaskMindForegroundService : Service() {
 
     companion object {
         const val NOTIFICATION_CHANNEL_ID = "taskmind_service_channel"
+        const val REMINDER_CHANNEL_ID = "taskmind_reminders"
         const val NOTIFICATION_ID = 1
 
         /**
-         * Idempotently creates the notification channel shared by the foreground service AND by
-         * reminder / geofence notifications. Also called from [com.rajasudhan.taskmind.TaskMindApp]
-         * on startup, so an alarm that fires after a reboot — before the user reopens the app, so this
-         * service has never run — still has a channel to post to. Without it, Android O+ silently drops
-         * a notification posted to a non-existent channel.
+         * Idempotently creates the app's notification channels. Also called from
+         * [com.rajasudhan.taskmind.TaskMindApp] on startup, so an alarm that fires after a reboot —
+         * before the user reopens the app, so this service has never run — still has a channel to
+         * post to. Without it, Android O+ silently drops a notification posted to a non-existent
+         * channel.
+         *
+         * Reminders get their own HIGH-importance channel: a channel's importance is fixed at first
+         * creation and overrides the notification builder's priority, so posting reminders to the
+         * service's LOW channel (as the app once did) made every alarm and geofence alert arrive
+         * silently — no sound, no heads-up.
          */
         fun ensureNotificationChannel(context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val channel = NotificationChannel(
-                    NOTIFICATION_CHANNEL_ID,
-                    "TaskMind Service Channel",
-                    NotificationManager.IMPORTANCE_LOW
+                val manager = context.getSystemService(NotificationManager::class.java) ?: return
+                manager.createNotificationChannel(
+                    NotificationChannel(
+                        NOTIFICATION_CHANNEL_ID,
+                        "Background service",
+                        NotificationManager.IMPORTANCE_LOW
+                    )
                 )
-                context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
+                manager.createNotificationChannel(
+                    NotificationChannel(
+                        REMINDER_CHANNEL_ID,
+                        "Reminders",
+                        NotificationManager.IMPORTANCE_HIGH
+                    )
+                )
             }
         }
     }

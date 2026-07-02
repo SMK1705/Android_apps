@@ -89,6 +89,9 @@
         <!-- Approve/Reject actions on the review notification. -->
         <receiver android:name=".data.source.NotificationActionReceiver" android:exported="false" />
 
+        <!-- Done/Snooze actions on fired reminder and geofence notifications. -->
+        <receiver android:name=".data.source.ReminderActionReceiver" android:exported="false" />
+
         <!-- Fires location reminders when entering a saved place. -->
         <receiver android:name=".data.source.GeofenceBroadcastReceiver" android:exported="false" />
 

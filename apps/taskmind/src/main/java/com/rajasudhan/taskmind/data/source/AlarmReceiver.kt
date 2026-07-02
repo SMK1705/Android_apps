@@ -52,14 +52,19 @@ class AlarmReceiver : BroadcastReceiver() {
         dueTime: String?,
         now: LocalDateTime = LocalDateTime.now(),
     ) {
-        // If the note was deleted, this alarm is stale: don't notify, and cancel it so a recurring
-        // reminder can't keep rescheduling itself for a note that no longer exists.
-        if (noteId >= 0 && dao.getNoteByIdNow(noteId) == null) {
-            alarmScheduler.cancel(noteId)
-            return
+        // If the note was deleted or already completed, this alarm is stale: don't notify, and
+        // cancel it so a recurring reminder can't keep rescheduling itself for a note that no
+        // longer needs it. (Completing a note doesn't cancel its alarm, so without this a finished
+        // task would still ring.)
+        if (noteId >= 0) {
+            val note = dao.getNoteByIdNow(noteId)
+            if (note == null || note.completed) {
+                alarmScheduler.cancel(noteId)
+                return
+            }
         }
 
-        notifyReminder(context, title)
+        notifyReminder(context, noteId, title)
 
         // Repeating reminder: advance the note's due date and schedule the next occurrence. Step at
         // least one period past the date that just fired, then keep skipping forward until the slot is
@@ -74,19 +79,57 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun notifyReminder(context: Context, title: String) {
+    /**
+     * Posts the reminder on the HIGH-importance channel (heads-up + sound — the whole point of a
+     * reminder), deep-links the tap to the note itself, and adds Done / Snooze actions so it can be
+     * triaged from the shade instead of dead-ending. Stable per-note id, so a snoozed re-fire
+     * replaces the original instead of stacking.
+     */
+    private fun notifyReminder(context: Context, noteId: Int, title: String) {
+        val tapIntent = Intent(context, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            if (noteId >= 0) putExtra(MainActivity.EXTRA_OPEN_NOTE_ID, noteId)
+        }
         val pendingIntent = PendingIntent.getActivity(
-            context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
+            context, if (noteId >= 0) ReminderActionReceiver.OPEN_RC_BASE + noteId else 0, tapIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val notification = NotificationCompat.Builder(context, TaskMindForegroundService.NOTIFICATION_CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, TaskMindForegroundService.REMINDER_CHANNEL_ID)
             .setContentTitle("Reminder: $title")
             .setContentText("It's time for your task.")
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .build()
+        if (noteId >= 0) {
+            builder
+                .addAction(
+                    android.R.drawable.checkbox_on_background, "Done",
+                    reminderAction(context, ReminderActionReceiver.ACTION_DONE, ReminderActionReceiver.DONE_RC_BASE + noteId, noteId, title)
+                )
+                .addAction(
+                    android.R.drawable.ic_popup_reminder, "Snooze 1h",
+                    reminderAction(context, ReminderActionReceiver.ACTION_SNOOZE, ReminderActionReceiver.SNOOZE_RC_BASE + noteId, noteId, title)
+                )
+        }
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .notify(System.currentTimeMillis().toInt(), notification)
+            .notify(if (noteId >= 0) NOTIFICATION_ID_BASE + noteId else System.currentTimeMillis().toInt(), builder.build())
+    }
+
+    private fun reminderAction(context: Context, action: String, rc: Int, noteId: Int, title: String): PendingIntent {
+        val intent = Intent(context, ReminderActionReceiver::class.java).apply {
+            this.action = action
+            putExtra(ReminderActionReceiver.EXTRA_NOTE_ID, noteId)
+            putExtra(ReminderActionReceiver.EXTRA_TITLE, title)
+        }
+        return PendingIntent.getBroadcast(
+            context, rc, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    companion object {
+        // Fired-reminder notifications: stable id per note, clear of the geofence (100_000 + id)
+        // and foreground-service (1) / review (42) ids.
+        const val NOTIFICATION_ID_BASE = 200_000
     }
 }

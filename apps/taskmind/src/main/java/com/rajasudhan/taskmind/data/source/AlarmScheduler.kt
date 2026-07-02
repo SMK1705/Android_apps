@@ -45,6 +45,32 @@ class AlarmScheduler @Inject constructor(
         alarmManager.cancel(pendingIntent(noteId, "", null, null, null))
     }
 
+    /**
+     * Re-fires the note's reminder notification [minutes] from now — the "Snooze" action on a fired
+     * reminder. Uses its own request-code namespace so it never replaces the note's main alarm (a
+     * recurring reminder's already-scheduled next occurrence must survive a snooze), and carries no
+     * recurrence/date extras so the re-fire only re-notifies, never advances the recurrence again.
+     * Falls back to an inexact-but-doze-safe alarm when exact alarms aren't permitted, rather than
+     * silently dropping the snooze.
+     */
+    fun snoozeReminder(noteId: Int, title: String, minutes: Long = 60) {
+        val at = System.currentTimeMillis() + minutes * 60_000
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            putExtra("noteId", noteId)
+            putExtra("title", title)
+        }
+        val pi = PendingIntent.getBroadcast(
+            context, SNOOZE_RC_BASE + noteId, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        if (alarmManager.canScheduleExactAlarms()) {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+        } else {
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+        }
+    }
+
     private fun pendingIntent(
         noteId: Int, title: String, dueDate: String?, dueTime: String?, recurrence: String?
     ): PendingIntent {
@@ -60,5 +86,11 @@ class AlarmScheduler @Inject constructor(
             context, noteId, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+    }
+
+    private companion object {
+        // Snooze re-fires live in their own request-code namespace, apart from the main per-note
+        // alarms (request code = noteId) and every notification-action namespace.
+        const val SNOOZE_RC_BASE = 7_000_000
     }
 }

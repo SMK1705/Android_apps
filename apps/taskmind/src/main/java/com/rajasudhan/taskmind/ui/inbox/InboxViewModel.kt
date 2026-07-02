@@ -8,6 +8,7 @@ import com.rajasudhan.taskmind.data.model.Suggestion
 import com.rajasudhan.taskmind.data.source.RecentDataScanner
 import com.rajasudhan.taskmind.data.source.RejectionLearner
 import com.rajasudhan.taskmind.data.source.SuggestionApprover
+import com.rajasudhan.taskmind.data.source.SuggestionNotifier
 import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
 import java.io.File
@@ -30,7 +31,8 @@ class InboxViewModel @Inject constructor(
     private val approver: SuggestionApprover,
     private val rejectionLearner: RejectionLearner,
     private val voskTranscriber: VoskTranscriber,
-    private val pipeline: UnderstandingPipeline
+    private val pipeline: UnderstandingPipeline,
+    private val notifier: SuggestionNotifier
 ) : ViewModel() {
 
     // Ticks every 30s so snoozed items auto-resurface shortly after their time passes.
@@ -104,11 +106,23 @@ class InboxViewModel @Inject constructor(
         }
     }
 
-    /** Hide [suggestion] from the Inbox until [until] (epoch millis). It returns on its own. */
+    /**
+     * Hide [suggestion] from the Inbox until [until] (epoch millis). An alarm re-posts the review
+     * notification at that time so it *announces* its return; refreshing the notification now also
+     * drops the snoozed item from the shade immediately. Undo leaves the alarm armed — firing is
+     * harmless, notifyPending() just re-renders whatever is pending then.
+     */
     fun snooze(suggestion: Suggestion, until: Long) {
         viewModelScope.launch {
             dao.updateSuggestion(suggestion.copy(snoozedUntil = until))
-            lastUndo = { dao.updateSuggestion(suggestion.copy(snoozedUntil = null)) }
+            notifier.scheduleResurface(suggestion.id, until)
+            notifier.notifyPending()
+            lastUndo = {
+                dao.updateSuggestion(suggestion.copy(snoozedUntil = null))
+                // The snooze just dropped this item from the shade — bring it straight back, or the
+                // notification would stay stale until the (now-irrelevant) resurface alarm fires.
+                notifier.notifyPending()
+            }
         }
     }
 

@@ -44,8 +44,9 @@ class InboxScreenTest {
     private val approver = mockk<SuggestionApprover>(relaxed = true)
     private val vosk = mockk<VoskTranscriber>(relaxed = true)
     private val pipeline = mockk<UnderstandingPipeline>(relaxed = true)
+    private val notifier = mockk<com.rajasudhan.taskmind.data.source.SuggestionNotifier>(relaxed = true)
 
-    private fun viewModel() = InboxViewModel(dao, scanner, approver, RejectionLearner(dao), vosk, pipeline)
+    private fun viewModel() = InboxViewModel(dao, scanner, approver, RejectionLearner(dao), vosk, pipeline, notifier)
 
     private fun seed(vararg suggestions: com.rajasudhan.taskmind.data.model.Suggestion) = runBlocking {
         suggestions.forEach { dao.insertSuggestion(it) }
