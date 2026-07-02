@@ -103,4 +103,19 @@ class ReminderActionReceiverTest {
         verify(exactly = 0) { alarms.snoozeReminder(any(), any(), any()) }
         verify(exactly = 0) { alarms.schedule(any(), any(), any(), any(), any()) }
     }
+
+    @Test
+    fun tomorrowOnAOneShot_persistsTomorrowMorning() = runTest {
+        val id = dao.insertNote(
+            aNote(type = "reminder", title = "Call back", dueDate = "2026-07-01", dueTime = "09:00")
+        ).toInt()
+
+        receiver().handle(context, ReminderActionReceiver.ACTION_SNOOZE_TOMORROW, id, "Call back")
+
+        val note = dao.getNoteByIdNow(id)!!
+        assertEquals(java.time.LocalDate.now().plusDays(1).toString(), note.dueDate)
+        assertEquals("09:00", note.dueTime)
+        verify { alarms.schedule(id, "Call back", note.dueDate, "09:00", null) }
+        verify(exactly = 0) { alarms.snoozeReminder(any(), any(), any()) }
+    }
 }

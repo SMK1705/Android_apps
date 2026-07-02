@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Settings
@@ -48,6 +49,7 @@ fun PrivacyScreen(
     isDark: Boolean = true,
     onToggleTheme: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    onOpenReliability: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val c = BoldTheme.colors
@@ -112,6 +114,16 @@ fun PrivacyScreen(
                     title = "No telemetry",
                     subtitle = "Zero analytics · zero tracking",
                     badge = "✓", badgeColor = c.accent, badgeSoft = c.accentGlow
+                )
+            }
+
+            item {
+                PrivacyStatusRow(
+                    icon = Icons.Outlined.Bolt,
+                    title = "Reliability",
+                    subtitle = "Check reminders can actually reach you",
+                    badge = "OPEN", badgeColor = c.ink2, badgeSoft = c.surface2,
+                    onClick = onOpenReliability
                 )
             }
 
@@ -182,10 +194,12 @@ private fun PrivacyStatusRow(
     badge: String,
     badgeColor: Color,
     badgeSoft: Color,
+    onClick: (() -> Unit)? = null,
 ) {
     val c = BoldTheme.colors
     Row(
         Modifier.fillMaxWidth().clip(ShapeCard).background(c.surface).border(1.dp, c.line, ShapeCard)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick).semantics { role = Role.Button } else Modifier)
             .padding(start = 16.dp, end = 16.dp, top = 15.dp, bottom = 15.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)

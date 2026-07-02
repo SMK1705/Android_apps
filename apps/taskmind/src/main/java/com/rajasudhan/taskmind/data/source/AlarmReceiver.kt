@@ -28,11 +28,12 @@ class AlarmReceiver : BroadcastReceiver() {
         val recurrence = intent.getStringExtra("recurrence")
         val dueDate = intent.getStringExtra("dueDate")
         val dueTime = intent.getStringExtra("dueTime")
+        val nagCount = intent.getIntExtra("nagCount", 0)
 
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                handle(context, noteId, title, recurrence, dueDate, dueTime)
+                handle(context, noteId, title, recurrence, dueDate, dueTime, nagCount = nagCount)
             } finally {
                 pending.finish()
             }
@@ -51,17 +52,16 @@ class AlarmReceiver : BroadcastReceiver() {
         dueDate: String?,
         dueTime: String?,
         now: LocalDateTime = LocalDateTime.now(),
+        nagCount: Int = 0,
     ) {
         // If the note was deleted or already completed, this alarm is stale: don't notify, and
         // cancel it so a recurring reminder can't keep rescheduling itself for a note that no
         // longer needs it. (Completing a note doesn't cancel its alarm, so without this a finished
         // task would still ring.)
-        if (noteId >= 0) {
-            val note = dao.getNoteByIdNow(noteId)
-            if (note == null || note.completed) {
-                alarmScheduler.cancel(noteId)
-                return
-            }
+        val note = if (noteId >= 0) dao.getNoteByIdNow(noteId) else null
+        if (noteId >= 0 && (note == null || note.completed)) {
+            alarmScheduler.cancel(noteId)
+            return
         }
 
         notifyReminder(context, noteId, title)
@@ -76,6 +76,15 @@ class AlarmReceiver : BroadcastReceiver() {
                 ?: firstNext
             dao.updateNoteDueDate(noteId, next)
             alarmScheduler.schedule(noteId, title, next, dueTime, recurrence)
+        }
+
+        // Nag mode: keep re-firing until the task is done. Walks the escalation ladder (5 → 10 →
+        // 20 → 30 min, then every 30) via the nagCount that rides on the re-fire intent. The chain
+        // stops on its own: Done/complete/delete all cancel the pending re-fire (AlarmScheduler.cancel
+        // covers the snooze/nag namespace), and the completed-note guard above eats any straggler.
+        if (note != null && note.nag) {
+            val interval = NAG_INTERVALS[nagCount.coerceIn(0, NAG_INTERVALS.size - 1)]
+            alarmScheduler.snoozeReminder(noteId, title, interval, nagCount + 1)
         }
     }
 
@@ -111,6 +120,10 @@ class AlarmReceiver : BroadcastReceiver() {
                     android.R.drawable.ic_popup_reminder, "Snooze 1h",
                     reminderAction(context, ReminderActionReceiver.ACTION_SNOOZE, ReminderActionReceiver.SNOOZE_RC_BASE + noteId, noteId, title)
                 )
+                .addAction(
+                    android.R.drawable.ic_menu_month, "Tomorrow",
+                    reminderAction(context, ReminderActionReceiver.ACTION_SNOOZE_TOMORROW, ReminderActionReceiver.TOMORROW_RC_BASE + noteId, noteId, title)
+                )
         }
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .notify(if (noteId >= 0) NOTIFICATION_ID_BASE + noteId else System.currentTimeMillis().toInt(), builder.build())
@@ -131,5 +144,9 @@ class AlarmReceiver : BroadcastReceiver() {
         // Fired-reminder notifications: stable id per note, clear of the geofence (100_000 + id)
         // and foreground-service (1) / review (42) ids.
         const val NOTIFICATION_ID_BASE = 200_000
+
+        // Nag-mode escalation ladder, in minutes: quick first nudge, then back off to a steady
+        // half-hour drumbeat until the task is completed.
+        val NAG_INTERVALS = longArrayOf(5, 10, 20, 30)
     }
 }

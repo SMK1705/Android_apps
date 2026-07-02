@@ -59,6 +59,15 @@ class TaskMindForegroundService : Service() {
         const val NOTIFICATION_ID = 1
 
         /**
+         * True while the live-watcher service is up. Read by the Reliability Doctor to tell the user
+         * whether the background watcher is actually running. `@Volatile` because it's flipped on the
+         * main thread (onCreate/onDestroy) and read from a ViewModel coroutine.
+         */
+        @Volatile
+        var isRunning: Boolean = false
+            private set
+
+        /**
          * Idempotently creates the app's notification channels. Also called from
          * [com.rajasudhan.taskmind.TaskMindApp] on startup, so an alarm that fires after a reboot —
          * before the user reopens the app, so this service has never run — still has a channel to
@@ -100,6 +109,7 @@ class TaskMindForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         ensureNotificationChannel(this)
         observeSmsSource()
         observeMediaSource(
@@ -173,6 +183,7 @@ class TaskMindForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isRunning = false
         if (smsObserverStarted) smsObserver.stop()
         if (audioWatching) contentResolver.unregisterContentObserver(audioObserver)
         if (imageWatching) contentResolver.unregisterContentObserver(imageObserver)

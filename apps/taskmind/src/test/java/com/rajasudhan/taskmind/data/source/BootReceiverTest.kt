@@ -79,6 +79,29 @@ class BootReceiverTest {
     }
 
     @Test
+    fun rearm_restartsTheNagLoopForAFiredButUncompletedNagNote() = runTest {
+        // A past-due, uncompleted nag note: its transient re-fire died with the reboot.
+        val id = dao.insertNote(
+            aNote(type = "reminder", title = "Pills", dueDate = "2026-06-01", dueTime = "09:00", nag = true)
+        ).toInt()
+
+        receiver().rearm(LocalDateTime.of(2026, 6, 20, 12, 0))
+
+        verify { alarms.snoozeReminder(id, "Pills", AlarmReceiver.NAG_INTERVALS[0], 0) }
+    }
+
+    @Test
+    fun rearm_doesNotRestartNagForAFutureNote_norACompletedOne() = runTest {
+        dao.insertNote(aNote(type = "reminder", title = "Future", dueDate = "2026-07-01", dueTime = "09:00", nag = true))
+        dao.insertNote(aNote(type = "reminder", title = "Done", dueDate = "2026-06-01", dueTime = "09:00", nag = true, completed = true))
+
+        receiver().rearm(LocalDateTime.of(2026, 6, 20, 12, 0))
+
+        // Future note re-arms normally (no nag restart); completed note does nothing.
+        verify(exactly = 0) { alarms.snoozeReminder(any(), any(), any(), any()) }
+    }
+
+    @Test
     fun rearm_reArmsAFutureSnoozedSuggestion_andRepostsTheReviewNotification() = runTest {
         val until = System.currentTimeMillis() + 3_600_000
         dao.insertSuggestion(aSuggestion(extractedTitle = "Later", status = "pending", snoozedUntil = until))

@@ -21,6 +21,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- "Ring as system alarm": hands a critical reminder off to the Clock app as a real alarm. -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <!-- Re-arm reminder alarms after a reboot (AlarmManager alarms don't survive a restart). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
@@ -94,6 +96,9 @@
 
         <!-- Fires location reminders when entering a saved place. -->
         <receiver android:name=".data.source.GeofenceBroadcastReceiver" android:exported="false" />
+
+        <!-- Target of the Reliability Doctor's test alarm (proves AlarmManager wakes the app on time). -->
+        <receiver android:name=".data.source.ReliabilityTestReceiver" android:exported="false" />
 
         <!-- Quick capture: share-sheet target (text), Quick Settings tile, and home-screen widget. -->
         <activity

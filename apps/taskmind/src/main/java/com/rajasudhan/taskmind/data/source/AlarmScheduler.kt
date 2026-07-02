@@ -21,6 +21,11 @@ class AlarmScheduler @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     fun schedule(noteId: Int, title: String, dueDate: String?, dueTime: String?, recurrence: String?) {
+        // (Re)establishing the main alarm invalidates any pending snooze/nag re-fire from an earlier
+        // fire — otherwise a rescheduled or snoozed nag note would keep ringing on its old cadence in
+        // parallel with the new schedule. AlarmReceiver's nag branch re-arms the re-fire *after* its
+        // recurrence-advance schedule() call, so the live nag loop is unaffected.
+        cancelRefire(noteId)
         if (dueDate == null || dueTime == null) return
         // Parse the time tolerantly via the shared helper — single-digit hours like "9:30" are valid
         // and persisted, and a strict HH parser would reject them and silently drop the alarm.
@@ -40,35 +45,55 @@ class AlarmScheduler @Inject constructor(
         }
     }
 
+    /**
+     * Cancels the note's main alarm AND any pending snooze/nag re-fire — completing or deleting a
+     * note must silence every alarm it has, not just the scheduled one.
+     */
     fun cancel(noteId: Int) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         alarmManager.cancel(pendingIntent(noteId, "", null, null, null))
+        cancelRefire(noteId)
+    }
+
+    /**
+     * Cancels only the transient snooze/nag re-fire (the 7M namespace), leaving the note's main
+     * alarm intact. Used to stop an in-flight nag chain (toggle off) without silencing the reminder.
+     */
+    fun cancelRefire(noteId: Int) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmManager.cancel(snoozePendingIntent(noteId, "", 0))
     }
 
     /**
      * Re-fires the note's reminder notification [minutes] from now — the "Snooze" action on a fired
-     * reminder. Uses its own request-code namespace so it never replaces the note's main alarm (a
-     * recurring reminder's already-scheduled next occurrence must survive a snooze), and carries no
-     * recurrence/date extras so the re-fire only re-notifies, never advances the recurrence again.
-     * Falls back to an inexact-but-doze-safe alarm when exact alarms aren't permitted, rather than
-     * silently dropping the snooze.
+     * reminder, and the nag-mode re-fire loop ([nagCount] rides along so [AlarmReceiver] can walk
+     * the escalation ladder). Uses its own request-code namespace so it never replaces the note's
+     * main alarm (a recurring reminder's already-scheduled next occurrence must survive a snooze),
+     * and carries no recurrence/date extras so the re-fire only re-notifies, never advances the
+     * recurrence again. Falls back to an inexact-but-doze-safe alarm when exact alarms aren't
+     * permitted, rather than silently dropping the snooze.
      */
-    fun snoozeReminder(noteId: Int, title: String, minutes: Long = 60) {
+    fun snoozeReminder(noteId: Int, title: String, minutes: Long = 60, nagCount: Int = 0) {
         val at = System.currentTimeMillis() + minutes * 60_000
-        val intent = Intent(context, AlarmReceiver::class.java).apply {
-            putExtra("noteId", noteId)
-            putExtra("title", title)
-        }
-        val pi = PendingIntent.getBroadcast(
-            context, SNOOZE_RC_BASE + noteId, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val pi = snoozePendingIntent(noteId, title, nagCount)
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         if (alarmManager.canScheduleExactAlarms()) {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
         } else {
             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
         }
+    }
+
+    private fun snoozePendingIntent(noteId: Int, title: String, nagCount: Int): PendingIntent {
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            putExtra("noteId", noteId)
+            putExtra("title", title)
+            putExtra("nagCount", nagCount)
+        }
+        return PendingIntent.getBroadcast(
+            context, SNOOZE_RC_BASE + noteId, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
     }
 
     private fun pendingIntent(

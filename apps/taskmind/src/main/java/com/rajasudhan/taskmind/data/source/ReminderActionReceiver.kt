@@ -53,7 +53,12 @@ class ReminderActionReceiver : BroadcastReceiver() {
                 alarmScheduler.cancel(noteId)
                 geofenceManager.remove(noteId)
             }
-            ACTION_SNOOZE -> snooze(dao.getNoteByIdNow(noteId))
+            ACTION_SNOOZE -> snooze(dao.getNoteByIdNow(noteId), LocalDateTime.now().plusMinutes(SNOOZE_MINUTES))
+            // "Tomorrow" = tomorrow morning at 09:00 — the deal-with-it-in-the-morning snooze.
+            ACTION_SNOOZE_TOMORROW -> snooze(
+                dao.getNoteByIdNow(noteId),
+                LocalDateTime.now().plusDays(1).withHour(9).withMinute(0)
+            )
         }
         // Dismiss whichever reminder surface(s) this note had showing (timed alarm and/or arrival).
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -62,29 +67,32 @@ class ReminderActionReceiver : BroadcastReceiver() {
     }
 
     /**
-     * Snoozes a fired reminder [SNOOZE_MINUTES] out. A one-shot's snooze is PERSISTED as the note's
-     * new due slot — that's what the snooze means now, the list shows the honest next fire, and
+     * Snoozes a fired reminder until [at]. A one-shot's snooze is PERSISTED as the note's new due
+     * slot — that's what the snooze means now, the list shows the honest next fire, and
      * [BootReceiver] re-arms it from dueDate/dueTime so it survives a reboot (a bare AlarmManager
      * alarm would not). A recurring note keeps its persisted chain (next occurrence already armed by
      * [AlarmReceiver]); its snooze is just a transient extra nudge via [AlarmScheduler.snoozeReminder],
      * which deliberately doesn't touch the chain.
      */
-    private suspend fun snooze(note: com.rajasudhan.taskmind.data.model.Note?) {
+    private suspend fun snooze(note: com.rajasudhan.taskmind.data.model.Note?, at: LocalDateTime) {
         if (note == null) return // deleted meanwhile; nothing to snooze
         if (note.recurrence.isNullOrBlank()) {
-            val at = LocalDateTime.now().plusMinutes(SNOOZE_MINUTES)
             val dueDate = at.toLocalDate().toString()
             val dueTime = "%02d:%02d".format(at.hour, at.minute)
             dao.updateNote(note.copy(dueDate = dueDate, dueTime = dueTime))
             alarmScheduler.schedule(note.id, note.title, dueDate, dueTime, null)
         } else {
-            alarmScheduler.snoozeReminder(note.id, note.title, SNOOZE_MINUTES)
+            // Round UP to whole minutes: the target was computed from an earlier now(), so a plain
+            // toMinutes() would land at 59 for a "1 hour" snooze.
+            val minutes = ((java.time.Duration.between(LocalDateTime.now(), at).seconds + 59) / 60).coerceAtLeast(1)
+            alarmScheduler.snoozeReminder(note.id, note.title, minutes)
         }
     }
 
     companion object {
         const val ACTION_DONE = "com.rajasudhan.taskmind.action.REMINDER_DONE"
         const val ACTION_SNOOZE = "com.rajasudhan.taskmind.action.REMINDER_SNOOZE"
+        const val ACTION_SNOOZE_TOMORROW = "com.rajasudhan.taskmind.action.REMINDER_SNOOZE_TOMORROW"
         const val EXTRA_NOTE_ID = "note_id"
         const val EXTRA_TITLE = "note_title"
         const val SNOOZE_MINUTES = 60L
@@ -95,5 +103,6 @@ class ReminderActionReceiver : BroadcastReceiver() {
         const val DONE_RC_BASE = 3_000_000
         const val SNOOZE_RC_BASE = 4_000_000
         const val OPEN_RC_BASE = 5_000_000
+        const val TOMORROW_RC_BASE = 8_000_000
     }
 }
