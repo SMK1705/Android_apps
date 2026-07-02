@@ -878,9 +878,10 @@ private fun BoldSuggestionCard(
                     }) { Text("Save") }
                 }
             } else {
-                // Meta row: kind pill + source (matches the design handoff's suggestion card).
+                // Meta row: kind pill + (suggested-high flag) + source (matches the design handoff).
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     BoldKindChip(kind)
+                    if (suggestion.priority == "high") HighPriorityBadge()
                     BoldSourcePill(suggestion.source, modifier = Modifier.weight(1f, fill = false))
                     BoldKindDot(kind)
                 }
@@ -953,6 +954,13 @@ private fun BoldSuggestionCard(
                             KindPickerChip("Note", suggestion.type == "note") { onEdit(suggestion.copy(type = "note")) }
                         }
                         Spacer(Modifier.height(10.dp))
+                        // Override the model's suggested priority before keeping.
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                            Text("PRIORITY", style = BoldType.detailMeta.copy(letterSpacing = 0.5.sp), color = c.ink3)
+                            KindPickerChip("Normal", suggestion.priority != "high") { onEdit(suggestion.copy(priority = "normal")) }
+                            KindPickerChip("High", suggestion.priority == "high") { onEdit(suggestion.copy(priority = "high")) }
+                        }
+                        Spacer(Modifier.height(10.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             callNumber?.let { num -> CardTextAction("Call", Icons.Outlined.Call) { dialNumber(context, num) } }
                             place?.let { p -> CardTextAction("Directions", Icons.Outlined.Directions) { openDirections(context, p, null, null) } }
@@ -962,6 +970,17 @@ private fun BoldSuggestionCard(
                 }
             }
         }
+    }
+}
+
+/** Small red "HIGH" flag shown on a suggestion the model marked urgent. Mirrors the Notes-list badge. */
+@Composable
+private fun HighPriorityBadge() {
+    val c = BoldTheme.colors
+    Box(
+        Modifier.clip(RoundedCornerShape(4.dp)).background(c.skipBg).padding(horizontal = 5.dp, vertical = 1.dp)
+    ) {
+        Text("HIGH", style = BoldType.detailMeta.copy(fontSize = 8.5.sp, letterSpacing = 0.5.sp), color = c.skip)
     }
 }
 

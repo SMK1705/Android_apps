@@ -20,7 +20,7 @@ class LlmModelsParsingTest {
     @Test
     fun parsesFullyPopulatedItem() {
         val json = """{"items":[{"type":"reminder","title":"Dentist","notes":"bring card",""" +
-            """"due_date":"2026-06-15","due_time":"09:30","confidence":0.9}]}"""
+            """"due_date":"2026-06-15","due_time":"09:30","priority":"high","confidence":0.9}]}"""
         val res = adapter.fromJson(json)
         assertNotNull(res)
         assertEquals(1, res!!.items.size)
@@ -30,6 +30,7 @@ class LlmModelsParsingTest {
         assertEquals("bring card", item.notes)
         assertEquals("2026-06-15", item.dueDate)
         assertEquals("09:30", item.dueTime)
+        assertEquals("high", item.priority)
         assertEquals(0.9, item.confidence, 1e-6)
     }
 
@@ -42,6 +43,7 @@ class LlmModelsParsingTest {
         assertEquals("", item.notes)
         assertNull(item.dueDate)
         assertNull(item.dueTime)
+        assertEquals("normal", item.priority)   // omitted priority floors to normal
         assertEquals(0.7, item.confidence, 1e-6)
     }
 

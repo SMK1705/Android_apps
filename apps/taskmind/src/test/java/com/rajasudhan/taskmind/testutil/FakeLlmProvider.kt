@@ -29,12 +29,13 @@ fun llmItem(
     dueTime: String? = null,
     location: String? = null,
     recurrence: String? = null,
+    priority: String = "normal",
     confidence: Double = 0.9,
 ): String {
     fun q(s: String?) = if (s == null) "null" else "\"$s\""
     return """{"type":"$type","title":"$title","notes":"$notes",""" +
         """"due_date":${q(dueDate)},"due_time":${q(dueTime)},"location":${q(location)},""" +
-        """"recurrence":${q(recurrence)},"confidence":$confidence}"""
+        """"recurrence":${q(recurrence)},"priority":"$priority","confidence":$confidence}"""
 }
 
 /** Wrap items into the `{"items":[...]}` envelope the model returns. */

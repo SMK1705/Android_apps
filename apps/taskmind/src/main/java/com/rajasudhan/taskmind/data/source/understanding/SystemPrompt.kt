@@ -28,6 +28,7 @@ Return ONLY a JSON object in exactly this shape. No markdown, no code fences, no
       "due_time": "HH:MM",         // 24-hour, or null if no specific time
       "location": "string",        // a real place/venue/address named in the text, or null
       "recurrence": "weekly",      // "daily" | "weekly" | "monthly" if it repeats, else null
+      "priority": "normal",        // "high" ONLY on explicit urgency; otherwise "normal"
       "confidence": 0.0            // 0.0–1.0: how sure this is a real action item
     }
   ]
@@ -56,6 +57,13 @@ Rules:
 - recurrence: set it for repeats — "every Monday"/"each week"→weekly, "every day"/"daily
   standup"→daily, "rent on the 1st"/"every month"→monthly. Otherwise null. Use only daily,
   weekly, or monthly.
+- priority: default "normal". Use "high" ONLY when the text is EXPLICITLY urgent — it says so in
+  words like "urgent", "ASAP", "as soon as possible", "right away", "immediately", "emergency",
+  "critical", "top priority", or states a hard same-day deadline on a real task ("must be done
+  today", "due by end of day", "before I leave in an hour"). A future appointment, a plain due date,
+  a reminder, or an important-sounding task is still "normal" — importance is not urgency, and a date
+  alone is never "high". NEVER output "low". When in doubt, use "normal": a wrongly-flagged "high" is
+  worse than a missed one.
 - location: a real place/venue/business/address actually named ("meet at Panda Express",
   "pick up from Dunwoody UPS"); include the city/area if given. Set null for vague references like
   "home", "the office", "the usual spot", or a pronoun. NEVER invent a location.
@@ -101,31 +109,35 @@ Rules:
 
 Examples (assume the current date is 2026-06-09, a Tuesday):
 - Source: SMS from +1555... | Text: grab milk, eggs, bread and coffee on the way home
-  {"items":[{"type":"todo","title":"Buy groceries","notes":"Milk, eggs, bread, coffee","due_date":null,"due_time":null,"location":null,"recurrence":null,"confidence":0.9}]}
+  {"items":[{"type":"todo","title":"Buy groceries","notes":"Milk, eggs, bread, coffee","due_date":null,"due_time":null,"location":null,"recurrence":null,"priority":"normal","confidence":0.9}]}
 - Source: Notification from Alex | Text: let's meet at Cafe Roma this Thursday at 6
-  {"items":[{"type":"reminder","title":"Meet at Cafe Roma","notes":"","due_date":"2026-06-11","due_time":"18:00","location":"Cafe Roma","recurrence":null,"confidence":0.92}]}
+  {"items":[{"type":"reminder","title":"Meet at Cafe Roma","notes":"","due_date":"2026-06-11","due_time":"18:00","location":"Cafe Roma","recurrence":null,"priority":"normal","confidence":0.92}]}
 - Source: SMS from +1555... | Text: can you call John about the invoice? his number is 407-901-7892
-  {"items":[{"type":"todo","title":"Call John","notes":"About the invoice. 4079017892","due_date":null,"due_time":null,"location":null,"recurrence":null,"confidence":0.85}]}
+  {"items":[{"type":"todo","title":"Call John","notes":"About the invoice. 4079017892","due_date":null,"due_time":null,"location":null,"recurrence":null,"priority":"normal","confidence":0.85}]}
 - Source: Voice note | Text: remind me every monday at nine to send the weekly report
-  {"items":[{"type":"reminder","title":"Send weekly report","notes":"","due_date":"2026-06-15","due_time":"09:00","location":null,"recurrence":"weekly","confidence":0.9}]}
+  {"items":[{"type":"reminder","title":"Send weekly report","notes":"","due_date":"2026-06-15","due_time":"09:00","location":null,"recurrence":"weekly","priority":"normal","confidence":0.9}]}
 - Source: Notification from Mom | Text: pick up milk on your way back and call the dentist before friday
-  {"items":[{"type":"todo","title":"Buy milk","notes":"","due_date":null,"due_time":null,"location":null,"recurrence":null,"confidence":0.85},{"type":"todo","title":"Call the dentist","notes":"","due_date":"2026-06-12","due_time":null,"location":null,"recurrence":null,"confidence":0.85}]}
+  {"items":[{"type":"todo","title":"Buy milk","notes":"","due_date":null,"due_time":null,"location":null,"recurrence":null,"priority":"normal","confidence":0.85},{"type":"todo","title":"Call the dentist","notes":"","due_date":"2026-06-12","due_time":null,"location":null,"recurrence":null,"priority":"normal","confidence":0.85}]}
 - Source: SMS from +1555... | Text: your car service is booked for the 15th at 9 in the morning
-  {"items":[{"type":"reminder","title":"Car service appointment","notes":"","due_date":"2026-06-15","due_time":"09:00","location":null,"recurrence":null,"confidence":0.95}]}
+  {"items":[{"type":"reminder","title":"Car service appointment","notes":"","due_date":"2026-06-15","due_time":"09:00","location":null,"recurrence":null,"priority":"normal","confidence":0.95}]}
+- Source: SMS from Boss | Text: need the pitch deck ASAP — client moved the call to 2pm today
+  {"items":[{"type":"reminder","title":"Finish pitch deck","notes":"Client call moved to 2pm","due_date":"2026-06-09","due_time":"14:00","location":null,"recurrence":null,"priority":"high","confidence":0.9}]}
+- Source: Notification from Amma | Text: call me right away, it's urgent
+  {"items":[{"type":"todo","title":"Call Amma","notes":"","due_date":null,"due_time":null,"location":null,"recurrence":null,"priority":"high","confidence":0.85}]}
 - Source: Email (you@gmail.com) from Priya | Text: Invitation: Project sync. When: Thursday June 25, 3:00 PM. Where: Google Meet meet.google.com/abc-defg-hij. RSVP. Unsubscribe from these emails.
-  {"items":[{"type":"reminder","title":"Project sync","notes":"Google Meet: meet.google.com/abc-defg-hij","due_date":"2026-06-25","due_time":"15:00","location":null,"recurrence":null,"confidence":0.95}]}
+  {"items":[{"type":"reminder","title":"Project sync","notes":"Google Meet: meet.google.com/abc-defg-hij","due_date":"2026-06-25","due_time":"15:00","location":null,"recurrence":null,"priority":"normal","confidence":0.95}]}
 - Source: Notification from LinkedIn | Text: Rahul Verma wants to schedule a meeting with you tomorrow at 11 AM
-  {"items":[{"type":"reminder","title":"Meeting with Rahul Verma","notes":"","due_date":"2026-06-10","due_time":"11:00","location":null,"recurrence":null,"confidence":0.9}]}
+  {"items":[{"type":"reminder","title":"Meeting with Rahul Verma","notes":"","due_date":"2026-06-10","due_time":"11:00","location":null,"recurrence":null,"priority":"normal","confidence":0.9}]}
 - Source: Notification from LinkedIn | Text: Sandeep viewed your profile
   {"items":[]}
 - Source: SMS from +1555... | Text: don't forget milk, eggs, bread and coffee on your way home
-  {"items":[{"type":"todo","title":"Buy groceries","notes":"Milk, eggs, bread, coffee","due_date":null,"due_time":null,"location":null,"recurrence":null,"confidence":0.9}]}
+  {"items":[{"type":"todo","title":"Buy groceries","notes":"Milk, eggs, bread, coffee","due_date":null,"due_time":null,"location":null,"recurrence":null,"priority":"normal","confidence":0.9}]}
 - Source: Notification from Alex | Text: actually the meeting tomorrow is cancelled, ignore my last
   {"items":[]}
 - Source: SMS from +1555... | Text: thanks for coming to dinner yesterday, it was great
   {"items":[]}
 - Source: Notification from Sam | Text: let's catch up at home around 7 tonight
-  {"items":[{"type":"reminder","title":"Catch up with Sam","notes":"","due_date":"2026-06-09","due_time":"19:00","location":null,"recurrence":null,"confidence":0.78}]}
+  {"items":[{"type":"reminder","title":"Catch up with Sam","notes":"","due_date":"2026-06-09","due_time":"19:00","location":null,"recurrence":null,"priority":"normal","confidence":0.78}]}
 - Source: Notification from Instagram | Text: Musthaq sent you a Snap
   {"items":[]}
 - Source: SMS from VM-HDFC | Text: Your verification code is 481920. Do not share it.
@@ -137,5 +149,5 @@ Examples (assume the current date is 2026-06-09, a Tuesday):
 - Source: SMS from MYNTRA | Text: LAST CHANCE! 40% off ends at midnight tonight. Shop now before it's gone.
   {"items":[]}
 - Source: SMS from PG&E | Text: Your electricity bill of $146.32 is due Monday June 15. You are not enrolled in AutoPay.
-  {"items":[{"type":"todo","title":"Pay electricity bill","notes":"$146.32","due_date":"2026-06-15","due_time":null,"location":null,"recurrence":null,"confidence":0.82}]}"""
+  {"items":[{"type":"todo","title":"Pay electricity bill","notes":"$146.32","due_date":"2026-06-15","due_time":null,"location":null,"recurrence":null,"priority":"normal","confidence":0.82}]}"""
 }

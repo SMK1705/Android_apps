@@ -48,8 +48,10 @@ fun aSuggestion(
     snoozedUntil: Long? = null,
     location: String? = null,
     recurrence: String? = null,
+    priority: String = "normal",
 ) = Suggestion(
     id = id, source = source, rawSnippet = rawSnippet, extractedTitle = extractedTitle,
     summary = summary, dueDate = dueDate, dueTime = dueTime, type = type, confidence = confidence,
     status = status, snoozedUntil = snoozedUntil, location = location, recurrence = recurrence,
+    priority = priority,
 )
