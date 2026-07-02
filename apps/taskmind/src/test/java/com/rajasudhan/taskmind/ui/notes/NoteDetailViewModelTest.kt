@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -79,6 +80,28 @@ class NoteDetailViewModelTest {
 
         assertEquals("weekly", dao.getNoteByIdNow(id)!!.recurrence)
         verify { alarms.schedule(id, "Rent", "2026-07-01", "09:00", "weekly") }
+    }
+
+    @Test
+    fun setNag_on_persistsWithoutTouchingAlarms() = runTest {
+        val (vm, id) = vmFor(aNote(title = "Pills", type = "reminder", dueDate = "2026-07-01", dueTime = "09:00", nag = false))
+
+        vm.setNag(true)
+
+        assertTrue(dao.getNoteByIdNow(id)!!.nag)
+        verify(exactly = 0) { alarms.cancelRefire(any()) }
+    }
+
+    @Test
+    fun setNag_off_cancelsTheInFlightReFire_butNotTheReminder() = runTest {
+        val (vm, id) = vmFor(aNote(title = "Pills", type = "reminder", dueDate = "2026-07-01", dueTime = "09:00", nag = true))
+
+        vm.setNag(false)
+
+        assertFalse(dao.getNoteByIdNow(id)!!.nag)
+        // Only the nag re-fire is silenced; the note's own reminder alarm is left intact.
+        verify { alarms.cancelRefire(id) }
+        verify(exactly = 0) { alarms.cancel(any()) }
     }
 
     @Test

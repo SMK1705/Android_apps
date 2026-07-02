@@ -80,6 +80,18 @@ class NoteDetailViewModel @Inject constructor(
         viewModelScope.launch { dao.updateNotePriority(current.id, priority) }
     }
 
+    /** Toggle nag-until-done: after the reminder fires, it re-rings until completed. */
+    fun setNag(nag: Boolean) {
+        val current = note.value ?: return
+        if (nag == current.nag) return
+        viewModelScope.launch {
+            dao.updateNoteNag(current.id, nag)
+            // Turning it off mid-chain must silence the pending re-fire too, or one more nag still
+            // lands. Cancel only the re-fire — the note's own reminder alarm stays armed.
+            if (!nag) alarmScheduler.cancelRefire(current.id)
+        }
+    }
+
     /** Set/clear how a reminder repeats; reschedules the alarm so the next fire reflects it. */
     fun updateRecurrence(option: String) {
         val current = note.value ?: return

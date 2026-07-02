@@ -27,5 +27,8 @@ data class Note(
     val locationRadius: Double? = null, // metres
     val locationLabel: String? = null,
     // v6 (MIGRATION_5_6): "low" | "normal" | "high" — the priority sort key after due date.
-    @ColumnInfo(defaultValue = "'normal'") val priority: String = "normal"
+    @ColumnInfo(defaultValue = "'normal'") val priority: String = "normal",
+    // v8 (MIGRATION_7_8): nag until done — after the reminder fires, keep re-firing it at
+    // escalating intervals until the note is completed (or deleted). Off by default.
+    @ColumnInfo(defaultValue = "0") val nag: Boolean = false
 )
