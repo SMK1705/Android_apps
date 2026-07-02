@@ -97,6 +97,9 @@
         <!-- Fires location reminders when entering a saved place. -->
         <receiver android:name=".data.source.GeofenceBroadcastReceiver" android:exported="false" />
 
+        <!-- Target of the Reliability Doctor's test alarm (proves AlarmManager wakes the app on time). -->
+        <receiver android:name=".data.source.ReliabilityTestReceiver" android:exported="false" />
+
         <!-- Quick capture: share-sheet target (text), Quick Settings tile, and home-screen widget. -->
         <activity
             android:name=".ui.capture.ShareTargetActivity"
