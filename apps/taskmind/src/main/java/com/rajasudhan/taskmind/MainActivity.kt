@@ -339,14 +339,15 @@ fun TaskMindAppContent(
 
     val isNoteDetail = currentRoute?.startsWith("notes/") == true
     val isSettingsDetail = currentRoute == "settings_all"
-    val isDetail = isNoteDetail || isSettingsDetail
+    val isReliability = currentRoute == "reliability"
+    val isDetail = isNoteDetail || isSettingsDetail || isReliability
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 // Every main tab renders its own in-screen serif header now, so the top bar carries no
                 // title there (only the note-detail sub-screen keeps a bar title alongside its back arrow).
-                title = { if (isDetail) Text(if (isSettingsDetail) "Settings" else "Note") },
+                title = { if (isDetail) Text(if (isSettingsDetail) "Settings" else if (isReliability) "Reliability" else "Note") },
                 navigationIcon = {
                     if (isDetail) {
                         IconButton(onClick = { navController.popBackStack() }) {
@@ -427,10 +428,14 @@ fun TaskMindAppContent(
                 com.rajasudhan.taskmind.ui.settings.PrivacyScreen(
                     isDark = isDark,
                     onToggleTheme = onToggleTheme,
-                    onOpenSettings = { navController.navigate("settings_all") { launchSingleTop = true } }
+                    onOpenSettings = { navController.navigate("settings_all") { launchSingleTop = true } },
+                    onOpenReliability = { navController.navigate("reliability") { launchSingleTop = true } }
                 )
             }
             composable("settings_all") { com.rajasudhan.taskmind.ui.settings.SettingsScreen() }
+            composable("reliability") {
+                com.rajasudhan.taskmind.ui.settings.ReliabilityScreen()
+            }
         }
     }
 
