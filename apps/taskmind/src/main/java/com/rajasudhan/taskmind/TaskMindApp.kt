@@ -8,6 +8,7 @@ import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.rajasudhan.taskmind.data.source.DailyBriefScheduler
 import com.rajasudhan.taskmind.data.source.DataCollectionWorker
 import com.rajasudhan.taskmind.data.source.SettingsManager
 import com.rajasudhan.taskmind.data.source.TaskMindForegroundService
@@ -24,6 +25,9 @@ class TaskMindApp : Application(), Configuration.Provider {
     @Inject
     lateinit var settingsManager: SettingsManager
 
+    @Inject
+    lateinit var dailyBriefScheduler: DailyBriefScheduler
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -36,6 +40,11 @@ class TaskMindApp : Application(), Configuration.Provider {
         TaskMindForegroundService.ensureNotificationChannel(this)
         // Keep the existing schedule on launch; only an explicit settings change replaces it.
         scheduleScan(this, settingsManager.scanFrequencyMinutes.toLong(), replace = false)
+        // Re-arm the daily brief from the saved preference (the WorkManager job is cleared on reinstall
+        // and its exact firing drifts across reboots; enqueueUniquePeriodicWork with UPDATE is idempotent).
+        dailyBriefScheduler.reschedule(
+            settingsManager.dailyBriefEnabled, settingsManager.dailyBriefHour, settingsManager.dailyBriefMinute
+        )
     }
 
     companion object {

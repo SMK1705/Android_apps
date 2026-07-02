@@ -54,6 +54,7 @@ class SettingsViewModel @Inject constructor(
     private val modelDownloader: ModelDownloader,
     private val backupManager: BackupManager,
     private val moshi: Moshi,
+    private val dailyBriefScheduler: com.rajasudhan.taskmind.data.source.DailyBriefScheduler,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -326,6 +327,31 @@ class SettingsViewModel @Inject constructor(
         settingsManager.scanFrequencyMinutes = minutes
         _scanFrequencyMinutes.value = minutes
         TaskMindApp.scheduleScan(context, minutes.toLong(), replace = true)
+    }
+
+    // ── Daily brief (morning) ──
+    private val _dailyBriefEnabled = MutableStateFlow(settingsManager.dailyBriefEnabled)
+    val dailyBriefEnabled: StateFlow<Boolean> = _dailyBriefEnabled
+
+    private val _dailyBriefHour = MutableStateFlow(settingsManager.dailyBriefHour)
+    val dailyBriefHour: StateFlow<Int> = _dailyBriefHour
+
+    fun updateDailyBriefEnabled(enabled: Boolean) {
+        settingsManager.dailyBriefEnabled = enabled
+        _dailyBriefEnabled.value = enabled
+        applyDailyBriefSchedule()
+    }
+
+    fun updateDailyBriefHour(hour: Int) {
+        settingsManager.dailyBriefHour = hour
+        _dailyBriefHour.value = hour
+        if (_dailyBriefEnabled.value) applyDailyBriefSchedule()
+    }
+
+    private fun applyDailyBriefSchedule() {
+        dailyBriefScheduler.reschedule(
+            _dailyBriefEnabled.value, _dailyBriefHour.value, settingsManager.dailyBriefMinute
+        )
     }
 
     // ---- Encrypted backup / restore ----
