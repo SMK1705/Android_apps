@@ -55,6 +55,7 @@ class SettingsViewModel @Inject constructor(
     private val backupManager: BackupManager,
     private val moshi: Moshi,
     private val dailyBriefScheduler: com.rajasudhan.taskmind.data.source.DailyBriefScheduler,
+    private val weeklyWinsScheduler: com.rajasudhan.taskmind.data.source.WeeklyWinsScheduler,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -352,6 +353,29 @@ class SettingsViewModel @Inject constructor(
         dailyBriefScheduler.reschedule(
             _dailyBriefEnabled.value, _dailyBriefHour.value, settingsManager.dailyBriefMinute
         )
+    }
+
+    // ── Weekly wins (Sunday recap) ──
+    private val _weeklyWinsEnabled = MutableStateFlow(settingsManager.weeklyWinsEnabled)
+    val weeklyWinsEnabled: StateFlow<Boolean> = _weeklyWinsEnabled
+
+    private val _weeklyWinsHour = MutableStateFlow(settingsManager.weeklyWinsHour)
+    val weeklyWinsHour: StateFlow<Int> = _weeklyWinsHour
+
+    fun updateWeeklyWinsEnabled(enabled: Boolean) {
+        settingsManager.weeklyWinsEnabled = enabled
+        _weeklyWinsEnabled.value = enabled
+        applyWeeklyWinsSchedule()
+    }
+
+    fun updateWeeklyWinsHour(hour: Int) {
+        settingsManager.weeklyWinsHour = hour
+        _weeklyWinsHour.value = hour
+        if (_weeklyWinsEnabled.value) applyWeeklyWinsSchedule()
+    }
+
+    private fun applyWeeklyWinsSchedule() {
+        weeklyWinsScheduler.reschedule(_weeklyWinsEnabled.value, _weeklyWinsHour.value)
     }
 
     // ---- Encrypted backup / restore ----

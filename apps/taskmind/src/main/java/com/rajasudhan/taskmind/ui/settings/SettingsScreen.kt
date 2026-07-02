@@ -83,6 +83,8 @@ fun SettingsScreen(
     val appLockEnabled by viewModel.appLockEnabled.collectAsState()
     val dailyBriefEnabled by viewModel.dailyBriefEnabled.collectAsState()
     val dailyBriefHour by viewModel.dailyBriefHour.collectAsState()
+    val weeklyWinsEnabled by viewModel.weeklyWinsEnabled.collectAsState()
+    val weeklyWinsHour by viewModel.weeklyWinsHour.collectAsState()
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri -> uri?.let { viewModel.exportNotesToUri(it) } }
@@ -483,6 +485,36 @@ fun SettingsScreen(
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     hourOptions.forEach { hour ->
                         BoldFilterChip("%02d:00".format(hour), dailyBriefHour == hour, { viewModel.updateDailyBriefHour(hour) })
+                    }
+                }
+            }
+        }
+
+        SettingsSectionCard(accent = Color(0xFF2E7D32), title = "Weekly Wins") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Sunday recap", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "A streak-free look back each Sunday at what you finished — and how much of it " +
+                            "TaskMind caught for you from SMS, notifications, and more that you'd have forgotten.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                com.rajasudhan.taskmind.ui.bold.BoldSwitch(
+                    checked = weeklyWinsEnabled,
+                    onCheckedChange = { viewModel.updateWeeklyWinsEnabled(it) }
+                )
+            }
+            if (weeklyWinsEnabled) {
+                val hourOptions = listOf(9, 12, 17, 18, 20)
+                Text("DELIVER AT", style = BoldType.sectionMono, color = c.ink3)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    hourOptions.forEach { hour ->
+                        BoldFilterChip("%02d:00".format(hour), weeklyWinsHour == hour, { viewModel.updateWeeklyWinsHour(hour) })
                     }
                 }
             }

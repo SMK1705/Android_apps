@@ -7,7 +7,10 @@ import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.source.AlarmScheduler
 import com.rajasudhan.taskmind.data.source.GeofenceManager
+import com.rajasudhan.taskmind.data.source.understanding.MagicBreakdown
+import com.rajasudhan.taskmind.data.source.understanding.OnDeviceLlmProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -20,6 +23,7 @@ class NoteDetailViewModel @Inject constructor(
     private val dao: TaskMindDao,
     private val alarmScheduler: AlarmScheduler,
     private val geofenceManager: GeofenceManager,
+    private val onDeviceLlm: OnDeviceLlmProvider,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -27,6 +31,10 @@ class NoteDetailViewModel @Inject constructor(
 
     val note: StateFlow<Note?> = dao.getNoteById(noteId)
         .stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+    /** True while a Magic Breakdown is running, so the UI can show a spinner. */
+    private val _breakingDown = MutableStateFlow(false)
+    val breakingDown: StateFlow<Boolean> = _breakingDown
 
     /** Deletes the note and tears down its alarm + geofence; [onDeleted] runs after, to pop back. */
     fun deleteNote(onDeleted: () -> Unit) {
@@ -50,6 +58,44 @@ class NoteDetailViewModel @Inject constructor(
     fun updateChecklist(encoded: String) {
         val current = note.value ?: return
         viewModelScope.launch { dao.updateNoteChecklist(current.id, encoded) }
+    }
+
+    /**
+     * Magic Breakdown: ask the on-device model to split this task into concrete steps and save them
+     * as the note's checklist. Deliberately on-device (not the routed provider): the cloud backend
+     * force-applies the extraction response schema, which mangles free-form output — and a private,
+     * offline task-splitter is the point. [onResult] reports a short snackbar message; a missing model
+     * says so. Leaves any existing checklist untouched when nothing usable comes back.
+     */
+    fun breakDown(onResult: (String) -> Unit) {
+        val current = note.value ?: return
+        if (_breakingDown.value) return
+        _breakingDown.value = true
+        // Runs on the main dispatcher: generate() offloads the heavy inference to Dispatchers.Default
+        // itself, and the DAO write is a suspend Room call, so nothing blocks the UI here — while
+        // onResult (a Toast) still lands on the main thread, as Toast requires.
+        viewModelScope.launch {
+            val message = try {
+                when {
+                    !onDeviceLlm.isModelPresent() ->
+                        "Add the on-device model in Settings to break tasks down."
+                    else -> {
+                        val task = listOf(current.title, current.summary).filter { it.isNotBlank() }.joinToString(" — ")
+                        val steps = MagicBreakdown.parseSteps(onDeviceLlm.generate(MagicBreakdown.INSTRUCTION, "Task: $task"))
+                        if (steps.size < 2) "Couldn't break that into steps — try again."
+                        else {
+                            dao.updateNoteChecklist(current.id, Checklist.encode(steps.map { Checklist.Item(it, false) }))
+                            "Broke it into ${steps.size} steps."
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                "Couldn't break that down — try again."
+            } finally {
+                _breakingDown.value = false
+            }
+            onResult(message)
+        }
     }
 
     /** Inline-edit the title; reschedules a timed reminder's alarm so its notification stays in sync. */
