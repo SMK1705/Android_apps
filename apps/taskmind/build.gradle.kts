@@ -135,6 +135,7 @@ dependencies {
     testImplementation(libs.androidx.arch.core.testing)
     testImplementation(libs.androidx.room.testing)
     testImplementation(libs.androidx.work.testing)
+    testImplementation(libs.okhttp.mockwebserver)
     // Compose UI testing on the JVM (Robolectric) — runs in the existing testDebugUnitTest job.
     // (ui-test-manifest is on debugImplementation below, which is on the unit-test classpath.)
     testImplementation(platform(libs.androidx.compose.bom))

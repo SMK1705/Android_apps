@@ -29,11 +29,14 @@ class SettingsManager @Inject constructor(
         private const val KEY_DAILY_BRIEF_ENABLED = "daily_brief_enabled"
         private const val KEY_DAILY_BRIEF_HOUR = "daily_brief_hour"
         private const val KEY_DAILY_BRIEF_MINUTE = "daily_brief_minute"
+        private const val KEY_WEEKLY_WINS_ENABLED = "weekly_wins_enabled"
+        private const val KEY_WEEKLY_WINS_HOUR = "weekly_wins_hour"
 
         const val CALENDAR_ID_AUTO = -1L
         const val DEFAULT_EVENT_DURATION_MINUTES = 60
         const val DEFAULT_SCAN_FREQUENCY_MINUTES = 30
         const val DEFAULT_DAILY_BRIEF_HOUR = 8
+        const val DEFAULT_WEEKLY_WINS_HOUR = 18
     }
 
     var llmApiKey: String
@@ -114,6 +117,16 @@ class SettingsManager @Inject constructor(
     var dailyBriefMinute: Int
         get() = encryptedPrefs.getInt(KEY_DAILY_BRIEF_MINUTE, 0)
         set(value) = encryptedPrefs.edit().putInt(KEY_DAILY_BRIEF_MINUTE, value).apply()
+
+    /** Whether the once-a-week Sunday "Weekly Wins" recap notification is enabled (default off). */
+    var weeklyWinsEnabled: Boolean
+        get() = encryptedPrefs.getBoolean(KEY_WEEKLY_WINS_ENABLED, false)
+        set(value) = encryptedPrefs.edit().putBoolean(KEY_WEEKLY_WINS_ENABLED, value).apply()
+
+    /** Hour (0–23) the Sunday recap fires. */
+    var weeklyWinsHour: Int
+        get() = encryptedPrefs.getInt(KEY_WEEKLY_WINS_HOUR, DEFAULT_WEEKLY_WINS_HOUR)
+        set(value) = encryptedPrefs.edit().putInt(KEY_WEEKLY_WINS_HOUR, value).apply()
 
     /**
      * Watermark (epoch ms) of the last successful recent-data scan, so each scan only covers what

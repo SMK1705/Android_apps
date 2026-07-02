@@ -55,6 +55,7 @@ class SettingsViewModel @Inject constructor(
     private val backupManager: BackupManager,
     private val moshi: Moshi,
     private val dailyBriefScheduler: com.rajasudhan.taskmind.data.source.DailyBriefScheduler,
+    private val weeklyWinsScheduler: com.rajasudhan.taskmind.data.source.WeeklyWinsScheduler,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -354,6 +355,29 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
+    // ── Weekly wins (Sunday recap) ──
+    private val _weeklyWinsEnabled = MutableStateFlow(settingsManager.weeklyWinsEnabled)
+    val weeklyWinsEnabled: StateFlow<Boolean> = _weeklyWinsEnabled
+
+    private val _weeklyWinsHour = MutableStateFlow(settingsManager.weeklyWinsHour)
+    val weeklyWinsHour: StateFlow<Int> = _weeklyWinsHour
+
+    fun updateWeeklyWinsEnabled(enabled: Boolean) {
+        settingsManager.weeklyWinsEnabled = enabled
+        _weeklyWinsEnabled.value = enabled
+        applyWeeklyWinsSchedule()
+    }
+
+    fun updateWeeklyWinsHour(hour: Int) {
+        settingsManager.weeklyWinsHour = hour
+        _weeklyWinsHour.value = hour
+        if (_weeklyWinsEnabled.value) applyWeeklyWinsSchedule()
+    }
+
+    private fun applyWeeklyWinsSchedule() {
+        weeklyWinsScheduler.reschedule(_weeklyWinsEnabled.value, _weeklyWinsHour.value)
+    }
+
     // ---- Encrypted backup / restore ----
 
     private val _backupStatus = MutableStateFlow<String?>(null)
@@ -420,7 +444,12 @@ class SettingsViewModel @Inject constructor(
             PermissionStatus("SMS", granted(Manifest.permission.READ_SMS)),
             PermissionStatus("Call log", granted(Manifest.permission.READ_CALL_LOG)),
             PermissionStatus("Calendar", granted(Manifest.permission.READ_CALENDAR)),
+            PermissionStatus("Contacts", granted(Manifest.permission.READ_CONTACTS)),
             PermissionStatus("Audio files", granted(Manifest.permission.READ_MEDIA_AUDIO)),
+            PermissionStatus("Photos & screenshots", granted(Manifest.permission.READ_MEDIA_IMAGES)),
+            PermissionStatus("Microphone", granted(Manifest.permission.RECORD_AUDIO)),
+            PermissionStatus("Location", granted(Manifest.permission.ACCESS_FINE_LOCATION)),
+            PermissionStatus("Background location", granted(Manifest.permission.ACCESS_BACKGROUND_LOCATION)),
             PermissionStatus("Post notifications", granted(Manifest.permission.POST_NOTIFICATIONS)),
             PermissionStatus("Notification access", notifAccess),
             PermissionStatus("Usage access", usageAccess),

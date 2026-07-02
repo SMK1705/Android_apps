@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.VerifiedUser
@@ -50,6 +51,7 @@ fun PrivacyScreen(
     onToggleTheme: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onOpenReliability: () -> Unit = {},
+    onOpenKnows: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val c = BoldTheme.colors
@@ -114,6 +116,16 @@ fun PrivacyScreen(
                     title = "No telemetry",
                     subtitle = "Zero analytics · zero tracking",
                     badge = "✓", badgeColor = c.accent, badgeSoft = c.accentGlow
+                )
+            }
+
+            item {
+                PrivacyStatusRow(
+                    icon = Icons.Outlined.Psychology,
+                    title = "What TaskMind knows about me",
+                    subtitle = "Every learned fact — review & forget",
+                    badge = "OPEN", badgeColor = c.ink2, badgeSoft = c.surface2,
+                    onClick = onOpenKnows
                 )
             }
 
