@@ -7,6 +7,8 @@ import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.source.AlarmScheduler
 import com.rajasudhan.taskmind.data.source.GeofenceManager
+import com.rajasudhan.taskmind.data.source.SettingsManager
+import com.rajasudhan.taskmind.data.source.understanding.LlmProvider
 import com.rajasudhan.taskmind.data.source.understanding.MagicBreakdown
 import com.rajasudhan.taskmind.data.source.understanding.OnDeviceLlmProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,6 +26,8 @@ class NoteDetailViewModel @Inject constructor(
     private val alarmScheduler: AlarmScheduler,
     private val geofenceManager: GeofenceManager,
     private val onDeviceLlm: OnDeviceLlmProvider,
+    private val llm: LlmProvider,
+    private val settingsManager: SettingsManager,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -61,27 +65,35 @@ class NoteDetailViewModel @Inject constructor(
     }
 
     /**
-     * Magic Breakdown: ask the on-device model to split this task into concrete steps and save them
-     * as the note's checklist. Deliberately on-device (not the routed provider): the cloud backend
-     * force-applies the extraction response schema, which mangles free-form output — and a private,
-     * offline task-splitter is the point. [onResult] reports a short snackbar message; a missing model
-     * says so. Leaves any existing checklist untouched when nothing usable comes back.
+     * Magic Breakdown: ask the model to split this task into concrete steps and save them as the
+     * note's checklist, via [LlmProvider.generateList]. The routed provider picks the backend —
+     * on-device Gemma (free-form) when selected and present, or the cloud model, which pins its reply
+     * to an array-of-strings schema so cloud output is clean steps instead of the extraction shape.
+     * [onResult] reports a short snackbar message, with a mode-aware nudge when neither backend is
+     * usable. Leaves any existing checklist untouched when nothing usable comes back.
      */
     fun breakDown(onResult: (String) -> Unit) {
         val current = note.value ?: return
         if (_breakingDown.value) return
         _breakingDown.value = true
-        // Runs on the main dispatcher: generate() offloads the heavy inference to Dispatchers.Default
-        // itself, and the DAO write is a suspend Room call, so nothing blocks the UI here — while
-        // onResult (a Toast) still lands on the main thread, as Toast requires.
+        // Runs on the main dispatcher: the provider offloads inference/network to a background
+        // dispatcher itself (Default on-device, IO on cloud) and the DAO write is a suspend Room
+        // call, so nothing blocks the UI — while onResult (a Toast) still lands on the main thread.
         viewModelScope.launch {
             val message = try {
+                val onDeviceMode = settingsManager.useOnDeviceLlm
+                val modelReady = onDeviceLlm.isModelPresent()
+                val cloudReady = settingsManager.llmApiKey.isNotBlank()
                 when {
-                    !onDeviceLlm.isModelPresent() ->
+                    // On-device mode, model not downloaded, and no cloud key to fall back to.
+                    onDeviceMode && !modelReady && !cloudReady ->
                         "Add the on-device model in Settings to break tasks down."
+                    // Cloud mode without an API key configured.
+                    !onDeviceMode && !cloudReady ->
+                        "Add your Cloud API key in Settings to break tasks down."
                     else -> {
                         val task = listOf(current.title, current.summary).filter { it.isNotBlank() }.joinToString(" — ")
-                        val steps = MagicBreakdown.parseSteps(onDeviceLlm.generate(MagicBreakdown.INSTRUCTION, "Task: $task"))
+                        val steps = MagicBreakdown.parseSteps(llm.generateList(MagicBreakdown.INSTRUCTION, "Task: $task"))
                         if (steps.size < 2) "Couldn't break that into steps — try again."
                         else {
                             dao.updateNoteChecklist(current.id, Checklist.encode(steps.map { Checklist.Item(it, false) }))

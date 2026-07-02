@@ -4,6 +4,8 @@ import androidx.lifecycle.SavedStateHandle
 import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.source.AlarmScheduler
 import com.rajasudhan.taskmind.data.source.GeofenceManager
+import com.rajasudhan.taskmind.data.source.SettingsManager
+import com.rajasudhan.taskmind.data.source.understanding.LlmProvider
 import com.rajasudhan.taskmind.data.source.understanding.OnDeviceLlmProvider
 import com.rajasudhan.taskmind.testutil.FakeTaskMindDao
 import com.rajasudhan.taskmind.testutil.MainDispatcherRule
@@ -33,11 +35,13 @@ class NoteDetailViewModelTest {
     private val alarms = mockk<AlarmScheduler>(relaxed = true)
     private val geofence = mockk<GeofenceManager>(relaxed = true)
     private val onDeviceLlm = mockk<OnDeviceLlmProvider>(relaxed = true)
+    private val llm = mockk<LlmProvider>(relaxed = true)
+    private val settingsManager = mockk<SettingsManager>(relaxed = true)
 
     /** Insert [note], build a VM bound to its id, and wait for the note flow to load. */
     private suspend fun vmFor(note: Note): Pair<NoteDetailViewModel, Int> {
         val id = dao.insertNote(note).toInt()
-        val vm = NoteDetailViewModel(dao, alarms, geofence, onDeviceLlm, SavedStateHandle(mapOf("noteId" to id)))
+        val vm = NoteDetailViewModel(dao, alarms, geofence, onDeviceLlm, llm, settingsManager, SavedStateHandle(mapOf("noteId" to id)))
         vm.note.filterNotNull().first()
         return vm to id
     }
@@ -68,9 +72,10 @@ class NoteDetailViewModelTest {
     }
 
     @Test
-    fun breakDown_writesTheModelSteps_asAChecklist() = runTest {
+    fun breakDown_onDevice_writesTheModelSteps_asAChecklist() = runTest {
+        every { settingsManager.useOnDeviceLlm } returns true
         every { onDeviceLlm.isModelPresent() } returns true
-        coEvery { onDeviceLlm.generate(any(), any()) } returns """["Gather documents", "Fill the form", "Submit online"]"""
+        coEvery { llm.generateList(any(), any()) } returns """["Gather documents", "Fill the form", "Submit online"]"""
         val (vm, id) = vmFor(aNote(title = "Renew passport", type = "todo"))
         var msg = ""
 
@@ -83,14 +88,46 @@ class NoteDetailViewModelTest {
     }
 
     @Test
-    fun breakDown_withNoModel_reportsAndLeavesTheNoteUntouched() = runTest {
+    fun breakDown_onCloud_writesTheSteps_viaTheRoutedProvider() = runTest {
+        // Cloud mode with a key: no on-device model needed — the router uses the cloud breakdown.
+        every { settingsManager.useOnDeviceLlm } returns false
+        every { settingsManager.llmApiKey } returns "key-123"
         every { onDeviceLlm.isModelPresent() } returns false
+        coEvery { llm.generateList(any(), any()) } returns """["Book flights", "Reserve hotel"]"""
+        val (vm, id) = vmFor(aNote(title = "Plan trip", type = "todo"))
+        var msg = ""
+
+        vm.breakDown { msg = it }
+
+        assertEquals("Broke it into 2 steps.", msg)
+        val items = com.rajasudhan.taskmind.ui.notes.Checklist.decode(dao.getNoteByIdNow(id)!!.checklist!!)
+        assertEquals(listOf("Book flights", "Reserve hotel"), items.map { it.text })
+    }
+
+    @Test
+    fun breakDown_onDeviceMode_noModel_noKey_nudgesToAddTheModel() = runTest {
+        every { settingsManager.useOnDeviceLlm } returns true
+        every { onDeviceLlm.isModelPresent() } returns false
+        every { settingsManager.llmApiKey } returns ""
         val (vm, id) = vmFor(aNote(title = "Vague task", type = "todo"))
         var msg = ""
 
         vm.breakDown { msg = it }
 
         assertTrue(msg.contains("Add the on-device model"))
+        assertNull(dao.getNoteByIdNow(id)!!.checklist)
+    }
+
+    @Test
+    fun breakDown_cloudMode_noKey_nudgesToAddACloudKey() = runTest {
+        every { settingsManager.useOnDeviceLlm } returns false
+        every { settingsManager.llmApiKey } returns ""
+        val (vm, id) = vmFor(aNote(title = "Vague task", type = "todo"))
+        var msg = ""
+
+        vm.breakDown { msg = it }
+
+        assertTrue(msg.contains("Add your Cloud API key"))
         assertNull(dao.getNoteByIdNow(id)!!.checklist)
     }
 
