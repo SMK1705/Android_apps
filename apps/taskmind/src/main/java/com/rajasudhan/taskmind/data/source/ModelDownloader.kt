@@ -11,7 +11,9 @@ import javax.inject.Singleton
 
 /** Downloads an on-device model file (Vosk zip, Tesseract traineddata) straight into app storage. */
 @Singleton
-class ModelDownloader @Inject constructor() {
+class ModelDownloader @Inject constructor(
+    private val egressLogger: EgressLogger,
+) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
@@ -26,7 +28,12 @@ class ModelDownloader @Inject constructor() {
             runCatching {
                 dest.parentFile?.mkdirs()
                 val tmp = File(dest.parentFile, dest.name + ".part")
-                client.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+                val request = Request.Builder().url(url).build()
+                // Fetching a model reaches out to a remote host, so it IS egress — record it (metadata
+                // only, never content) to keep the Privacy ledger honest. Without this the "No data has
+                // left this device" guarantee is silently false every time a model is downloaded.
+                egressLogger.record(request.url.host, "On-device model download (${dest.name})")
+                client.newCall(request).execute().use { resp ->
                     if (!resp.isSuccessful) error("HTTP ${resp.code}")
                     val body = resp.body ?: error("empty response body")
                     val total = body.contentLength()
