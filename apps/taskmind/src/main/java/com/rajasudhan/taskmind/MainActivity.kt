@@ -1,5 +1,6 @@
 package com.rajasudhan.taskmind
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.compose.setContent
@@ -57,9 +58,20 @@ import javax.inject.Inject
 class MainActivity : AppCompatActivity() {
     @Inject lateinit var settingsManager: SettingsManager
 
+    // A reminder/geofence notification tap deep-links to its note. Held as state (not read once)
+    // so a tap that arrives via onNewIntent — the activity was already open — also navigates, and
+    // so the navigation naturally waits out the app lock: it only runs once the nav graph composes.
+    private val pendingOpenNoteId = kotlinx.coroutines.flow.MutableStateFlow(-1)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Only a fresh launch consumes the extra. On recreation (theme flip, Recents relaunch after
+        // process death) the system redelivers the same intent — without this guard the app would
+        // yank the user back to an already-dismissed note on every recreation.
+        if (savedInstanceState == null) {
+            pendingOpenNoteId.value = intent?.getIntExtra(EXTRA_OPEN_NOTE_ID, -1) ?: -1
+        }
 
         setContent {
             val themeMode by settingsManager.themeModeFlow.collectAsState()
@@ -155,6 +167,7 @@ class MainActivity : AppCompatActivity() {
                     LaunchedEffect(Unit) { promptBiometric { isAuthenticated = true } }
                 } else {
                     // The manual-lock action only makes sense when the lock is on AND enforceable.
+                    val openNoteId by pendingOpenNoteId.collectAsState()
                     TaskMindAppContent(
                         onLock = if (lockEnabled && canLock) ({ isAuthenticated = false }) else null,
                         isDark = darkTheme,
@@ -162,11 +175,29 @@ class MainActivity : AppCompatActivity() {
                         // (it leaves SYSTEM behind, which is what a deliberate tap implies).
                         onToggleTheme = {
                             settingsManager.themeMode = if (darkTheme) ThemeMode.LIGHT else ThemeMode.DARK
+                        },
+                        openNoteId = openNoteId,
+                        onNoteOpened = {
+                            pendingOpenNoteId.value = -1
+                            // Also strip the extra from the sticky intent (kept by setIntent), so a
+                            // same-process recreation can't re-read it.
+                            intent?.removeExtra(EXTRA_OPEN_NOTE_ID)
                         }
                     )
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingOpenNoteId.value = intent.getIntExtra(EXTRA_OPEN_NOTE_ID, -1)
+    }
+
+    companion object {
+        /** Int extra: a note id to navigate to on open — set by reminder/geofence notification taps. */
+        const val EXTRA_OPEN_NOTE_ID = "open_note_id"
     }
 
     /** True only when the device has a biometric or device credential enrolled to authenticate against. */
@@ -287,10 +318,21 @@ fun TaskMindAppContent(
     onLock: (() -> Unit)?,
     isDark: Boolean = true,
     onToggleTheme: () -> Unit = {},
+    openNoteId: Int = -1,
+    onNoteOpened: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+
+    // Deep link from a reminder/geofence notification tap: jump straight to the note. Runs after
+    // the first composition, so the NavHost below has already set its graph.
+    LaunchedEffect(openNoteId) {
+        if (openNoteId >= 0) {
+            navController.navigate("notes/$openNoteId") { launchSingleTop = true }
+            onNoteOpened()
+        }
+    }
 
     val guideViewModel: GuideViewModel = hiltViewModel()
     val showGuide by guideViewModel.showGuide.collectAsState()

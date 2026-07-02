@@ -3,6 +3,7 @@ package com.rajasudhan.taskmind.ui.inbox
 import com.rajasudhan.taskmind.data.source.RecentDataScanner
 import com.rajasudhan.taskmind.data.source.RejectionLearner
 import com.rajasudhan.taskmind.data.source.SuggestionApprover
+import com.rajasudhan.taskmind.data.source.SuggestionNotifier
 import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
 import com.rajasudhan.taskmind.testutil.FakeTaskMindDao
@@ -38,11 +39,12 @@ class InboxViewModelTest {
     private val approver = mockk<SuggestionApprover>(relaxed = true)
     private val vosk = mockk<VoskTranscriber>(relaxed = true)
     private val pipeline = mockk<UnderstandingPipeline>(relaxed = true)
+    private val notifier = mockk<SuggestionNotifier>(relaxed = true)
     private lateinit var vm: InboxViewModel
 
     @Before
     fun setUp() {
-        vm = InboxViewModel(dao, scanner, approver, RejectionLearner(dao), vosk, pipeline)
+        vm = InboxViewModel(dao, scanner, approver, RejectionLearner(dao), vosk, pipeline, notifier)
     }
 
     private suspend fun pending() = dao.getPendingSuggestions().first()
@@ -71,6 +73,23 @@ class InboxViewModelTest {
 
         vm.undoLast()
         assertNull(dao.getSuggestionById(s.id)!!.snoozedUntil)
+    }
+
+    @Test
+    fun snooze_armsTheResurfaceAlarm_andRefreshesTheNotification() = runTest {
+        dao.insertSuggestion(aSuggestion(extractedTitle = "Later", status = "pending"))
+        val s = pending().single()
+        val until = System.currentTimeMillis() + 1_000_000
+
+        vm.snooze(s, until)
+
+        // The alarm announces the snooze's return; the immediate refresh drops it from the shade now.
+        coVerify { notifier.scheduleResurface(s.id, until) }
+        coVerify(exactly = 1) { notifier.notifyPending() }
+
+        // Undo brings the item straight back to the shade too — not just the in-app list.
+        vm.undoLast()
+        coVerify(exactly = 2) { notifier.notifyPending() }
     }
 
     @Test

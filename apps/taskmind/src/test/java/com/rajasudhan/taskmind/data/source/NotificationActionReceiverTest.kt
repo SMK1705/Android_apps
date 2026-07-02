@@ -81,4 +81,16 @@ class NotificationActionReceiverTest {
         coVerify(exactly = 0) { approver.approve(any()) }
         coVerify { notifier.notifyPending() }
     }
+
+    @Test
+    fun resurface_mutatesNothing_andRepostsTheReviewNotification() = runTest {
+        dao.insertSuggestion(aSuggestion(status = "pending"))
+        val s = dao.getPendingSuggestions().first().single()
+
+        receiver().handle(NotificationActionReceiver.ACTION_RESURFACE, s.id)
+
+        assertEquals("pending", dao.getSuggestionById(s.id)!!.status)
+        coVerify(exactly = 0) { approver.approve(any()) }
+        coVerify { notifier.notifyPending() }
+    }
 }

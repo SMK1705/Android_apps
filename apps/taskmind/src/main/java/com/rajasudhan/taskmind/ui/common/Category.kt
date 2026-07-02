@@ -91,6 +91,30 @@ fun overdueLabel(dueDate: String?, dueTime: String?): String? {
     }
 }
 
+/**
+ * A short human label for when an item is due — "Today" / "Tomorrow" / "Mon" (within the week) /
+ * "12 Jul" (further out), with the time appended when one is set ("Tomorrow · 09:00"). Null when
+ * there's no due date (or it doesn't parse), so callers can simply skip the chip.
+ */
+fun dueChipLabel(dueDate: String?, dueTime: String?, today: LocalDate = LocalDate.now()): String? {
+    val date = dueDate ?: return null
+    val day = try {
+        LocalDate.parse(date)
+    } catch (e: Exception) {
+        return null
+    }
+    val days = java.time.temporal.ChronoUnit.DAYS.between(today, day)
+    val dayLabel = when {
+        days == 0L -> "Today"
+        days == 1L -> "Tomorrow"
+        days == -1L -> "Yesterday"
+        days in 2..6 -> day.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault())
+        day.year == today.year -> "${day.dayOfMonth} ${day.month.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault())}"
+        else -> "${day.dayOfMonth} ${day.month.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault())} ${day.year}"
+    }
+    return if (dueTime != null) "$dayLabel · $dueTime" else dayLabel
+}
+
 /** Maps an item's type + due date to its color category (overdue reminders/todos escalate). */
 fun categoryFor(type: String, dueDate: String?, dueTime: String?): Category = when {
     (type == "reminder" || type == "todo") && isOverdue(dueDate, dueTime) -> OverdueCategory

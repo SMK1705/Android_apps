@@ -58,4 +58,26 @@ class GeofenceBroadcastReceiverTest {
 
         assertEquals(0, shadowOf(notificationManager()).allNotifications.size)
     }
+
+    @Test
+    fun notifyEntered_skipsACompletedNote() = runTest {
+        val id = dao.insertNote(
+            aNote(title = "Pick up parcel", locationLabel = "Office", completed = true)
+        ).toInt()
+
+        receiver().notifyEntered(context, listOf(id))
+
+        assertEquals(0, shadowOf(notificationManager()).allNotifications.size)
+    }
+
+    @Test
+    fun arrivalNotification_isHighChannel_withADoneAction() = runTest {
+        val id = dao.insertNote(aNote(title = "Pick up parcel", locationLabel = "Office")).toInt()
+
+        receiver().notifyEntered(context, listOf(id))
+
+        val posted = shadowOf(notificationManager()).allNotifications.single()
+        assertEquals(TaskMindForegroundService.REMINDER_CHANNEL_ID, posted.channelId)
+        assertEquals(listOf("Done"), posted.actions.map { it.title.toString() })
+    }
 }

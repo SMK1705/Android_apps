@@ -1,5 +1,6 @@
 package com.rajasudhan.taskmind.data.source
 
+import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -30,10 +31,11 @@ class SuggestionNotifier @Inject constructor(
     companion object {
         const val CHANNEL_ID = "taskmind_suggestions"
         const val NOTIFICATION_ID = 42
-        // High request-code bases so Call/Directions PendingIntents never collide with the
-        // Approve/Reject broadcasts (which use id*2 + 0/1).
+        // High request-code bases so Call/Directions/resurface PendingIntents never collide with
+        // the Approve/Reject broadcasts (which use id*2 + 0/1).
         private const val CALL_RC_BASE = 1_000_000
         private const val DIRECTIONS_RC_BASE = 2_000_000
+        private const val RESURFACE_RC_BASE = 6_000_000
     }
 
     private val manager: NotificationManager? =
@@ -123,5 +125,26 @@ class SuggestionNotifier @Inject constructor(
     fun cancel() {
         manager?.cancel(NOTIFICATION_ID)
         QuickAddWidget.refresh(context)
+    }
+
+    /**
+     * Arms an alarm for a snoozed suggestion's return time, so the review notification re-posts
+     * (and the widget refreshes) the moment the snooze expires — without this a snoozed item only
+     * resurfaced silently, whenever the app was next opened. Inexact-but-doze-safe is enough here:
+     * "back around tomorrow morning" doesn't need to-the-minute delivery, and it keeps snoozes off
+     * the exact-alarm budget reserved for real reminders. Firing is harmless if the suggestion was
+     * meanwhile handled or its snooze undone — notifyPending() just re-renders the current state.
+     */
+    fun scheduleResurface(suggestionId: Int, at: Long) {
+        val intent = Intent(context, NotificationActionReceiver::class.java).apply {
+            action = NotificationActionReceiver.ACTION_RESURFACE
+            putExtra(NotificationActionReceiver.EXTRA_ID, suggestionId)
+        }
+        val pi = PendingIntent.getBroadcast(
+            context, RESURFACE_RC_BASE + suggestionId, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        context.getSystemService(AlarmManager::class.java)
+            ?.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
     }
 }

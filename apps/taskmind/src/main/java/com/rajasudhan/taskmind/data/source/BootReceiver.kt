@@ -7,6 +7,7 @@ import com.rajasudhan.taskmind.data.local.TaskMindDao
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import javax.inject.Inject
@@ -25,6 +26,7 @@ class BootReceiver : BroadcastReceiver() {
 
     @Inject lateinit var dao: TaskMindDao
     @Inject lateinit var alarmScheduler: AlarmScheduler
+    @Inject lateinit var notifier: SuggestionNotifier
 
     override fun onReceive(context: Context, intent: Intent) {
         // Only react to a real boot broadcast (BOOT_COMPLETED, or an OEM quick-boot variant).
@@ -62,6 +64,16 @@ class BootReceiver : BroadcastReceiver() {
                 alarmScheduler.schedule(note.id, note.title, date, time, null)
             }
         }
+
+        // Snoozed suggestions: their resurface alarms died with the reboot too. Re-arm the ones
+        // still in the future, then re-post the review notification — that both restores the
+        // pre-reboot notification (cleared by the restart) and immediately surfaces any snooze
+        // that expired while the device was off. No-ops when nothing is pending.
+        val nowMs = System.currentTimeMillis()
+        dao.getPendingSuggestions().first()
+            .filter { (it.snoozedUntil ?: 0L) > nowMs }
+            .forEach { notifier.scheduleResurface(it.id, it.snoozedUntil!!) }
+        notifier.notifyPending()
     }
 
     private companion object {

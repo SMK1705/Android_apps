@@ -79,6 +79,8 @@ import com.rajasudhan.taskmind.data.source.transcription.AudioRecorder
 import com.rajasudhan.taskmind.ui.bold.*
 import com.rajasudhan.taskmind.ui.common.SkeletonList
 import com.rajasudhan.taskmind.ui.common.dialNumber
+import com.rajasudhan.taskmind.ui.common.dueChipLabel
+import com.rajasudhan.taskmind.ui.common.isOverdue
 import com.rajasudhan.taskmind.ui.common.openDirections
 import com.rajasudhan.taskmind.ui.theme.BoldOnAccent
 import com.rajasudhan.taskmind.ui.theme.BoldTheme
@@ -878,10 +880,15 @@ private fun BoldSuggestionCard(
                     }) { Text("Save") }
                 }
             } else {
-                // Meta row: kind pill + (suggested-high flag) + source (matches the design handoff).
+                // Meta row: kind pill + (suggested-high flag) + extracted schedule + source. The
+                // schedule chip is what tells apart multiple items split out of ONE message ("do it
+                // today" vs "review tomorrow morning") — without it they render as duplicates.
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     BoldKindChip(kind)
                     if (suggestion.priority == "high") HighPriorityBadge()
+                    dueChipLabel(suggestion.dueDate, suggestion.dueTime)?.let { label ->
+                        ScheduleChip(label, if (isOverdue(suggestion.dueDate, suggestion.dueTime)) c.skip else c.reminder)
+                    }
                     BoldSourcePill(suggestion.source, modifier = Modifier.weight(1f, fill = false))
                     BoldKindDot(kind)
                 }
@@ -970,6 +977,15 @@ private fun BoldSuggestionCard(
                 }
             }
         }
+    }
+}
+
+/** The extracted due date/time on the suggestion meta row ("Today · 14:00", red when overdue). */
+@Composable
+private fun ScheduleChip(label: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        Icon(Icons.Outlined.Schedule, contentDescription = null, tint = color, modifier = Modifier.size(11.dp))
+        Text(label, style = BoldType.detailMeta.copy(fontSize = 10.sp), color = color)
     }
 }
 

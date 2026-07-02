@@ -5,6 +5,8 @@ import androidx.test.core.app.ApplicationProvider
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase
 import com.rajasudhan.taskmind.testutil.aNote
+import com.rajasudhan.taskmind.testutil.aSuggestion
+import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
@@ -24,6 +26,7 @@ class BootReceiverTest {
     private lateinit var db: TaskMindDatabase
     private lateinit var dao: TaskMindDao
     private val alarms = mockk<AlarmScheduler>(relaxed = true)
+    private val notifier = mockk<SuggestionNotifier>(relaxed = true)
 
     @Before
     fun setUp() {
@@ -40,6 +43,7 @@ class BootReceiverTest {
         val r = BootReceiver()
         r.dao = dao
         r.alarmScheduler = alarms
+        r.notifier = notifier
         return r
     }
 
@@ -72,5 +76,30 @@ class BootReceiverTest {
         receiver().rearm()
 
         verify(exactly = 0) { alarms.schedule(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun rearm_reArmsAFutureSnoozedSuggestion_andRepostsTheReviewNotification() = runTest {
+        val until = System.currentTimeMillis() + 3_600_000
+        dao.insertSuggestion(aSuggestion(extractedTitle = "Later", status = "pending", snoozedUntil = until))
+        val id = dao.getSuggestionById(1)!!.id
+
+        receiver().rearm()
+
+        verify { notifier.scheduleResurface(id, until) }
+        coVerify { notifier.notifyPending() }
+    }
+
+    @Test
+    fun rearm_doesNotReArmAnExpiredSnooze_butStillReposts() = runTest {
+        dao.insertSuggestion(
+            aSuggestion(extractedTitle = "Due back", status = "pending", snoozedUntil = System.currentTimeMillis() - 1_000)
+        )
+
+        receiver().rearm()
+
+        verify(exactly = 0) { notifier.scheduleResurface(any(), any()) }
+        // notifyPending() itself surfaces the expired snooze immediately.
+        coVerify { notifier.notifyPending() }
     }
 }
