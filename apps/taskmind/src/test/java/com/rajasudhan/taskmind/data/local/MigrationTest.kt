@@ -12,6 +12,7 @@ import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_3
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_4_5
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_5_6
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_6_7
+import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_7_8
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -23,7 +24,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * Exercises the real MIGRATION_1_2 … MIGRATION_6_7 chain end to end.
+ * Exercises the real MIGRATION_1_2 … MIGRATION_7_8 chain end to end.
  *
  * There are no exported schemas for v1–v4 (export was only enabled at v5), so instead of
  * MigrationTestHelper we create a genuine v1 database with raw SQL (the original columns minus
@@ -86,14 +87,14 @@ class MigrationTest {
     }
 
     @Test
-    fun migrate1To7_preservesData_andRoomValidatesSchema() = runTest {
+    fun migrate1To8_preservesData_andRoomValidatesSchema() = runTest {
         createV1Database()
 
         val db = Room.databaseBuilder(context, TaskMindDatabase::class.java, testDb)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
             .allowMainThreadQueries()
             .build()
-        // Opening runs the 1→7 chain and validates the resulting schema against the current entities.
+        // Opening runs the 1→8 chain and validates the resulting schema against the current entities.
         db.openHelper.writableDatabase
 
         val dao = db.taskMindDao()
@@ -105,6 +106,7 @@ class MigrationTest {
         assertFalse(notes[0].completed)      // added in v3 with DEFAULT 0
         assertNull(notes[0].recurrence)      // added in v3, nullable
         assertEquals("normal", notes[0].priority) // added in v6 with DEFAULT 'normal'
+        assertFalse(notes[0].nag)            // added in v8 with DEFAULT 0
 
         val sug = dao.getSuggestionById(1)
         assertNotNull(sug)

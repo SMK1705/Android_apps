@@ -55,6 +55,9 @@ interface TaskMindDao {
     @Query("UPDATE notes SET priority = :priority WHERE id = :id")
     suspend fun updateNotePriority(id: Int, priority: String)
 
+    @Query("UPDATE notes SET nag = :nag WHERE id = :id")
+    suspend fun updateNoteNag(id: Int, nag: Boolean)
+
     @Query("UPDATE notes SET locationLat = :lat, locationLng = :lng, locationRadius = :radius, locationLabel = :label WHERE id = :id")
     suspend fun updateNoteLocation(id: Int, lat: Double?, lng: Double?, radius: Double?, label: String?)
 

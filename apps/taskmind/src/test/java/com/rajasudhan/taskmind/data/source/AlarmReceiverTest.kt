@@ -105,7 +105,46 @@ class AlarmReceiverTest {
         val posted = shadowOf(manager).allNotifications.single()
         // The dedicated HIGH-importance channel — posting to the LOW service channel made reminders silent.
         assertEquals(TaskMindForegroundService.REMINDER_CHANNEL_ID, posted.channelId)
-        // Done + Snooze, so a fired reminder isn't a dead-end.
-        assertEquals(listOf("Done", "Snooze 1h"), posted.actions.map { it.title.toString() })
+        // Done + Snooze + Tomorrow, so a fired reminder isn't a dead-end.
+        assertEquals(listOf("Done", "Snooze 1h", "Tomorrow"), posted.actions.map { it.title.toString() })
+    }
+
+    @Test
+    fun nagNote_schedulesTheNextReFire_walkingTheEscalationLadder() = runTest {
+        val id = dao.insertNote(
+            aNote(type = "reminder", title = "Pills", dueDate = "2026-07-01", dueTime = "09:00", nag = true)
+        ).toInt()
+
+        // First fire: nagCount 0 -> next nudge after the first ladder step, carrying count 1.
+        receiver().handle(context, id, "Pills", null, "2026-07-01", "09:00", nagCount = 0)
+        verify { alarms.snoozeReminder(id, "Pills", AlarmReceiver.NAG_INTERVALS[0], 1) }
+
+        // Deep into the chain: interval caps at the ladder's last step.
+        receiver().handle(context, id, "Pills", null, "2026-07-01", "09:00", nagCount = 9)
+        verify { alarms.snoozeReminder(id, "Pills", AlarmReceiver.NAG_INTERVALS.last(), 10) }
+    }
+
+    @Test
+    fun nonNagNote_neverReFires() = runTest {
+        val id = dao.insertNote(
+            aNote(type = "reminder", title = "Once", dueDate = "2026-07-01", dueTime = "09:00")
+        ).toInt()
+
+        receiver().handle(context, id, "Once", null, "2026-07-01", "09:00")
+
+        verify(exactly = 0) { alarms.snoozeReminder(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun nagChain_stopsOnceTheNoteIsCompleted() = runTest {
+        val id = dao.insertNote(
+            aNote(type = "reminder", title = "Pills", dueDate = "2026-07-01", dueTime = "09:00", nag = true, completed = true)
+        ).toInt()
+
+        receiver().handle(context, id, "Pills", null, "2026-07-01", "09:00", nagCount = 3)
+
+        // Completed guard eats the straggler re-fire and cancels everything outstanding.
+        verify { alarms.cancel(id) }
+        verify(exactly = 0) { alarms.snoozeReminder(any(), any(), any(), any()) }
     }
 }
