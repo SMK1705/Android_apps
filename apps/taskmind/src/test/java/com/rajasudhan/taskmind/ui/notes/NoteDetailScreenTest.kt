@@ -40,10 +40,12 @@ class NoteDetailScreenTest {
     private val alarms = mockk<AlarmScheduler>(relaxed = true)
     private val geofence = mockk<GeofenceManager>(relaxed = true)
     private val onDeviceLlm = mockk<com.rajasudhan.taskmind.data.source.understanding.OnDeviceLlmProvider>(relaxed = true)
+    private val llm = mockk<com.rajasudhan.taskmind.data.source.understanding.LlmProvider>(relaxed = true)
+    private val settingsManager = mockk<com.rajasudhan.taskmind.data.source.SettingsManager>(relaxed = true)
 
     private fun vmFor(note: Note): NoteDetailViewModel {
         val id = runBlocking { dao.insertNote(note) }.toInt()
-        return NoteDetailViewModel(dao, alarms, geofence, onDeviceLlm, SavedStateHandle(mapOf("noteId" to id)))
+        return NoteDetailViewModel(dao, alarms, geofence, onDeviceLlm, llm, settingsManager, SavedStateHandle(mapOf("noteId" to id)))
     }
 
     @Test

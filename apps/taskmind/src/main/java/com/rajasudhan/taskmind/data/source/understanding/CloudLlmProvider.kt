@@ -17,14 +17,38 @@ class CloudLlmProvider @Inject constructor(
     private val client: OkHttpClient,
     private val egressLogger: EgressLogger
 ) : LlmProvider {
-    override suspend fun generate(systemMessage: String, userMessage: String): String = withContext(Dispatchers.IO) {
+    /** Task extraction: the reply is constrained to the `{items:[…]}` extraction schema. */
+    override suspend fun generate(systemMessage: String, userMessage: String): String =
+        callGemini(systemMessage, userMessage, responseSchema(), "Cloud LLM extraction", EMPTY_ITEMS)
+
+    /**
+     * Magic Breakdown: the reply is constrained to a bare array of strings, so a free-form
+     * decomposition prompt comes back as `["step", "step", …]` — never coerced into the extraction
+     * shape (which is what mangled it before, leaking field names into the checklist).
+     */
+    override suspend fun generateList(systemMessage: String, userMessage: String): String =
+        callGemini(systemMessage, userMessage, stringArraySchema(), "Cloud LLM task breakdown", EMPTY_ARRAY)
+
+    /**
+     * Posts a Gemini generateContent request whose output is pinned to [schema], returning the
+     * model's raw JSON text. [purpose] is what gets written to the egress ledger; [fallback] is
+     * returned (without any network call) on a blank key, and (after a call) on a non-2xx response
+     * or missing body — always shaped to match [schema] so the caller's parser stays happy.
+     */
+    private suspend fun callGemini(
+        systemMessage: String,
+        userMessage: String,
+        schema: JSONObject,
+        purpose: String,
+        fallback: String,
+    ): String = withContext(Dispatchers.IO) {
         val apiKey = settingsManager.llmApiKey
         if (apiKey.isBlank()) {
-            return@withContext "{\"items\": []}"
+            return@withContext fallback
         }
 
         // Audit: record that data is about to leave the device (metadata only, never content).
-        egressLogger.record("generativelanguage.googleapis.com", "Cloud LLM extraction")
+        egressLogger.record("generativelanguage.googleapis.com", purpose)
 
         val jsonBody = JSONObject().apply {
             // system_instruction
@@ -42,7 +66,7 @@ class CloudLlmProvider @Inject constructor(
             val genConfig = JSONObject()
                 .put("temperature", 0.1)
                 .put("responseMimeType", "application/json")
-                .put("responseSchema", responseSchema())
+                .put("responseSchema", schema)
             put("generationConfig", genConfig)
         }
 
@@ -51,7 +75,7 @@ class CloudLlmProvider @Inject constructor(
             .post(jsonBody.toString().toRequestBody("application/json".toMediaType()))
             .build()
 
-        return@withContext sendForJson(request)
+        return@withContext sendForJson(request, fallback)
     }
 
     /**
@@ -85,10 +109,14 @@ class CloudLlmProvider @Inject constructor(
             .put("required", JSONArray(listOf("items")))
     }
 
-    private fun sendForJson(request: Request): String =
+    /** Structured-output schema for Magic Breakdown: a bare array of short step strings. */
+    private fun stringArraySchema(): JSONObject =
+        JSONObject().put("type", "ARRAY").put("items", JSONObject().put("type", "STRING"))
+
+    private fun sendForJson(request: Request, fallback: String): String =
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return@use "{\"items\": []}"
-            val bodyStr = response.body?.string() ?: return@use "{\"items\": []}"
+            if (!response.isSuccessful) return@use fallback
+            val bodyStr = response.body?.string() ?: return@use fallback
             JSONObject(bodyStr)
                 .getJSONArray("candidates")
                 .getJSONObject(0)
@@ -97,4 +125,10 @@ class CloudLlmProvider @Inject constructor(
                 .getJSONObject(0)
                 .getString("text")
         }
+
+    companion object {
+        // Empty results shaped to match each call's schema, so the caller's parser never chokes.
+        private const val EMPTY_ITEMS = "{\"items\": []}"
+        private const val EMPTY_ARRAY = "[]"
+    }
 }

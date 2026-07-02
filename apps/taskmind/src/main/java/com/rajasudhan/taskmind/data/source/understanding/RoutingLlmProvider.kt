@@ -33,4 +33,21 @@ class RoutingLlmProvider @Inject constructor(
         }
         return cloud.generate(systemMessage, userMessage)
     }
+
+    override suspend fun generateList(systemMessage: String, userMessage: String): String {
+        if (settingsManager.useOnDeviceLlm) {
+            return try {
+                onDevice.generateList(systemMessage, userMessage)
+            } catch (e: Exception) {
+                // On-device unavailable — fall back to the cloud breakdown only if a key is set;
+                // otherwise an empty array, and the caller reports "couldn't break that down".
+                if (settingsManager.llmApiKey.isNotBlank()) {
+                    cloud.generateList(systemMessage, userMessage)
+                } else {
+                    "[]"
+                }
+            }
+        }
+        return cloud.generateList(systemMessage, userMessage)
+    }
 }
