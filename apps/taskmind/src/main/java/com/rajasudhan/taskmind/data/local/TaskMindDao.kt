@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.rajasudhan.taskmind.data.model.Note
+import com.rajasudhan.taskmind.data.model.NoteEmbedding
 import com.rajasudhan.taskmind.data.model.RejectedPattern
 import com.rajasudhan.taskmind.data.model.Suggestion
 import kotlinx.coroutines.flow.Flow
@@ -82,6 +83,19 @@ interface TaskMindDao {
 
     @Query("DELETE FROM notes")
     suspend fun deleteAllNotes()
+
+    // ---- Semantic embeddings (one vector per note) ----
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertEmbedding(embedding: NoteEmbedding)
+
+    /** All stored note vectors — loaded on demand for a search or a dedup check, not on every query. */
+    @Query("SELECT * FROM note_embeddings")
+    suspend fun getAllEmbeddings(): List<NoteEmbedding>
+
+    /** Note ids that already have a vector, so backfill only embeds what's missing. */
+    @Query("SELECT noteId FROM note_embeddings")
+    suspend fun embeddedNoteIds(): List<Int>
 
     @Query("DELETE FROM suggestions")
     suspend fun deleteAllSuggestions()

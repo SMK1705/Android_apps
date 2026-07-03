@@ -36,7 +36,12 @@ class NotesScreenTest {
     val rules: RuleChain = RuleChain.outerRule(mainRule).around(composeRule)
 
     private val dao = FakeTaskMindDao()
-    private fun viewModel() = NotesViewModel(dao, mockk<AlarmScheduler>(relaxed = true))
+    private fun viewModel() = NotesViewModel(
+        dao, mockk<AlarmScheduler>(relaxed = true),
+        com.rajasudhan.taskmind.data.source.embedding.SemanticIndex(
+            com.rajasudhan.taskmind.data.source.embedding.HashingEmbedder(), dao
+        )
+    )
 
     @Test
     fun header_isShown() {

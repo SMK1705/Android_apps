@@ -26,7 +26,12 @@ class NotesViewModelTest {
 
     @Before
     fun setUp() {
-        vm = NotesViewModel(dao, mockk<AlarmScheduler>(relaxed = true))
+        vm = NotesViewModel(
+            dao, mockk<AlarmScheduler>(relaxed = true),
+            com.rajasudhan.taskmind.data.source.embedding.SemanticIndex(
+                com.rajasudhan.taskmind.data.source.embedding.HashingEmbedder(), dao
+            )
+        )
     }
 
     private suspend fun seed() {
