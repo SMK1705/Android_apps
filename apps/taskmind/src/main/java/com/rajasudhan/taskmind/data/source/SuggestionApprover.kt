@@ -34,6 +34,7 @@ class SuggestionApprover @Inject constructor(
     private val placeGeocoder: PlaceGeocoder,
     private val geofenceManager: GeofenceManager,
     private val rejectionLearner: RejectionLearner,
+    private val semanticIndex: com.rajasudhan.taskmind.data.source.embedding.SemanticIndex,
     @ApplicationContext private val context: Context
 ) {
     /**
@@ -71,6 +72,9 @@ class SuggestionApprover @Inject constructor(
             counterparty = suggestion.counterparty
         )
         val noteId = dao.insertNote(note)
+
+        // Index the approved note for semantic search + near-duplicate detection (embed once, here).
+        semanticIndex.index(noteId.toInt(), note.title, note.summary)
 
         // If the model named a place, geocode it so the note's map + Get directions point at the
         // actual venue (not wherever the user happened to be). Best-effort: directions still resolve
