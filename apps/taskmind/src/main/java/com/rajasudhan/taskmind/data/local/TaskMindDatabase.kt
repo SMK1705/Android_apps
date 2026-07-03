@@ -5,12 +5,13 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.rajasudhan.taskmind.data.model.Note
+import com.rajasudhan.taskmind.data.model.NoteEmbedding
 import com.rajasudhan.taskmind.data.model.RejectedPattern
 import com.rajasudhan.taskmind.data.model.Suggestion
 
 @Database(
-    entities = [Note::class, Suggestion::class, RejectedPattern::class],
-    version = 9,
+    entities = [Note::class, Suggestion::class, RejectedPattern::class, NoteEmbedding::class],
+    version = 10,
     exportSchema = true
 )
 abstract class TaskMindDatabase : RoomDatabase() {
@@ -95,6 +96,20 @@ abstract class TaskMindDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE notes ADD COLUMN counterparty TEXT")
                 db.execSQL("ALTER TABLE suggestions ADD COLUMN counterparty TEXT")
+            }
+        }
+
+        /**
+         * v10 adds the `note_embeddings` table — one semantic vector (BLOB) per note, for semantic
+         * search + near-duplicate detection. Cascades on note delete so vectors never orphan.
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `note_embeddings` (" +
+                        "`noteId` INTEGER NOT NULL, `vector` BLOB NOT NULL, PRIMARY KEY(`noteId`), " +
+                        "FOREIGN KEY(`noteId`) REFERENCES `notes`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)"
+                )
             }
         }
     }

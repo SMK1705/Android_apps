@@ -30,7 +30,8 @@ class RecentDataScanner @Inject constructor(
     private val gmailCollector: GmailCollector,
     private val appUsageCollector: AppUsageCollector,
     private val voskTranscriber: VoskTranscriber,
-    private val ocrEngine: OcrEngine
+    private val ocrEngine: OcrEngine,
+    private val personContextNotifier: PersonContextNotifier
 ) {
     private companion object {
         const val MAX_LOOKBACK_MS = 24 * 60 * 60 * 1000L      // cap a since-last-scan window at 24h
@@ -105,6 +106,8 @@ class RecentDataScanner @Inject constructor(
                 val type = cursor.getInt(1)
                 val duration = cursor.getString(2)
                 val cachedName = cursor.getString(3)
+                // Person-context: a call from a known contact surfaces any open item tied to them.
+                if (!cachedName.isNullOrBlank()) personContextNotifier.notifyForContact(cachedName)
                 if (type == CallLog.Calls.MISSED_TYPE) {
                     // A missed call is a concrete "call back" task, but the LLM tends to drop it as
                     // non-actionable — so build the suggestion straight from the log, which already

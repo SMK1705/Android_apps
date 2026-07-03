@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.rajasudhan.taskmind.data.model.Note
+import com.rajasudhan.taskmind.data.model.NoteEmbedding
 import com.rajasudhan.taskmind.data.model.RejectedPattern
 import com.rajasudhan.taskmind.data.model.Suggestion
 import kotlinx.coroutines.flow.Flow
@@ -83,6 +84,19 @@ interface TaskMindDao {
     @Query("DELETE FROM notes")
     suspend fun deleteAllNotes()
 
+    // ---- Semantic embeddings (one vector per note) ----
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertEmbedding(embedding: NoteEmbedding)
+
+    /** All stored note vectors — loaded on demand for a search or a dedup check, not on every query. */
+    @Query("SELECT * FROM note_embeddings")
+    suspend fun getAllEmbeddings(): List<NoteEmbedding>
+
+    /** Note ids that already have a vector, so backfill only embeds what's missing. */
+    @Query("SELECT noteId FROM note_embeddings")
+    suspend fun embeddedNoteIds(): List<Int>
+
     @Query("DELETE FROM suggestions")
     suspend fun deleteAllSuggestions()
 
@@ -107,6 +121,14 @@ interface TaskMindDao {
     /** Dated waiting-on follow-up nudges — re-armed after a reboot alongside the reminder alarms. */
     @Query("SELECT * FROM notes WHERE completed = 0 AND type = 'waiting_on' AND dueDate IS NOT NULL AND dueTime IS NOT NULL")
     suspend fun getWaitingOnReminders(): List<Note>
+
+    /**
+     * Open items tied to a person (a commitment/task with a counterparty), excluding waiting-on items
+     * (those auto-resolve on contact instead). Used to surface "you have something with X" the moment
+     * X gets in touch.
+     */
+    @Query("SELECT * FROM notes WHERE completed = 0 AND counterparty IS NOT NULL AND type != 'waiting_on'")
+    suspend fun getActivePersonNotes(): List<Note>
 
     /** Retention: drop notes created before [cutoff] (epoch millis). */
     @Query("DELETE FROM notes WHERE createdDate < :cutoff")

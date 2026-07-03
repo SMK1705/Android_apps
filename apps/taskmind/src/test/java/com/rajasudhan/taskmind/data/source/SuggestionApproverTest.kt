@@ -47,6 +47,9 @@ class SuggestionApproverTest {
         dao = db.taskMindDao()
         approver = SuggestionApprover(
             dao, settings, alarms, geocoder, geofence, RejectionLearner(dao),
+            com.rajasudhan.taskmind.data.source.embedding.SemanticIndex(
+                com.rajasudhan.taskmind.data.source.embedding.HashingEmbedder(), dao
+            ),
             ApplicationProvider.getApplicationContext<Context>(),
         )
     }

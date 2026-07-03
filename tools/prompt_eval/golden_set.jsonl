@@ -192,3 +192,5 @@
 {"name": "waiting_on_landlord_no_date", "source": "SMS from +15551230000", "text": "the landlord said he'll get back to me about the lease renewal", "now": "2026-06-09T09:00", "expect": [{"type": "waiting_on", "counterparty_contains": "landlord"}]}
 {"name": "waiting_on_review_tomorrow", "source": "SMS from Priya", "text": "i'll review your doc and send comments tomorrow", "now": "2026-06-09T09:00", "expect": [{"type": "waiting_on", "counterparty_contains": "Priya", "due_date": "2026-06-10"}]}
 {"name": "commitment_send_invoice", "source": "Voice note", "text": "note to self i need to send maya the invoice", "now": "2026-06-09T09:00", "expect": [{"type": "todo", "title_contains": "invoice", "counterparty_contains": "Maya"}]}
+{"name": "person_context_ask_sarah", "source": "Voice note", "text": "remind me to ask sarah about the contract", "now": "2026-06-09T09:00", "expect": [{"type": "todo", "counterparty_contains": "Sarah"}]}
+{"name": "person_context_tell_dad", "source": "SMS from +15551230000", "text": "i need to tell dad about the plumber appointment", "now": "2026-06-09T09:00", "expect": [{"type": "todo", "counterparty_contains": "Dad"}]}
