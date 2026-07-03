@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.rajasudhan.taskmind.data.source.SourceManager
 import com.rajasudhan.taskmind.data.source.email.GmailAuth
 import com.rajasudhan.taskmind.data.source.email.GmailAuthState
+import com.rajasudhan.taskmind.data.source.email.GmailConsentResult
 import com.rajasudhan.taskmind.data.source.email.GmailCollector
 import com.rajasudhan.taskmind.data.source.ocr.OcrEngine
 import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
@@ -203,13 +204,17 @@ class SourcesViewModel @Inject constructor(
     /** Called by the screen with the result of the consent activity. */
     fun onConsentResult(data: Intent?) {
         viewModelScope.launch {
-            val token = gmailAuth.tokenFromConsent(data)
-            if (token == null) {
-                pendingAccountEmail = null
-                _gmailStatus.value = "Gmail connection cancelled."
-                return@launch
+            when (val result = gmailAuth.consentResult(data)) {
+                is GmailConsentResult.Token -> finishConnect(result.accessToken)
+                GmailConsentResult.Cancelled -> {
+                    pendingAccountEmail = null
+                    _gmailStatus.value = "Gmail connection cancelled."
+                }
+                is GmailConsentResult.Failed -> {
+                    pendingAccountEmail = null
+                    _gmailStatus.value = result.message
+                }
             }
-            finishConnect(token)
         }
     }
 
