@@ -47,6 +47,9 @@ class NotesViewModel @Inject constructor(
                     "reminder" to list.count { it.type == "reminder" },
                     "note" to list.count { it.type == "note" },
                     "waiting_on" to list.count { it.type == "waiting_on" },
+                    // Waiting-on items whose counterparty got back in touch — awaiting the user's
+                    // one-tap "did they deliver?" answer (see WaitingConfirmNotifier).
+                    "ready_to_close" to list.count { it.pendingConfirmSince != null },
                     "overdue" to list.count { isOverdue(it.dueDate, it.dueTime) }
                 )
             }
@@ -73,6 +76,7 @@ class NotesViewModel @Inject constructor(
                 fun keep(n: Note) = when (kind) {
                     null -> true
                     "overdue" -> isOverdue(n.dueDate, n.dueTime)
+                    "ready_to_close" -> n.pendingConfirmSince != null
                     else -> n.type == kind
                 }
                 when {

@@ -94,6 +94,9 @@
         <!-- Done/Snooze actions on fired reminder and geofence notifications. -->
         <receiver android:name=".data.source.ReminderActionReceiver" android:exported="false" />
 
+        <!-- Got it / Still waiting actions on the "did they deliver?" waiting-on check. -->
+        <receiver android:name=".data.source.WaitingConfirmReceiver" android:exported="false" />
+
         <!-- Fires location reminders when entering a saved place. -->
         <receiver android:name=".data.source.GeofenceBroadcastReceiver" android:exported="false" />
 

@@ -58,6 +58,13 @@ interface TaskMindDao {
     @Query("UPDATE notes SET nag = :nag WHERE id = :id")
     suspend fun updateNoteNag(id: Int, nag: Boolean)
 
+    /**
+     * Flags/clears a "waiting_on" note as awaiting the user's delivery confirmation. Set to the
+     * moment the counterparty got in touch; cleared (null) once the user taps Got it / Still waiting.
+     */
+    @Query("UPDATE notes SET pendingConfirmSince = :since WHERE id = :id")
+    suspend fun setPendingConfirm(id: Int, since: Long?)
+
     @Query("UPDATE notes SET locationLat = :lat, locationLng = :lng, locationRadius = :radius, locationLabel = :label WHERE id = :id")
     suspend fun updateNoteLocation(id: Int, lat: Double?, lng: Double?, radius: Double?, label: String?)
 

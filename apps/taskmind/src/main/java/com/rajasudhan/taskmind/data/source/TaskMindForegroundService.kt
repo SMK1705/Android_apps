@@ -57,6 +57,7 @@ class TaskMindForegroundService : Service() {
         const val REMINDER_CHANNEL_ID = "taskmind_reminders"
         const val DAILY_BRIEF_CHANNEL_ID = "taskmind_daily_brief"
         const val WEEKLY_WINS_CHANNEL_ID = "taskmind_weekly_wins"
+        const val WAITING_CONFIRM_CHANNEL_ID = "taskmind_waiting_confirm"
         const val NOTIFICATION_ID = 1
 
         /**
@@ -109,6 +110,16 @@ class TaskMindForegroundService : Service() {
                         WEEKLY_WINS_CHANNEL_ID,
                         "Weekly wins",
                         NotificationManager.IMPORTANCE_DEFAULT
+                    )
+                )
+                // Quiet on purpose (IMPORTANCE_LOW: no sound, no heads-up): the "did they deliver?"
+                // check rides in right after the counterparty's own message, so a second buzz would
+                // just be noise. It waits calmly in the shade until the user gets to it.
+                manager.createNotificationChannel(
+                    NotificationChannel(
+                        WAITING_CONFIRM_CHANNEL_ID,
+                        "Waiting-on check-ins",
+                        NotificationManager.IMPORTANCE_LOW
                     )
                 )
             }

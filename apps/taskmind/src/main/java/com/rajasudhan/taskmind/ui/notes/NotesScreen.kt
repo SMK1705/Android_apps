@@ -159,6 +159,11 @@ private fun NotesKindFilter(kind: String?, counts: Map<String, Int>, onSelect: (
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         BoldFilterChip("All", kind == null, { onSelect(null) }, count = counts["all"] ?: 0)
+        // Waiting-on items whose person just got back in touch — front of the row, they need a
+        // one-tap "did they deliver?" answer.
+        if ((counts["ready_to_close"] ?: 0) > 0) {
+            BoldFilterChip("Ready to close", kind == "ready_to_close", { onSelect("ready_to_close") }, count = counts["ready_to_close"] ?: 0)
+        }
         if ((counts["overdue"] ?: 0) > 0) {
             BoldFilterChip("Overdue", kind == "overdue", { onSelect("overdue") }, count = counts["overdue"] ?: 0)
         }
