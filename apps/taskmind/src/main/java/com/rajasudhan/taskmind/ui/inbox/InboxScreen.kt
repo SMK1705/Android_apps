@@ -350,7 +350,11 @@ fun InboxScreen(
                 },
                 onAddToCalendar = { hour, minute, duration ->
                     val time = String.format(java.util.Locale.US, "%02d:%02d", hour, minute)
-                    viewModel.approveSuggestion(suggestion.copy(dueTime = time, type = "reminder"), durationMinutes = duration)
+                    // Adding a time promotes a dated item to a timed reminder — but a waiting-on item
+                    // must KEEP its type (a follow-up time doesn't turn "waiting on Sarah" into a plain
+                    // reminder, and it would silently lose the waiting-on categorisation + auto-resolve).
+                    val timedType = if (suggestion.type == "waiting_on") "waiting_on" else "reminder"
+                    viewModel.approveSuggestion(suggestion.copy(dueTime = time, type = timedType), durationMinutes = duration)
                     showUndo("Added to calendar")
                     timePickerFor = null
                 }
