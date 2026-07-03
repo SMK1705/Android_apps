@@ -1,5 +1,7 @@
 package com.rajasudhan.taskmind.data.source.understanding
 
+import java.time.LocalDate
+
 /**
  * Pure, dependency-free heuristics used by [UnderstandingPipeline] to filter and sanitize what the
  * LLM produces. Kept separate (no Android/Room/Moshi deps) so the safety-critical logic — the stuff
@@ -45,8 +47,15 @@ object ExtractionHeuristics {
     fun isLikelyNoise(text: String): Boolean =
         !ACTIONABLE_HINTS.containsMatchIn(text) && NOISE_PATTERNS.any { it.containsMatchIn(text) }
 
-    /** Returns the date only if it is a well-formed `yyyy-MM-dd`, else null. */
-    fun sanitizeDate(raw: String?): String? = raw?.takeIf { it.matches(DATE_REGEX) }
+    /**
+     * Returns the date only if it is a well-formed AND real `yyyy-MM-dd`, else null. The regex fixes
+     * the shape (rejecting `2026-6-1`, `tomorrow`, …); [LocalDate.parse] then rejects a shape-valid
+     * but calendar-invalid date the model can hallucinate — `2026-02-30`, `2026-13-01`, `2026-04-31`.
+     * Without this such a date would persist on a reminder whose alarm silently never fires (the
+     * scheduler's own `LocalDate.parse` throws and drops the alarm inside a `runCatching`).
+     */
+    fun sanitizeDate(raw: String?): String? =
+        raw?.takeIf { it.matches(DATE_REGEX) && runCatching { LocalDate.parse(it) }.isSuccess }
 
     /** Returns the time only if it is a well-formed `H:mm`/`HH:mm`, else null. */
     fun sanitizeTime(raw: String?): String? = raw?.takeIf { it.matches(TIME_REGEX) }

@@ -131,6 +131,13 @@ class BackupManager @Inject constructor(
                     return Result.Failure("Backup couldn't be opened with its key — not restoring.")
                 }
 
+                // Park the matching key in a pending slot BEFORE the swap. If the process dies in the
+                // window between the swap and the primary-key commit below, the next launch finds the
+                // {restored file, still-old primary key} pair and would fail to open — but DatabaseModule
+                // then tries this pending key, and on success promotes it. That turns the old
+                // "swap-then-commit" data-loss window into a fully recoverable restore.
+                encryptedPrefs.edit().putString(DB_KEY_PENDING, key).commit()
+
                 // Staged file is good. Swap it in atomically so the database on disk is only ever the
                 // complete old file or the complete new one — never a half-written mix, even if the
                 // process is killed mid-restore (the old in-place overwrite could leave a torn file).
@@ -156,10 +163,9 @@ class BackupManager @Inject constructor(
                     File(dbFile.path + "-wal").delete()
                     File(dbFile.path + "-shm").delete()
                 }
-                // Persist the matching key durably (commit, not apply) so the next launch opens the
-                // restored file with the right key. A crash in the tiny window before this lands leaves
-                // {new file, old key}; DatabaseModule self-heals that on next launch rather than bricking.
-                encryptedPrefs.edit().putString(DB_KEY_PREF, key).commit()
+                // Promote the key to primary and clear the pending slot, durably (commit, not apply),
+                // so the next launch opens the restored file with the right key straight away.
+                encryptedPrefs.edit().putString(DB_KEY_PREF, key).remove(DB_KEY_PENDING).commit()
             } finally {
                 staged.delete() // no-op once the move consumed it; cleans up on any failure path
             }
@@ -208,6 +214,13 @@ class BackupManager @Inject constructor(
     companion object {
         private const val DB_NAME = "taskmind_db"
         private const val DB_KEY_PREF = "db_key"
+
+        /**
+         * Pref slot holding a restore's key during the swap→commit window, so an interrupted restore
+         * is recoverable on next launch (see [restore] and `DatabaseModule.provideDatabase`). Public
+         * because the DB open path reads it to promote a pending key.
+         */
+        const val DB_KEY_PENDING = "db_key_pending"
         private const val ENTRY_KEY = "db_key"
         private const val ENTRY_DB = "taskmind_db"
     }
