@@ -10,8 +10,15 @@ name: Install to phone
 #   2. Android SDK on that laptop (ANDROID_HOME set, or the default %LOCALAPPDATA%\Android\Sdk).
 #   3. Phone plugged in with USB debugging enabled and this computer authorized (adb "Allow").
 #
-# Builds on your machine, so the APK is signed with your local debug key — it updates the
-# existing install in place and keeps your on-device data.
+# The debug APK is signed with the repo's committed debug keystore (apps/taskmind/debug.keystore) —
+# the SAME key every local and CI build now uses. That shared, stable signature is what lets both
+# this install AND the over-the-air "debug-latest" build update in place and keep your data.
+#
+# ONE-TIME NOTE: a phone that still has an install signed with a DIFFERENT key — an older per-machine
+# local debug key, or a pre-fix "debug-latest" build (each CI run used to generate a throwaway key) —
+# cannot be updated in place. adb/Gradle fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE ("signatures
+# do not match"). Fix it once: back up in-app (Privacy -> gear -> "Back up (encrypted)"), uninstall
+# the app, then re-run this workflow. Every install after that updates cleanly.
 
 on:
   workflow_dispatch:
