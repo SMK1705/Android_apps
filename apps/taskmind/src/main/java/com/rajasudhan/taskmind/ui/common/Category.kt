@@ -13,9 +13,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.rajasudhan.taskmind.data.source.RecurrenceUtil
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.LocalTime
 
 /**
  * Shared color category so Inbox, Notes (and beyond) speak the same visual language.
@@ -58,36 +58,35 @@ fun onCard(): Color = MaterialTheme.colorScheme.onSurface
 @Composable
 fun onCardMuted(): Color = MaterialTheme.colorScheme.onSurfaceVariant
 
+/**
+ * The moment an item is due, from its stored date + optional time. Parses the time with the tolerant
+ * [RecurrenceUtil.parseTime] — the same parser the alarm scheduler uses — so a single-digit-hour time
+ * like "9:30" (which the pipeline accepts and persists) is honoured instead of throwing under strict
+ * [java.time.LocalTime.parse] and silently making the item read as not-overdue. A missing or
+ * unparseable time falls to end-of-day (23:59), matching an all-day item. Null when the date doesn't
+ * parse.
+ */
+private fun dueDateTime(dueDate: String, dueTime: String?): LocalDateTime? = runCatching {
+    val date = LocalDate.parse(dueDate)
+    val time = dueTime?.let { RecurrenceUtil.parseTime(it) }
+    if (time != null) LocalDateTime.of(date, time) else date.atTime(23, 59)
+}.getOrNull()
+
 fun isOverdue(dueDate: String?, dueTime: String?): Boolean {
-    val date = dueDate ?: return false
-    return try {
-        val due = if (dueTime != null) {
-            LocalDateTime.of(LocalDate.parse(date), LocalTime.parse(dueTime))
-        } else {
-            LocalDate.parse(date).atTime(23, 59)
-        }
-        due.isBefore(LocalDateTime.now())
-    } catch (e: Exception) {
-        false
-    }
+    val due = dueDateTime(dueDate ?: return false, dueTime) ?: return false
+    return due.isBefore(LocalDateTime.now())
 }
 
 /** For an overdue item: how long ago it was due — "2d" / "yesterday" / "3h" / "5m". Null if not overdue. */
 fun overdueLabel(dueDate: String?, dueTime: String?): String? {
-    val date = dueDate ?: return null
-    return try {
-        val due = if (dueTime != null) LocalDateTime.of(LocalDate.parse(date), LocalTime.parse(dueTime))
-        else LocalDate.parse(date).atTime(23, 59)
-        val mins = java.time.Duration.between(due, LocalDateTime.now()).toMinutes()
-        when {
-            mins < 1 -> null
-            mins < 60 -> "${mins}m"
-            mins < 1440 -> "${mins / 60}h"
-            mins < 2880 -> "yesterday"
-            else -> "${mins / 1440}d"
-        }
-    } catch (e: Exception) {
-        null
+    val due = dueDateTime(dueDate ?: return null, dueTime) ?: return null
+    val mins = java.time.Duration.between(due, LocalDateTime.now()).toMinutes()
+    return when {
+        mins < 1 -> null
+        mins < 60 -> "${mins}m"
+        mins < 1440 -> "${mins / 60}h"
+        mins < 2880 -> "yesterday"
+        else -> "${mins / 1440}d"
     }
 }
 
