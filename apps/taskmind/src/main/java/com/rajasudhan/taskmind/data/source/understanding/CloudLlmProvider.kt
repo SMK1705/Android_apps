@@ -118,13 +118,21 @@ class CloudLlmProvider @Inject constructor(
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) return@use fallback
             val bodyStr = response.body?.string() ?: return@use fallback
-            JSONObject(bodyStr)
-                .getJSONArray("candidates")
-                .getJSONObject(0)
-                .getJSONObject("content")
-                .getJSONArray("parts")
-                .getJSONObject(0)
-                .getString("text")
+            // Navigate with opt* (null on absence, never throwing) and fall back to the schema-shaped
+            // empty result on any missing hop. A 200 can still carry no usable text — an empty
+            // `candidates` (safety block) or a candidate with content but no `parts` (MAX_TOKENS
+            // truncation). The old chained get* accessors threw JSONException there, which was never
+            // caught and aborted the whole source's scan, silently dropping the remaining items.
+            val text = runCatching {
+                JSONObject(bodyStr)
+                    .optJSONArray("candidates")
+                    ?.optJSONObject(0)
+                    ?.optJSONObject("content")
+                    ?.optJSONArray("parts")
+                    ?.optJSONObject(0)
+                    ?.optString("text")
+            }.getOrNull()
+            if (text.isNullOrBlank()) fallback else text
         }
 
     companion object {

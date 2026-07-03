@@ -105,6 +105,16 @@ class ExtractionHeuristicsTest {
         assertEquals(expected, ExtractionHeuristics.stripJsonFences("  {\"items\": []}  "))
     }
 
+    @Test
+    fun stripJsonFencesHandlesATrailingNewlineAfterTheClosingFence() {
+        // The regression: a trailing newline after ``` made removeSuffix("```") a no-op, leaving a
+        // dangling fence that failed JSON parsing and silently dropped the whole extraction.
+        val expected = "{\"items\": []}"
+        assertEquals(expected, ExtractionHeuristics.stripJsonFences("```json\n{\"items\": []}\n```\n"))
+        assertEquals(expected, ExtractionHeuristics.stripJsonFences("```json\n{\"items\": []}\n```  \n"))
+        assertEquals(expected, ExtractionHeuristics.stripJsonFences("  ```\n{\"items\": []}\n```\n\n"))
+    }
+
     // ---------------- acceptance threshold ----------------
 
     @Test
