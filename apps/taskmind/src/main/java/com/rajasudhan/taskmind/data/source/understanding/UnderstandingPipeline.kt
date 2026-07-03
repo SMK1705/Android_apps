@@ -7,6 +7,7 @@ import com.rajasudhan.taskmind.data.source.RejectionLearner
 import com.rajasudhan.taskmind.data.source.SuggestionNotifier
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.flow.first
+import org.json.JSONObject
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.LocalDateTime
@@ -160,8 +161,33 @@ class UnderstandingPipeline @Inject constructor(
         return try {
             moshi.adapter(LlmResponse::class.java).fromJson(cleanedJson)
         } catch (e: Exception) {
-            null
+            // The whole-object parse is all-or-nothing: one malformed element (a null title, a
+            // string where a number is expected) makes Moshi throw and would discard every good item
+            // in an otherwise-fine multi-item extraction. Salvage the well-formed items individually.
+            salvageItems(cleanedJson)
         }
+    }
+
+    /**
+     * Best-effort recovery when the strict [LlmResponse] parse fails: walk the `items` array and adapt
+     * each element on its own, keeping the ones that parse and dropping only the malformed ones.
+     *
+     * Returns null — so [processText] still falls through to its stronger-nudge retry — unless at
+     * least one salvaged item is actually *acceptable*. Gating on acceptability (not mere JSON
+     * parseability) preserves the pre-salvage behaviour: a strict-parse failure that yields nothing
+     * worth keeping (prose, a broken payload, or only sub-threshold items) must retry, rather than be
+     * silently satisfied by an unusable salvage and drop a task the retry would have captured.
+     */
+    private fun salvageItems(cleanedJson: String): LlmResponse? = try {
+        val arr = JSONObject(cleanedJson).optJSONArray("items") ?: return null
+        val itemAdapter = moshi.adapter(LlmItem::class.java)
+        val items = (0 until arr.length()).mapNotNull { i ->
+            arr.optJSONObject(i)?.let { obj -> runCatching { itemAdapter.fromJson(obj.toString()) }.getOrNull() }
+        }
+        // Pass the full list on (the insert loop still scores/dedups it); null when nothing's usable.
+        if (items.any { ExtractionHeuristics.isAcceptable(it) }) LlmResponse(items) else null
+    } catch (e: Exception) {
+        null
     }
 
     private suspend fun isDuplicate(item: LlmItem): Boolean {
