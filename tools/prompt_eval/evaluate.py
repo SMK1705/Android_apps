@@ -157,7 +157,7 @@ def matches(item: dict, m: dict) -> bool:
     return True
 
 
-def check(expect, items: list) -> tuple[bool, str]:
+def check(expect, items: list, max_items: int | None = None) -> tuple[bool, str]:
     # "none" expectation: the model must extract nothing.
     if isinstance(expect, dict) and expect.get("items") == 0:
         return (len(items) == 0, "expected no items" if items else "")
@@ -167,6 +167,10 @@ def check(expect, items: list) -> tuple[bool, str]:
         return False, "unmet: " + json.dumps(unmet)
     if isinstance(expect, list) and len(items) < len(expect):
         return False, f"expected >= {len(expect)} items, got {len(items)}"
+    # Optional upper bound — guards against over-segmentation / a failed self-correction or dedup
+    # (e.g. a ramble that should collapse to one item must not emit the stale one too).
+    if max_items is not None and len(items) > max_items:
+        return False, f"expected <= {max_items} items, got {len(items)}"
     return True, ""
 
 
@@ -390,7 +394,7 @@ def main() -> int:
             try:
                 result = call_gemini(key, system, user)
                 items = result.get("items", [])
-                ok, reason = check(c["expect"], items)
+                ok, reason = check(c["expect"], items, c.get("max_items"))
             except Exception as e:  # noqa: BLE001 - surface any failure as a case failure
                 ok, reason, items = False, f"error: {e}", []
             passed += ok
