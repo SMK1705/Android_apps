@@ -205,7 +205,7 @@ fun InboxScreen(
 
     fun doSnooze(s: Suggestion, until: Long) {
         viewModel.snooze(s, until)
-        showUndo("Snoozed")
+        showUndo("Reminder set")
     }
 
     Scaffold(
@@ -698,9 +698,9 @@ private fun BoldCalendarSheet(
 private fun BoldSnoozeSheet(onDismiss: () -> Unit, onPick: (Long) -> Unit) {
     val c = BoldTheme.colors
     BoldBottomSheet(
-        title = "Snooze until",
+        title = "Remind me later",
         onDismiss = onDismiss,
-        subtitle = "It comes back to your Inbox then — nothing is saved yet."
+        subtitle = "The original message bounces back as a notification then — nothing is saved yet."
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             snoozeOptions().forEach { opt ->

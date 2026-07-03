@@ -12,6 +12,7 @@ import androidx.core.app.NotificationCompat
 import com.rajasudhan.taskmind.MainActivity
 import com.rajasudhan.taskmind.R
 import com.rajasudhan.taskmind.data.local.TaskMindDao
+import com.rajasudhan.taskmind.data.model.Suggestion
 import com.rajasudhan.taskmind.ui.capture.QuickAddWidget
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -30,12 +31,16 @@ class SuggestionNotifier @Inject constructor(
 ) {
     companion object {
         const val CHANNEL_ID = "taskmind_suggestions"
+        const val BOUNCE_BACK_CHANNEL_ID = "taskmind_bounce_back"
         const val NOTIFICATION_ID = 42
+        // Its own notification-id lane so a bounced-back message coexists with the review prompt (42).
+        const val BOUNCE_NOTIFICATION_ID_BASE = 500_000
         // High request-code bases so Call/Directions/resurface PendingIntents never collide with
         // the Approve/Reject broadcasts (which use id*2 + 0/1).
         private const val CALL_RC_BASE = 1_000_000
         private const val DIRECTIONS_RC_BASE = 2_000_000
         private const val RESURFACE_RC_BASE = 6_000_000
+        private const val BOUNCE_TAP_RC_BASE = 9_500_000
     }
 
     private val manager: NotificationManager? =
@@ -126,6 +131,44 @@ class SuggestionNotifier @Inject constructor(
         manager?.cancel(NOTIFICATION_ID)
         QuickAddWidget.refresh(context)
     }
+
+    private fun ensureBounceBackChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager?.createNotificationChannel(
+                NotificationChannel(BOUNCE_BACK_CHANNEL_ID, "Message reminders", NotificationManager.IMPORTANCE_DEFAULT)
+            )
+        }
+    }
+
+    /**
+     * Bounce-Back: at a snoozed suggestion's chosen time, re-posts its ORIGINAL captured message as
+     * its own notification — so "remind me about this later" brings back the actual content you
+     * wanted to deal with, not a generic "N to review". Tapping opens the Inbox. On its own channel so
+     * it can be tuned or silenced apart from the review prompt.
+     */
+    fun notifyBounceBack(suggestion: Suggestion) {
+        ensureBounceBackChannel()
+        val body = suggestion.rawSnippet.trim().ifBlank { suggestion.extractedTitle }
+        val tapIntent = PendingIntent.getActivity(
+            context, BOUNCE_TAP_RC_BASE + suggestion.id, Intent(context, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val builder = NotificationCompat.Builder(context, BOUNCE_BACK_CHANNEL_ID)
+            .setContentTitle(bounceTitle(suggestion.source))
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setSubText("Reminder")
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentIntent(tapIntent)
+            .setAutoCancel(true)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+        manager?.notify(BOUNCE_NOTIFICATION_ID_BASE + suggestion.id, builder.build())
+        QuickAddWidget.refresh(context)
+    }
+
+    /** The sender from a source label ("Notification from Alex" → "Alex"), else the source itself. */
+    private fun bounceTitle(source: String): String =
+        source.substringAfter(" from ", source).trim().ifBlank { "Reminder" }
 
     /**
      * Arms an alarm for a snoozed suggestion's return time, so the review notification re-posts
