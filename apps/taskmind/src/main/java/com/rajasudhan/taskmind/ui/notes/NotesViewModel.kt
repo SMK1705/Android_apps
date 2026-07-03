@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.source.AlarmScheduler
+import com.rajasudhan.taskmind.data.source.embedding.SemanticIndex
 import com.rajasudhan.taskmind.ui.common.isOverdue
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -24,8 +25,14 @@ import javax.inject.Inject
 @HiltViewModel
 class NotesViewModel @Inject constructor(
     private val dao: TaskMindDao,
-    private val alarmScheduler: AlarmScheduler
+    private val alarmScheduler: AlarmScheduler,
+    private val semanticIndex: SemanticIndex
 ) : ViewModel() {
+
+    init {
+        // Catch up any notes saved before semantic indexing existed, so search/dedup cover them too.
+        viewModelScope.launch { semanticIndex.backfill() }
+    }
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query
@@ -80,11 +87,12 @@ class NotesViewModel @Inject constructor(
                     else -> n.type == kind
                 }
                 when {
-                    q.isNotBlank() ->
-                        dao.searchNotes("%$q%").map { list ->
-                            val f = list.filter { it.completed == completed && keep(it) }
-                            if (completed) f else prioritise(f)
-                        }
+                    q.isNotBlank() -> {
+                        // Semantic + lexical search: keep every substring match, plus notes the query
+                        // is semantically close to (meaning, not just keywords), ranked by relevance.
+                        val base = if (completed) dao.getCompletedNotes() else dao.getActiveNotes()
+                        base.map { list -> rankBySearch(q, list.filter { keep(it) }) }
+                    }
                     completed -> dao.getCompletedNotes().map { list -> list.filter { keep(it) } }
                     else -> dao.getActiveNotes().map { list -> prioritise(list.filter { keep(it) }) }
                 }
@@ -120,6 +128,27 @@ class NotesViewModel @Inject constructor(
 
     fun deleteNote(note: Note) {
         viewModelScope.launch { dao.deleteNote(note) }
+    }
+
+    /**
+     * Rank [notes] for search query [q]: substring (lexical) hits always show and sort to the top,
+     * plus notes the query is semantically close to (via the embedding index), by relevance. Falls
+     * back to plain substring matching when nothing is indexed yet.
+     */
+    private suspend fun rankBySearch(q: String, notes: List<Note>): List<Note> {
+        val scores = semanticIndex.scores(q, SemanticIndex.SEARCH_FLOOR)
+        val ql = q.trim().lowercase()
+        fun lexical(n: Note) =
+            n.title.lowercase().contains(ql) || n.summary.lowercase().contains(ql) || n.body.lowercase().contains(ql)
+        return notes.mapNotNull { n ->
+            val sem = scores[n.id] ?: 0f
+            val relevance = when {
+                lexical(n) -> 1f + sem  // a keyword hit always shows, ranked above semantic-only matches
+                sem >= SemanticIndex.SEARCH_FLOOR -> sem
+                else -> return@mapNotNull null
+            }
+            n to relevance
+        }.sortedByDescending { it.second }.map { it.first }
     }
 
     // Priority order (research-backed: overdue → soonest due → priority → type → recency). Bucket 0

@@ -34,7 +34,7 @@ data class Note(
     // v9 (MIGRATION_8_9): the other party — who you're waiting on (type "waiting_on") or who a
     // commitment is to. Used to prompt a "did they deliver?" check when that person next gets in touch.
     val counterparty: String? = null,
-    // v10 (MIGRATION_9_10): set to the moment the counterparty got in touch on an open "waiting_on"
+    // v11 (MIGRATION_10_11): set to the moment the counterparty got in touch on an open "waiting_on"
     // item — the note is then awaiting the user's one-tap confirmation of whether they actually
     // delivered. Nullable (null = not awaiting confirmation), so no @ColumnInfo default.
     val pendingConfirmSince: Long? = null

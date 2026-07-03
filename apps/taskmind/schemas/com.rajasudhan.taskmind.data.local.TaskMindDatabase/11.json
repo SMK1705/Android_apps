@@ -1,12 +1,12 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 10,
-    "identityHash": "86d2fb24cbc14156df2a47cbe72edf51",
+    "version": 11,
+    "identityHash": "5b30277a9f639ee519eb7d118bb43778",
     "entities": [
       {
         "tableName": "notes",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `summary` TEXT NOT NULL DEFAULT '', `body` TEXT NOT NULL, `dueDate` TEXT, `dueTime` TEXT, `source` TEXT NOT NULL, `createdDate` INTEGER NOT NULL, `type` TEXT NOT NULL, `completed` INTEGER NOT NULL DEFAULT 0, `completedDate` INTEGER, `recurrence` TEXT, `checklist` TEXT, `locationLat` REAL, `locationLng` REAL, `locationRadius` REAL, `locationLabel` TEXT, `priority` TEXT NOT NULL DEFAULT 'normal', `nag` INTEGER NOT NULL DEFAULT 0, `counterparty` TEXT)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `summary` TEXT NOT NULL DEFAULT '', `body` TEXT NOT NULL, `dueDate` TEXT, `dueTime` TEXT, `source` TEXT NOT NULL, `createdDate` INTEGER NOT NULL, `type` TEXT NOT NULL, `completed` INTEGER NOT NULL DEFAULT 0, `completedDate` INTEGER, `recurrence` TEXT, `checklist` TEXT, `locationLat` REAL, `locationLng` REAL, `locationRadius` REAL, `locationLabel` TEXT, `priority` TEXT NOT NULL DEFAULT 'normal', `nag` INTEGER NOT NULL DEFAULT 0, `counterparty` TEXT, `pendingConfirmSince` INTEGER)",
         "fields": [
           {
             "fieldPath": "id",
@@ -121,6 +121,11 @@
             "fieldPath": "counterparty",
             "columnName": "counterparty",
             "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "pendingConfirmSince",
+            "columnName": "pendingConfirmSince",
+            "affinity": "INTEGER"
           }
         ],
         "primaryKey": {
@@ -305,7 +310,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '86d2fb24cbc14156df2a47cbe72edf51')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5b30277a9f639ee519eb7d118bb43778')"
     ]
   }
 }

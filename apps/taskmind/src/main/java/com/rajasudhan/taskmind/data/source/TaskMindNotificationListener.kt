@@ -26,6 +26,9 @@ class TaskMindNotificationListener : NotificationListenerService() {
     @Inject
     lateinit var waitingOnResolver: WaitingOnResolver
 
+    @Inject
+    lateinit var personContextNotifier: PersonContextNotifier
+
     private val job = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + job)
 
@@ -89,8 +92,13 @@ class TaskMindNotificationListener : NotificationListenerService() {
                 isPersonMessage(notification) -> title
                 else -> null
             }
-            // Pass the message body so the prompt can show a short snippet; a missed call has none.
-            resolveSender?.let { waitingOnResolver.resolveFrom(it, text) }
+            resolveSender?.let {
+                // Pass the message body so the "did they deliver?" prompt can show a short snippet;
+                // a missed call has none.
+                waitingOnResolver.resolveFrom(it, text)
+                // Person-context: surface any open item tied to this sender, right when they message.
+                personContextNotifier.notifyForContact(it)
+            }
             // NOTE: do not log notification content — it is sensitive user data.
             if (missedCaller != null) {
                 // No number in the notification; the Call button resolves the name via Contacts.
