@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentSender
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
 import com.google.android.gms.tasks.Task
 import com.rajasudhan.taskmind.data.source.EgressLogger
@@ -29,6 +30,13 @@ sealed interface GmailAuthState {
     data class Authorized(val accessToken: String) : GmailAuthState
     data class NeedsConsent(val intentSender: IntentSender) : GmailAuthState
     data class Error(val message: String) : GmailAuthState
+}
+
+/** Outcome of the consent activity — a token, an explicit user-cancel, or a concrete failure. */
+sealed interface GmailConsentResult {
+    data class Token(val accessToken: String) : GmailConsentResult
+    object Cancelled : GmailConsentResult
+    data class Failed(val message: String) : GmailConsentResult
 }
 
 /**
@@ -108,13 +116,28 @@ class GmailAuth @Inject constructor(
     fun accountFromChooser(data: Intent?): String? =
         data?.getStringExtra(AccountManager.KEY_ACCOUNT_NAME)
 
-    /** Extracts the access token from the consent activity result intent. */
-    fun tokenFromConsent(data: Intent?): String? =
-        runCatching {
-            Identity.getAuthorizationClient(appContext)
+    /**
+     * Interprets the consent activity result: a token on success, an explicit user-cancellation, or a
+     * concrete failure with a reason — so the UI can say *why* it failed (e.g. an unregistered SHA-1 or
+     * an OAuth-project misconfig) instead of a blanket "cancelled" that hides a real error.
+     */
+    fun consentResult(data: Intent?): GmailConsentResult {
+        if (data == null) return GmailConsentResult.Cancelled // user backed out of the consent screen
+        return try {
+            val token = Identity.getAuthorizationClient(appContext)
                 .getAuthorizationResultFromIntent(data)
                 .accessToken
-        }.onFailure { android.util.Log.e(TAG, "tokenFromConsent failed", it) }.getOrNull()
+            if (!token.isNullOrBlank()) GmailConsentResult.Token(token)
+            else GmailConsentResult.Failed(gmailConsentErrorMessage(GMAIL_STATUS_NO_TOKEN))
+        } catch (e: ApiException) {
+            android.util.Log.e(TAG, "consentResult failed (status=${e.statusCode})", e)
+            if (e.statusCode == GMAIL_STATUS_CANCELLED) GmailConsentResult.Cancelled
+            else GmailConsentResult.Failed(gmailConsentErrorMessage(e.statusCode))
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "consentResult failed", e)
+            GmailConsentResult.Failed(gmailConsentErrorMessage(GMAIL_STATUS_NO_TOKEN))
+        }
+    }
 
     fun addAccount(email: String) {
         settingsManager.addGmailAccount(email)
