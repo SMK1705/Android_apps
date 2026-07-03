@@ -67,7 +67,8 @@ class SuggestionApprover @Inject constructor(
             type = noteType,
             recurrence = suggestion.recurrence,
             checklist = checklist,
-            priority = suggestion.priority
+            priority = suggestion.priority,
+            counterparty = suggestion.counterparty
         )
         val noteId = dao.insertNote(note)
 
@@ -93,6 +94,10 @@ class SuggestionApprover @Inject constructor(
         if (isReminder) {
             alarmScheduler.schedule(noteId.toInt(), suggestion.extractedTitle, suggestion.dueDate, suggestion.dueTime, suggestion.recurrence)
             if (addCalendar) addToCalendar(suggestion.extractedTitle, note.body, suggestion.dueDate, suggestion.dueTime, durationMinutes)
+        } else if (suggestion.type == "waiting_on" && suggestion.dueDate != null && suggestion.dueTime != null) {
+            // A waiting-on item with a follow-up time gets a nudge to chase it up — no calendar event,
+            // since you're not attending anything, just reminding yourself to follow up.
+            alarmScheduler.schedule(noteId.toInt(), suggestion.extractedTitle, suggestion.dueDate, suggestion.dueTime, suggestion.recurrence)
         } else if (suggestion.type == "todo" && suggestion.dueDate != null) {
             if (addCalendar) addToCalendar(suggestion.extractedTitle, note.body, suggestion.dueDate, null, durationMinutes)
         }

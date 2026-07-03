@@ -100,6 +100,14 @@ interface TaskMindDao {
     @Query("SELECT * FROM notes WHERE completed = 0 AND type = 'reminder' AND dueDate IS NOT NULL AND dueTime IS NOT NULL")
     suspend fun getReminderNotes(): List<Note>
 
+    /** Open "waiting on <someone>" items — used to auto-resolve one when that counterparty gets in touch. */
+    @Query("SELECT * FROM notes WHERE completed = 0 AND type = 'waiting_on' AND counterparty IS NOT NULL")
+    suspend fun getActiveWaitingOn(): List<Note>
+
+    /** Dated waiting-on follow-up nudges — re-armed after a reboot alongside the reminder alarms. */
+    @Query("SELECT * FROM notes WHERE completed = 0 AND type = 'waiting_on' AND dueDate IS NOT NULL AND dueTime IS NOT NULL")
+    suspend fun getWaitingOnReminders(): List<Note>
+
     /** Retention: drop notes created before [cutoff] (epoch millis). */
     @Query("DELETE FROM notes WHERE createdDate < :cutoff")
     suspend fun deleteNotesOlderThan(cutoff: Long)

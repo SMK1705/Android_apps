@@ -133,7 +133,7 @@ fun NoteDetailScreen(
 
     val kind = boldKindFor(n.type, n.dueDate != null)
     val kindColor = kind.color()
-    val completable = n.type == "todo" || n.type == "reminder"
+    val completable = n.type == "todo" || n.type == "reminder" || n.type == "waiting_on"
 
     // Call shortcut for "call X / call me back" items: prefer a number named in the message, else
     // resolve the named contact's number. Resolution can touch contacts, so it runs off-thread.

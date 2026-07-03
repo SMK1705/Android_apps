@@ -38,8 +38,8 @@ REPORT_DEFAULT = HERE / "EVAL_REPORT.md"
 MODEL = "gemini-2.5-flash"
 ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
 
-# The four classes of the type confusion matrix. "none" = the model extracted nothing for the case.
-TYPE_CLASSES = ["reminder", "todo", "note", "none"]
+# The classes of the type confusion matrix. "none" = the model extracted nothing for the case.
+TYPE_CLASSES = ["reminder", "todo", "note", "waiting_on", "none"]
 
 # The priority confusion matrix classes. Extraction only ever produces normal/high; "none" = nothing
 # extracted. Only cases whose primary expectation pins a `priority` are scored here.
@@ -54,7 +54,7 @@ RESPONSE_SCHEMA = {
             "items": {
                 "type": "OBJECT",
                 "properties": {
-                    "type": {"type": "STRING", "enum": ["reminder", "todo", "note"]},
+                    "type": {"type": "STRING", "enum": ["reminder", "todo", "note", "waiting_on"]},
                     "title": {"type": "STRING"},
                     "notes": {"type": "STRING"},
                     "due_date": {"type": "STRING", "nullable": True},
@@ -62,10 +62,11 @@ RESPONSE_SCHEMA = {
                     "location": {"type": "STRING", "nullable": True},
                     "recurrence": {"type": "STRING", "nullable": True},
                     "priority": {"type": "STRING", "enum": ["normal", "high"]},
+                    "counterparty": {"type": "STRING", "nullable": True},
                     "confidence": {"type": "NUMBER"},
                 },
                 "required": ["type", "title", "notes", "confidence"],
-                "propertyOrdering": ["type", "title", "notes", "due_date", "due_time", "location", "recurrence", "priority", "confidence"],
+                "propertyOrdering": ["type", "title", "notes", "due_date", "due_time", "location", "recurrence", "priority", "counterparty", "confidence"],
             },
         }
     },
@@ -151,6 +152,8 @@ def matches(item: dict, m: dict) -> bool:
     if "recurrence" in m and item.get("recurrence") != m["recurrence"]:
         return False
     if "priority" in m and (item.get("priority") or "normal") != m["priority"]:
+        return False
+    if "counterparty_contains" in m and not contains("counterparty", m["counterparty_contains"]):
         return False
     if "min_confidence" in m and float(item.get("confidence") or 0) < m["min_confidence"]:
         return False

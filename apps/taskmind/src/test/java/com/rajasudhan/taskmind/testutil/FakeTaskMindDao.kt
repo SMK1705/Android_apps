@@ -119,6 +119,12 @@ class FakeTaskMindDao : TaskMindDao {
     override suspend fun getReminderNotes(): List<Note> =
         notes.value.filter { !it.completed && it.type == "reminder" && it.dueDate != null && it.dueTime != null }
 
+    override suspend fun getActiveWaitingOn(): List<Note> =
+        notes.value.filter { !it.completed && it.type == "waiting_on" && it.counterparty != null }
+
+    override suspend fun getWaitingOnReminders(): List<Note> =
+        notes.value.filter { !it.completed && it.type == "waiting_on" && it.dueDate != null && it.dueTime != null }
+
     override suspend fun deleteNotesOlderThan(cutoff: Long) {
         notes.update { list -> list.filter { it.createdDate >= cutoff } }
     }

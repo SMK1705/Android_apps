@@ -14,9 +14,11 @@ data class Suggestion(
     @ColumnInfo(defaultValue = "''") val summary: String = "", // one-line model summary; UI falls back to a snippet preview
     val dueDate: String?, // YYYY-MM-DD
     val dueTime: String?, // HH:MM
-    val type: String, // "note" | "todo" | "reminder"
+    val type: String, // "note" | "todo" | "reminder" | "waiting_on"
     val confidence: Double,
     val status: String, // "pending" | "approved" | "rejected"
+    // v9 (MIGRATION_8_9): the other party — who you're waiting on / who a commitment is to. Nullable.
+    val counterparty: String? = null,
     // v3 (MIGRATION_2_3): when set, the item is hidden from the Inbox until this time (snooze).
     val snoozedUntil: Long? = null,
     // v4 (MIGRATION_3_4): a place named in the source text (geocoded into the note on approval).

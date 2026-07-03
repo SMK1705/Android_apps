@@ -57,6 +57,18 @@ class BootReceiverTest {
     }
 
     @Test
+    fun rearm_reschedulesADatedWaitingOnFollowup() = runTest {
+        // A waiting-on follow-up nudge is a plain alarm too — it must survive a reboot like a reminder.
+        dao.insertNote(
+            aNote(type = "waiting_on", title = "Waiting on John: numbers", dueDate = "2026-07-01", dueTime = "09:00", counterparty = "John")
+        )
+
+        receiver().rearm(LocalDateTime.of(2026, 6, 1, 0, 0))
+
+        verify { alarms.schedule(any(), "Waiting on John: numbers", "2026-07-01", "09:00", null) }
+    }
+
+    @Test
     fun rearm_advancesARecurringReminderToItsNextFutureSlot() = runTest {
         val id = dao.insertNote(
             aNote(type = "reminder", title = "Rent", dueDate = "2026-06-01", dueTime = "09:00", recurrence = "weekly")

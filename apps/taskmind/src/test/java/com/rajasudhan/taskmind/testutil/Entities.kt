@@ -27,12 +27,13 @@ fun aNote(
     locationLabel: String? = null,
     priority: String = "normal",
     nag: Boolean = false,
+    counterparty: String? = null,
 ) = Note(
     id = id, title = title, summary = summary, body = body, dueDate = dueDate, dueTime = dueTime,
     source = source, createdDate = createdDate, type = type, completed = completed,
     completedDate = completedDate, recurrence = recurrence, checklist = checklist,
     locationLat = locationLat, locationLng = locationLng, locationRadius = locationRadius,
-    locationLabel = locationLabel, priority = priority, nag = nag,
+    locationLabel = locationLabel, priority = priority, nag = nag, counterparty = counterparty,
 )
 
 fun aSuggestion(
@@ -50,9 +51,10 @@ fun aSuggestion(
     location: String? = null,
     recurrence: String? = null,
     priority: String = "normal",
+    counterparty: String? = null,
 ) = Suggestion(
     id = id, source = source, rawSnippet = rawSnippet, extractedTitle = extractedTitle,
     summary = summary, dueDate = dueDate, dueTime = dueTime, type = type, confidence = confidence,
     status = status, snoozedUntil = snoozedUntil, location = location, recurrence = recurrence,
-    priority = priority,
+    priority = priority, counterparty = counterparty,
 )

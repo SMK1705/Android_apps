@@ -13,6 +13,7 @@ import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_4
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_5_6
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_6_7
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_7_8
+import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_8_9
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -87,14 +88,14 @@ class MigrationTest {
     }
 
     @Test
-    fun migrate1To8_preservesData_andRoomValidatesSchema() = runTest {
+    fun migrate1To9_preservesData_andRoomValidatesSchema() = runTest {
         createV1Database()
 
         val db = Room.databaseBuilder(context, TaskMindDatabase::class.java, testDb)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
             .allowMainThreadQueries()
             .build()
-        // Opening runs the 1→8 chain and validates the resulting schema against the current entities.
+        // Opening runs the 1→9 chain and validates the resulting schema against the current entities.
         db.openHelper.writableDatabase
 
         val dao = db.taskMindDao()
@@ -107,6 +108,7 @@ class MigrationTest {
         assertNull(notes[0].recurrence)      // added in v3, nullable
         assertEquals("normal", notes[0].priority) // added in v6 with DEFAULT 'normal'
         assertFalse(notes[0].nag)            // added in v8 with DEFAULT 0
+        assertNull(notes[0].counterparty)    // added in v9, nullable
 
         val sug = dao.getSuggestionById(1)
         assertNotNull(sug)
@@ -116,6 +118,7 @@ class MigrationTest {
         assertNull(sug.location)             // v4
         assertNull(sug.recurrence)           // v5
         assertEquals("normal", sug.priority) // added in v7 with DEFAULT 'normal'
+        assertNull(sug.counterparty)         // added in v9, nullable
 
         db.close()
     }
