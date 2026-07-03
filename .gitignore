@@ -24,6 +24,12 @@ __pycache__/
 *.keystore
 *.jks
 keystore.properties
+# …except the fixed DEBUG keystore. It uses the well-known standard debug credentials
+# (android / androiddebugkey), so it is NOT a secret — the default Android debug key is globally
+# shared. Committing it gives every debug build (local + each ephemeral CI runner) one stable
+# signature, so the rolling "debug-latest" APK can update an existing install in place instead of
+# forcing an uninstall that wipes the user's data. A real release keystore must NEVER be committed.
+!apps/taskmind/debug.keystore
 
 # ---- On-device LLM models (100s of MB to several GB; pushed to the device, not versioned) ----
 *.task

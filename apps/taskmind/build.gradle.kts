@@ -32,11 +32,29 @@ android {
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
+    signingConfigs {
+        // Override the built-in debug signing config to use a fixed, committed debug keystore instead
+        // of the throwaway ~/.android/debug.keystore that each machine (and every ephemeral CI runner)
+        // auto-generates. A shared, reproducible debug signature is what lets the rolling "debug-latest"
+        // APK update an existing install in place; otherwise Android rejects it with a signature
+        // mismatch (INSTALL_FAILED_UPDATE_INCOMPATIBLE) and the user must uninstall, wiping their data.
+        // These are the standard, non-secret debug credentials — safe to commit (see .gitignore note).
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             optimization {
                 enable = false
             }
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
