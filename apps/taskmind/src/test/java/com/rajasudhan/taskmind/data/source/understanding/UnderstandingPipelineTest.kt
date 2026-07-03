@@ -115,6 +115,21 @@ class UnderstandingPipelineTest {
     }
 
     @Test
+    fun nonConformingDate_isSanitizedThenDeduped_notReinsertedOnRescan() = runTest {
+        // "2026-6-1" (single-digit month) sanitizes to null and is stored with a null date. The dedup
+        // must compare on that SANITIZED date, so the re-scan recognises the same item instead of
+        // piling up a fresh copy every time (the raw-vs-sanitized mismatch bug).
+        val json = llmResponse(llmItem(title = "Pay rent", dueDate = "2026-6-1", confidence = 0.9))
+
+        pipeline(FakeLlmProvider(json)).processText("SMS from +10000000000", "pay rent")
+        pipeline(FakeLlmProvider(json)).processText("SMS from +10000000000", "pay rent again")
+
+        val rent = dao.getPendingSuggestions().first().filter { it.extractedTitle == "Pay rent" }
+        assertEquals(1, rent.size)
+        assertNull(rent.single().dueDate) // stored sanitized (the malformed date dropped)
+    }
+
+    @Test
     fun rejectionPenalty_dropsABorderlineItem() = runTest {
         dao.upsertRejectedPattern(RejectedPattern("sender", "+15551234567", 3, 1L))
         val llm = FakeLlmProvider(llmResponse(llmItem(title = "spammy", confidence = 0.8)))
