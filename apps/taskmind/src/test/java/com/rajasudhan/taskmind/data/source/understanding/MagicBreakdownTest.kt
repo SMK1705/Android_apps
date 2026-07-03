@@ -52,6 +52,46 @@ class MagicBreakdownTest {
     }
 
     @Test
+    fun truncatedOpenArray_salvagesTheCompleteQuotedItems_withoutBracketJunk() {
+        // MAX_TOKENS cut the array off mid-item (no closing ']'); the complete quoted steps survive
+        // and the leading '[' never leaks into the first step.
+        val steps = MagicBreakdown.parseSteps("""["Gather documents", "Fill the form", "Submit onl""")
+        assertEquals(listOf("Gather documents", "Fill the form"), steps)
+    }
+
+    @Test
+    fun closedButUnquotedArray_stripsStrayBracketsFromFirstAndLastStep() {
+        // A small model emits a bracketed comma list without quotes; '[' and ']' must not cling to
+        // the first/last step.
+        val steps = MagicBreakdown.parseSteps("[wash rice, boil water, add rice]")
+        assertEquals(listOf("wash rice", "boil water", "add rice"), steps)
+    }
+
+    @Test
+    fun preservesLegitimateBracketsInsideAStep() {
+        // Bracket cleanup is only for stray array delimiters — a step whose text legitimately begins
+        // or ends with a bracket must survive intact (regression guard for the per-item trim removal).
+        assertEquals(
+            listOf("Water plants [balcony]", "Call bank"),
+            MagicBreakdown.parseSteps("""["Water plants [balcony]", "Call bank"]"""),
+        )
+        assertEquals(
+            listOf("[urgent] Review PR", "Merge branch"),
+            MagicBreakdown.parseSteps("""["[urgent] Review PR", "Merge branch"]"""),
+        )
+        assertEquals(
+            listOf("Review PR [urgent]", "Merge branch"),
+            MagicBreakdown.parseSteps("1. Review PR [urgent]\n2. Merge branch"),
+        )
+    }
+
+    @Test
+    fun stripsCodeFencesWithATrailingNewline() {
+        val steps = MagicBreakdown.parseSteps("```json\n[\"Book flights\", \"Reserve hotel\"]\n```\n")
+        assertEquals(listOf("Book flights", "Reserve hotel"), steps)
+    }
+
+    @Test
     fun emptyOrGarbage_yieldsNothingUsable() {
         assertTrue(MagicBreakdown.parseSteps("").isEmpty())
         assertTrue(MagicBreakdown.parseSteps("   \n  ").isEmpty())

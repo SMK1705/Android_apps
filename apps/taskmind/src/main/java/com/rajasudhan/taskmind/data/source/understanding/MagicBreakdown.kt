@@ -23,20 +23,32 @@ object MagicBreakdown {
      * limited to [MAX_STEPS].
      */
     fun parseSteps(raw: String): List<String> {
-        val cleaned = raw
-            .removePrefix("```json").removePrefix("```").removeSuffix("```")
-            .trim()
+        // Shared, hardened fence-stripping (handles a trailing newline after the closing ```).
+        val cleaned = ExtractionHeuristics.stripJsonFences(raw)
 
-        // Prefer the quoted items inside a JSON-ish array when one is present…
-        val fromArray = if (cleaned.contains('[') && cleaned.contains(']')) {
+        // Prefer the quoted items inside a JSON-ish array when one is present. Detect on a lone '['
+        // (not '[' AND ']') so a truncated array that never closed — `["Gather docs", "Fill the fo`
+        // from a MAX_TOKENS cut-off — still yields its complete quoted items instead of falling
+        // through to the comma path with bracket junk. substringBeforeLast(']') is a no-op when the
+        // ']' is absent, leaving the tail intact for the quoted-token scan.
+        val fromArray = if (cleaned.contains('[')) {
             QUOTED.findAll(cleaned.substringAfter('[').substringBeforeLast(']'))
                 .map { it.groupValues[1] }.toList()
         } else emptyList()
 
         val candidates = fromArray.ifEmpty {
-            // …otherwise treat it as lines / a bracket-free comma list.
+            // …otherwise treat it as lines / a comma list.
             val lines = cleaned.lines().map { it.trim() }.filter { it.isNotBlank() }
-            if (lines.size >= 2) lines else cleaned.split(",")
+            if (lines.size >= 2) {
+                lines
+            } else {
+                // A single-line comma list. If it's a bracketed array (`[milk, eggs, bread]`, or a
+                // truncated `[milk, eggs`), drop the outer array brackets ONCE here so they don't
+                // cling to the first/last item. Never strip brackets per-item — that would eat a
+                // legitimate one inside a step like "Water plants [balcony]".
+                val inner = if (cleaned.startsWith("[")) cleaned.removePrefix("[").removeSuffix("]") else cleaned
+                inner.split(",")
+            }
         }
 
         val seen = LinkedHashSet<String>()

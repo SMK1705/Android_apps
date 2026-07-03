@@ -149,6 +149,46 @@ class UnderstandingPipelineTest {
     }
 
     @Test
+    fun fencedReplyWithTrailingNewline_isParsedNotDropped() = runTest {
+        // The model wrapped valid JSON in a ```json fence and appended a trailing newline — this used
+        // to defeat fence-stripping and discard the whole extraction. It must parse on the first try.
+        val fenced = "```json\n" + llmResponse(llmItem(title = "Fenced task", confidence = 0.9)) + "\n```\n"
+        val llm = FakeLlmProvider(fenced)
+
+        pipeline(llm).processText("SMS from +10000000000", "please add a task")
+
+        assertEquals(1, llm.calls) // no retry needed
+        assertEquals(listOf("Fenced task"), dao.getPendingSuggestions().first().map { it.extractedTitle })
+    }
+
+    @Test
+    fun oneMalformedItem_isSkipped_butGoodItemsSurvive_withoutARetry() = runTest {
+        // The strict whole-object parse throws on the null title; salvage keeps the well-formed item
+        // instead of discarding the entire (otherwise-fine) extraction, so no retry is needed.
+        val raw = """{"items":[{"type":"todo","title":"Good one","confidence":0.9},{"title":null,"confidence":0.9}]}"""
+        val llm = FakeLlmProvider(raw)
+
+        pipeline(llm).processText("SMS from +10000000000", "please add tasks")
+
+        assertEquals(1, llm.calls)
+        assertEquals(listOf("Good one"), dao.getPendingSuggestions().first().map { it.extractedTitle })
+    }
+
+    @Test
+    fun salvageWithOnlyUnacceptableItems_stillTriggersTheRetry() = runTest {
+        // Strict parse throws on the null title; salvage recovers only a low-confidence item, which
+        // is unacceptable — so the retry must still fire (not be suppressed by an unusable salvage),
+        // and the clean high-confidence retry reply is what gets captured.
+        val first = """{"items":[{"type":"todo","title":"low conf","confidence":0.3},{"title":null,"confidence":0.9}]}"""
+        val llm = FakeLlmProvider(first, llmResponse(llmItem(title = "Retried task", confidence = 0.9)))
+
+        pipeline(llm).processText("SMS from +10000000000", "please add tasks")
+
+        assertEquals(2, llm.calls)
+        assertEquals(listOf("Retried task"), dao.getPendingSuggestions().first().map { it.extractedTitle })
+    }
+
+    @Test
     fun addCallback_insertsACallBackAndDedupes() = runTest {
         val pipeline = pipeline(FakeLlmProvider())
 

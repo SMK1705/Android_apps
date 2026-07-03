@@ -68,9 +68,18 @@ object ExtractionHeuristics {
     fun sanitizePriority(raw: String?): String =
         if (raw?.trim()?.lowercase() == "high") "high" else "normal"
 
-    /** Strips markdown code fences the LLM sometimes wraps JSON in, despite instructions. */
+    /**
+     * Strips markdown code fences the LLM sometimes wraps JSON in, despite instructions. Trims the
+     * outer whitespace FIRST so a trailing newline after the closing ``` (a very common model output
+     * shape) doesn't defeat `removeSuffix("```")` and leave a dangling fence that fails JSON parsing —
+     * which would silently discard the entire extraction.
+     */
     fun stripJsonFences(json: String): String =
-        json.removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+        json.trim()
+            .removePrefix("```json").removePrefix("```JSON").removePrefix("```")
+            .trim()
+            .removeSuffix("```")
+            .trim()
 
     /** A model item is worth keeping only if it has a title and clears the confidence bar. */
     fun isAcceptable(item: LlmItem): Boolean =
