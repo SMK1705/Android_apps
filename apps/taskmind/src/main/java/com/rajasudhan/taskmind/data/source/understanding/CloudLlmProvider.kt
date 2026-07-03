@@ -91,7 +91,7 @@ class CloudLlmProvider @Inject constructor(
             .put(
                 "properties",
                 JSONObject()
-                    .put("type", JSONObject().put("type", "STRING").put("enum", JSONArray(listOf("reminder", "todo", "note"))))
+                    .put("type", JSONObject().put("type", "STRING").put("enum", JSONArray(listOf("reminder", "todo", "note", "waiting_on"))))
                     .put("title", JSONObject().put("type", "STRING"))
                     .put("notes", JSONObject().put("type", "STRING"))
                     .put("due_date", nullableString())
@@ -99,10 +99,11 @@ class CloudLlmProvider @Inject constructor(
                     .put("location", nullableString())
                     .put("recurrence", nullableString())
                     .put("priority", JSONObject().put("type", "STRING").put("enum", JSONArray(listOf("normal", "high"))))
+                    .put("counterparty", nullableString())
                     .put("confidence", JSONObject().put("type", "NUMBER"))
             )
             .put("required", JSONArray(listOf("type", "title", "notes", "confidence")))
-            .put("propertyOrdering", JSONArray(listOf("type", "title", "notes", "due_date", "due_time", "location", "recurrence", "priority", "confidence")))
+            .put("propertyOrdering", JSONArray(listOf("type", "title", "notes", "due_date", "due_time", "location", "recurrence", "priority", "counterparty", "confidence")))
         return JSONObject()
             .put("type", "OBJECT")
             .put("properties", JSONObject().put("items", JSONObject().put("type", "ARRAY").put("items", itemSchema)))

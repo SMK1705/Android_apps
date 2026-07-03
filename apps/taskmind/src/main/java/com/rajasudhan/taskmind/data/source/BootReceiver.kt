@@ -73,6 +73,16 @@ class BootReceiver : BroadcastReceiver() {
             }
         }
 
+        // Waiting-on follow-up nudges are plain one-shot alarms too (scheduled by SuggestionApprover
+        // for a dated waiting_on item), so a reboot would silently drop the "chase this up" reminder
+        // just like a real reminder — re-arm them the same way. schedule() drops any already-past slot.
+        for (note in dao.getWaitingOnReminders()) {
+            val date = note.dueDate ?: continue
+            val time = note.dueTime ?: continue
+            if (RecurrenceUtil.parseTime(time) == null) continue
+            alarmScheduler.schedule(note.id, note.title, date, time, note.recurrence)
+        }
+
         // Snoozed suggestions: their resurface alarms died with the reboot too. Re-arm the ones
         // still in the future, then re-post the review notification — that both restores the
         // pre-reboot notification (cleared by the restart) and immediately surfaces any snooze

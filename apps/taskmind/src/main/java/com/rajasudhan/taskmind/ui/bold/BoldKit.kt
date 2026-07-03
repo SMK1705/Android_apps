@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.HourglassEmpty
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Schedule
@@ -63,14 +64,14 @@ import com.rajasudhan.taskmind.ui.theme.ShapePill
 import kotlin.math.roundToInt
 
 // ── Kinds ────────────────────────────────────────────────────────────────────
-enum class BoldKind(val label: String) { TASK("Task"), EVENT("Event"), REMINDER("Reminder"), NOTE("Note") }
+enum class BoldKind(val label: String) { TASK("Task"), EVENT("Event"), REMINDER("Reminder"), NOTE("Note"), WAITING("Waiting on") }
 
 @Composable fun BoldKind.color(): Color = with(BoldTheme.colors) {
-    when (this@color) { BoldKind.TASK -> task; BoldKind.EVENT -> event; BoldKind.REMINDER -> reminder; BoldKind.NOTE -> idea }
+    when (this@color) { BoldKind.TASK -> task; BoldKind.EVENT -> event; BoldKind.REMINDER -> reminder; BoldKind.NOTE -> idea; BoldKind.WAITING -> amber }
 }
 
 @Composable fun BoldKind.soft(): Color = with(BoldTheme.colors) {
-    when (this@soft) { BoldKind.TASK -> taskSoft; BoldKind.EVENT -> eventSoft; BoldKind.REMINDER -> reminderSoft; BoldKind.NOTE -> ideaSoft }
+    when (this@soft) { BoldKind.TASK -> taskSoft; BoldKind.EVENT -> eventSoft; BoldKind.REMINDER -> reminderSoft; BoldKind.NOTE -> ideaSoft; BoldKind.WAITING -> amberSoft }
 }
 
 fun BoldKind.icon(): ImageVector = when (this) {
@@ -78,12 +79,14 @@ fun BoldKind.icon(): ImageVector = when (this) {
     BoldKind.EVENT -> Icons.Outlined.CalendarToday
     BoldKind.REMINDER -> Icons.Outlined.Schedule
     BoldKind.NOTE -> Icons.Outlined.Lightbulb
+    BoldKind.WAITING -> Icons.Outlined.HourglassEmpty
 }
 
-/** Bridge the app's 3 suggestion types onto the design's 4 kinds (a dated reminder reads as an Event). */
+/** Bridge the app's suggestion types onto the design's kinds (a dated reminder reads as an Event). */
 fun boldKindFor(type: String, hasDate: Boolean): BoldKind = when (type.lowercase()) {
     "todo" -> BoldKind.TASK
     "note" -> BoldKind.NOTE
+    "waiting_on" -> BoldKind.WAITING
     "reminder" -> if (hasDate) BoldKind.EVENT else BoldKind.REMINDER
     else -> BoldKind.NOTE
 }

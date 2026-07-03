@@ -46,6 +46,7 @@ class NotesViewModel @Inject constructor(
                     "todo" to list.count { it.type == "todo" },
                     "reminder" to list.count { it.type == "reminder" },
                     "note" to list.count { it.type == "note" },
+                    "waiting_on" to list.count { it.type == "waiting_on" },
                     "overdue" to list.count { isOverdue(it.dueDate, it.dueTime) }
                 )
             }

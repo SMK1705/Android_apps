@@ -23,6 +23,9 @@ class TaskMindNotificationListener : NotificationListenerService() {
     @Inject
     lateinit var understandingPipeline: UnderstandingPipeline
 
+    @Inject
+    lateinit var waitingOnResolver: WaitingOnResolver
+
     private val job = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + job)
 
@@ -76,6 +79,17 @@ class TaskMindNotificationListener : NotificationListenerService() {
             // Per-app allowlist: empty = monitor all; otherwise only the chosen apps.
             val allowlist = sourceManager.notificationAllowlist.first()
             if (allowlist.isNotEmpty() && sbn.packageName !in allowlist) return@launch
+            // Auto-resolve any "waiting on <this sender>" item — they've now been in touch, so the
+            // open loop is closed without the user lifting a finger. Gate strictly on a genuine
+            // person-to-person message (or a missed call): only there is the title actually a sender
+            // name. An app-generated title ("Your bank statement is ready") must NEVER resolve a
+            // "waiting on the bank" item — that would silently close a real item and cancel its nudge.
+            val resolveSender = when {
+                missedCaller != null -> missedCaller
+                isPersonMessage(notification) -> title
+                else -> null
+            }
+            resolveSender?.let { waitingOnResolver.resolveFrom(it) }
             // NOTE: do not log notification content — it is sensitive user data.
             if (missedCaller != null) {
                 // No number in the notification; the Call button resolves the name via Contacts.
@@ -101,6 +115,16 @@ class TaskMindNotificationListener : NotificationListenerService() {
      * summary — which then reads as non-actionable noise and a real DM ("can we meet at 3?") is lost.
      * So prefer the MessagingStyle messages, then the expanded big-text / inbox lines, then EXTRA_TEXT.
      */
+    /**
+     * True only for a genuine person-to-person message — a MessagingStyle payload or an explicit
+     * CATEGORY_MESSAGE — where the notification title is reliably the *sender*. App-generated
+     * notifications (statements, promos, order updates) have an app-authored title, so they must not
+     * drive counterparty auto-resolution.
+     */
+    private fun isPersonMessage(n: Notification): Boolean =
+        n.category == Notification.CATEGORY_MESSAGE ||
+            NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)?.messages?.isNotEmpty() == true
+
     private fun bestNotificationText(n: Notification): String? {
         val messages = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)?.messages
         if (!messages.isNullOrEmpty()) {

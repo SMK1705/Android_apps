@@ -163,6 +163,9 @@ private fun NotesKindFilter(kind: String?, counts: Map<String, Int>, onSelect: (
             BoldFilterChip("Overdue", kind == "overdue", { onSelect("overdue") }, count = counts["overdue"] ?: 0)
         }
         BoldFilterChip("Tasks", kind == "todo", { onSelect("todo") }, count = counts["todo"] ?: 0)
+        if ((counts["waiting_on"] ?: 0) > 0) {
+            BoldFilterChip("Waiting on", kind == "waiting_on", { onSelect("waiting_on") }, count = counts["waiting_on"] ?: 0)
+        }
         BoldFilterChip("Reminders", kind == "reminder", { onSelect("reminder") }, count = counts["reminder"] ?: 0)
         BoldFilterChip("Notes", kind == "note", { onSelect("note") }, count = counts["note"] ?: 0)
     }

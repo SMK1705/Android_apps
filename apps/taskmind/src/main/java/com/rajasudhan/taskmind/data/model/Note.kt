@@ -15,7 +15,7 @@ data class Note(
     val dueTime: String?, // HH:MM
     val source: String,
     val createdDate: Long, // timestamp
-    val type: String, // "note" | "todo" | "reminder"
+    val type: String, // "note" | "todo" | "reminder" | "waiting_on"
     // ---- v3 additions (MIGRATION_2_3). Nullable columns need no @ColumnInfo default; the one
     // NOT NULL column (`completed`) mirrors its migration DEFAULT so schema validation passes. ----
     @ColumnInfo(defaultValue = "0") val completed: Boolean = false,
@@ -30,5 +30,8 @@ data class Note(
     @ColumnInfo(defaultValue = "'normal'") val priority: String = "normal",
     // v8 (MIGRATION_7_8): nag until done — after the reminder fires, keep re-firing it at
     // escalating intervals until the note is completed (or deleted). Off by default.
-    @ColumnInfo(defaultValue = "0") val nag: Boolean = false
+    @ColumnInfo(defaultValue = "0") val nag: Boolean = false,
+    // v9 (MIGRATION_8_9): the other party — who you're waiting on (type "waiting_on") or who a
+    // commitment is to. Used to auto-resolve a waiting item when that person next gets in touch.
+    val counterparty: String? = null
 )

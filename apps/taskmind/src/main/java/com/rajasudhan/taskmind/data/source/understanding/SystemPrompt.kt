@@ -21,7 +21,7 @@ Return ONLY a JSON object in exactly this shape. No markdown, no code fences, no
 {
   "items": [
     {
-      "type": "reminder",          // "reminder" | "todo" | "note"
+      "type": "reminder",          // "reminder" | "todo" | "note" | "waiting_on"
       "title": "string",           // concise, max ~8 words, grounded in the text
       "notes": "string",           // one-line summary or short list; "" if none
       "due_date": "YYYY-MM-DD",    // or null if no date stated or implied
@@ -29,6 +29,7 @@ Return ONLY a JSON object in exactly this shape. No markdown, no code fences, no
       "location": "string",        // a real place/venue/address named in the text, or null
       "recurrence": "weekly",      // "daily" | "weekly" | "monthly" if it repeats, else null
       "priority": "normal",        // "high" ONLY on explicit urgency; otherwise "normal"
+      "counterparty": "string",    // who you're waiting on / who a commitment is to; null if none
       "confidence": 0.0            // 0.0–1.0: how sure this is a real action item
     }
   ]
@@ -50,6 +51,13 @@ Rules:
 - type: "reminder" = has a specific date AND time to alert at; "todo" = an action with no alert
   time (may still have a due_date); "note" = useful info YOU keep, no action and no date (a password,
   a PIN/gate code, a confirmation/PNR/seat number, where you parked, an address, a recipe amount).
+- Waiting-on & commitments: use type "waiting_on" when SOMEONE ELSE owes YOU something or you're
+  expecting something back — "John will send the numbers", "waiting to hear from the landlord", "the
+  plumber will call me back", "Priya still owes me the file". Title it "Waiting on <who>: <what>" and
+  set counterparty to that person/org; add a follow-up due_date/due_time only if one is stated. A
+  COMMITMENT YOU made — YOU owe someone ("I'll send Alex the deck", "tell mom I'll call her") — is a
+  "todo" with counterparty set to who you owe. Set counterparty (a name or org) whenever an item
+  clearly involves one other party; otherwise null.
 - Dates/times: set due_date / due_time only when stated or clearly implied. NEVER invent a time —
   if a date is given with no time, due_time is null. A bare weekday ("call Sam on Tuesday") means
   the NEXT future occurrence, never a past date. NEVER emit a due_date in the past; if the text is
@@ -133,6 +141,10 @@ Examples (assume the current date is 2026-06-09, a Tuesday):
   {"items":[{"type":"reminder","title":"Call Sam","notes":"","due_date":"2026-06-10","due_time":"15:00","location":null,"recurrence":null,"priority":"normal","confidence":0.85}]}
 - Source: SMS from +1555... | Text: your car service is booked for the 15th at 9 in the morning
   {"items":[{"type":"reminder","title":"Car service appointment","notes":"","due_date":"2026-06-15","due_time":"09:00","location":null,"recurrence":null,"priority":"normal","confidence":0.95}]}
+- Source: Notification from John | Text: i'll get you those sales numbers by thursday
+  {"items":[{"type":"waiting_on","title":"Waiting on John: sales numbers","notes":"","due_date":"2026-06-11","due_time":null,"location":null,"recurrence":null,"priority":"normal","counterparty":"John","confidence":0.8}]}
+- Source: SMS from +1555... | Text: remind me i still need to send Alex the signed contract
+  {"items":[{"type":"todo","title":"Send Alex the signed contract","notes":"","due_date":null,"due_time":null,"location":null,"recurrence":null,"priority":"normal","counterparty":"Alex","confidence":0.82}]}
 - Source: SMS from Boss | Text: need the pitch deck ASAP — client moved the call to 2pm today
   {"items":[{"type":"reminder","title":"Finish pitch deck","notes":"Client call moved to 2pm","due_date":"2026-06-09","due_time":"14:00","location":null,"recurrence":null,"priority":"high","confidence":0.9}]}
 - Source: Notification from Amma | Text: call me right away, it's urgent

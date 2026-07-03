@@ -84,7 +84,7 @@ object DatabaseModule {
                     TaskMindDatabase.MIGRATION_1_2, TaskMindDatabase.MIGRATION_2_3,
                     TaskMindDatabase.MIGRATION_3_4, TaskMindDatabase.MIGRATION_4_5,
                     TaskMindDatabase.MIGRATION_5_6, TaskMindDatabase.MIGRATION_6_7,
-                    TaskMindDatabase.MIGRATION_7_8
+                    TaskMindDatabase.MIGRATION_7_8, TaskMindDatabase.MIGRATION_8_9
                 )
                 .build()
 
