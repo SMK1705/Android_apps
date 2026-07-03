@@ -107,10 +107,11 @@ class InboxViewModel @Inject constructor(
     }
 
     /**
-     * Hide [suggestion] from the Inbox until [until] (epoch millis). An alarm re-posts the review
-     * notification at that time so it *announces* its return; refreshing the notification now also
-     * drops the snoozed item from the shade immediately. Undo leaves the alarm armed — firing is
-     * harmless, notifyPending() just re-renders whatever is pending then.
+     * Bounce-Back: hide [suggestion] from the Inbox until [until] (epoch millis), and arm an alarm
+     * that re-posts the ORIGINAL captured message as a notification at that time — so the content you
+     * wanted to deal with comes back to you, not just silently to the Inbox. Refreshing the prompt now
+     * also drops the snoozed item from the shade immediately. Undo clears the snooze; the alarm may
+     * still fire but no-ops, since the bounce only posts while the item is still pending AND snoozed.
      */
     fun snooze(suggestion: Suggestion, until: Long) {
         viewModelScope.launch {

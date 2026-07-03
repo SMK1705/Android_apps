@@ -83,14 +83,42 @@ class NotificationActionReceiverTest {
     }
 
     @Test
-    fun resurface_mutatesNothing_andRepostsTheReviewNotification() = runTest {
-        dao.insertSuggestion(aSuggestion(status = "pending"))
+    fun resurface_ofASnoozedPendingItem_bouncesBackTheOriginalMessage() = runTest {
+        // Bounce-Back: the snooze timer fired, so re-post the original captured message itself.
+        dao.insertSuggestion(
+            aSuggestion(status = "pending", snoozedUntil = 1_000L, source = "Notification from Alex", rawSnippet = "can we move dinner to friday")
+        )
+        val s = dao.getSuggestionById(1)!!
+
+        receiver().handle(NotificationActionReceiver.ACTION_RESURFACE, s.id)
+
+        assertEquals("pending", dao.getSuggestionById(s.id)!!.status)
+        coVerify { notifier.notifyBounceBack(match { it.id == s.id }) }
+        coVerify(exactly = 0) { notifier.notifyPending() }
+    }
+
+    @Test
+    fun resurface_ofAnUnsnoozedItem_justReconcilesThePrompt_withoutBouncing() = runTest {
+        // No snoozedUntil (e.g. the snooze was undone) → nothing to bounce; just refresh the prompt.
+        dao.insertSuggestion(aSuggestion(status = "pending", snoozedUntil = null))
         val s = dao.getPendingSuggestions().first().single()
 
         receiver().handle(NotificationActionReceiver.ACTION_RESURFACE, s.id)
 
         assertEquals("pending", dao.getSuggestionById(s.id)!!.status)
-        coVerify(exactly = 0) { approver.approve(any()) }
+        coVerify(exactly = 0) { notifier.notifyBounceBack(any()) }
+        coVerify { notifier.notifyPending() }
+    }
+
+    @Test
+    fun resurface_ofAnAlreadyHandledItem_doesNotBounce() = runTest {
+        // Approved/rejected before the timer fired → the user dealt with it; don't bounce it back.
+        dao.insertSuggestion(aSuggestion(status = "approved", snoozedUntil = 1_000L))
+        val s = dao.getSuggestionById(1)!!
+
+        receiver().handle(NotificationActionReceiver.ACTION_RESURFACE, s.id)
+
+        coVerify(exactly = 0) { notifier.notifyBounceBack(any()) }
         coVerify { notifier.notifyPending() }
     }
 }

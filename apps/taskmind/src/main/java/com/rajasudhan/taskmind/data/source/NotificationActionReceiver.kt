@@ -42,14 +42,21 @@ class NotificationActionReceiver : BroadcastReceiver() {
      * Applies the notification action and refreshes the prompt. Extracted from [onReceive] so it's
      * unit-testable without the broadcast/goAsync plumbing.
      *
-     * [ACTION_RESURFACE] carries no mutation of its own — it's the alarm
-     * [SuggestionNotifier.scheduleResurface] sets for a snoozed suggestion's return time, and the
-     * shared notifyPending() below re-posts the review notification the moment the snooze expires
-     * (previously a snoozed item came back silently, so "snooze until morning" did nothing unless
-     * the app happened to be opened).
+     * [ACTION_RESURFACE] is the Bounce-Back alarm [SuggestionNotifier.scheduleResurface] sets for a
+     * snoozed suggestion's return time. It re-posts the ORIGINAL captured message so the content
+     * itself reappears — not a generic "N to review" — unless the item was meanwhile approved,
+     * rejected, or un-snoozed, in which case we just reconcile the review prompt.
      */
     internal suspend fun handle(action: String, id: Int) {
         val suggestion = dao.getSuggestionById(id)
+        if (action == ACTION_RESURFACE) {
+            if (suggestion != null && suggestion.status == "pending" && suggestion.snoozedUntil != null) {
+                notifier.notifyBounceBack(suggestion)
+            } else {
+                notifier.notifyPending()
+            }
+            return
+        }
         if (suggestion != null && suggestion.status == "pending") {
             when (action) {
                 ACTION_APPROVE -> approver.approve(suggestion)
