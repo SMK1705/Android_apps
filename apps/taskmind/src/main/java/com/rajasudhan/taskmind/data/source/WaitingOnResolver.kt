@@ -21,40 +21,14 @@ class WaitingOnResolver @Inject constructor(
      * a no-op for a blank/too-short sender or when nothing matches.
      */
     suspend fun resolveFrom(sender: String): Int {
-        val who = normalize(sender)
-        if (who.length < MIN_LEN) return 0
-        val senderTokens = tokens(who)
         var resolved = 0
         for (note in dao.getActiveWaitingOn()) {
-            val cp = normalize(note.counterparty ?: "")
-            if (cp.length < MIN_LEN) continue
-            if (matches(senderTokens, tokens(cp))) {
+            if (PersonMatch.matches(sender, note.counterparty ?: continue)) {
                 dao.setNoteCompleted(note.id, true, System.currentTimeMillis())
                 alarmScheduler.cancel(note.id)
                 resolved++
             }
         }
         return resolved
-    }
-
-    /**
-     * True when the counterparty plausibly names the sender: every name-word of the counterparty is a
-     * whole word in the sender. Whole-word (not substring) matching keeps "Dave" from resolving a
-     * "David" item, while "John" still resolves against a "John Doe" notification.
-     */
-    private fun matches(senderTokens: Set<String>, counterpartyTokens: Set<String>): Boolean =
-        counterpartyTokens.isNotEmpty() && counterpartyTokens.all { it in senderTokens }
-
-    private fun normalize(s: String): String =
-        s.trim().lowercase().removePrefix("the ").trim()
-
-    private fun tokens(s: String): Set<String> =
-        s.split(WHITESPACE).map { it.trim(*PUNCT) }.filter { it.length >= MIN_LEN }.toSet()
-
-    private companion object {
-        // Guards against trivially-short matches ("Al" resolving "Alex", "PA" a payment alert).
-        const val MIN_LEN = 3
-        val WHITESPACE = Regex("\\s+")
-        val PUNCT = charArrayOf('.', ',', ':', ';', '!', '?', '(', ')', '"', '\'')
     }
 }

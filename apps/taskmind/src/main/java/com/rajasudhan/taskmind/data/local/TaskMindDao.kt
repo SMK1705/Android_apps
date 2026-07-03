@@ -122,6 +122,14 @@ interface TaskMindDao {
     @Query("SELECT * FROM notes WHERE completed = 0 AND type = 'waiting_on' AND dueDate IS NOT NULL AND dueTime IS NOT NULL")
     suspend fun getWaitingOnReminders(): List<Note>
 
+    /**
+     * Open items tied to a person (a commitment/task with a counterparty), excluding waiting-on items
+     * (those auto-resolve on contact instead). Used to surface "you have something with X" the moment
+     * X gets in touch.
+     */
+    @Query("SELECT * FROM notes WHERE completed = 0 AND counterparty IS NOT NULL AND type != 'waiting_on'")
+    suspend fun getActivePersonNotes(): List<Note>
+
     /** Retention: drop notes created before [cutoff] (epoch millis). */
     @Query("DELETE FROM notes WHERE createdDate < :cutoff")
     suspend fun deleteNotesOlderThan(cutoff: Long)
