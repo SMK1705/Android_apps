@@ -123,8 +123,22 @@ Android_apps/
 | **Publish debug APK** (`release-apk.yml`) | `ubuntu-latest` | push to `main` + manual | builds and publishes to the rolling **`debug-latest`** pre-release for over-the-air install |
 | **Install to phone** (`install-to-phone.yml`) | **self-hosted** | manual | `installDebug` over `adb` to a phone plugged into that runner |
 
-`main` is protected — changes land via PR. Secrets (keystores, API keys) and on-device model files
-(`*.task` / `*.litertlm`) are git-ignored and never committed.
+`main` is protected — changes land via PR. **Release** signing keys, API keys, and on-device model
+files (`*.task` / `*.litertlm`) are git-ignored and never committed. The **debug** keystore
+(`apps/taskmind/debug.keystore`) *is* committed — it holds the standard, non-secret debug credentials,
+so every local, CI, and OTA build shares one stable signature and can update an existing install in
+place instead of forcing an uninstall.
+
+**Gmail OAuth:** Gmail sign-in (Google Identity Services) has no embedded client-id — Google matches
+the app by package + signing SHA-1 against an **Android OAuth client** you register in the Google
+Cloud project:
+
+- package `com.rajasudhan.taskmind`
+- SHA-1 `CB:5D:68:D2:EA:B0:E1:DD:10:35:F6:F9:1C:35:54:8F:09:81:A3:F4` — the committed debug keystore's
+  fingerprint (re-derive with `keytool -list -v -keystore apps/taskmind/debug.keystore -storepass android`)
+
+If the consent flow cancels immediately or throws `DEVELOPER_ERROR`, that client is missing or its
+SHA-1/package doesn't match the installed build.
 
 ## 📜 License
 
