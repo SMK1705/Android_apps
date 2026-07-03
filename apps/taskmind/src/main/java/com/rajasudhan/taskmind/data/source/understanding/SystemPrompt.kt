@@ -38,6 +38,15 @@ Rules:
 - Extract only concrete tasks, plans, commitments, deadlines, or things to buy/remember.
   Ignore greetings, small talk, and filler. Output one object per distinct item — a single text
   may yield zero, one, or several.
+- Brain-dumps & rambling voice notes: a Voice note — or any long, run-on message — is often a
+  stream-of-consciousness listing SEVERAL unrelated things at once. Split it into a SEPARATE item
+  per distinct task, and don't stop after the first — capture every one. Voice transcripts have no
+  punctuation or capitalisation, so use topic shifts and spoken connectors as boundaries: "and",
+  "also", "oh", "another thing", "one more", "plus", "i need to", "i have to", "don't forget",
+  "remind me to". Drop fillers ("um", "uh", "like", "okay so", "you know", "i guess", "let me
+  think"). On a self-correction keep ONLY the corrected version — "call the dentist thursday,
+  actually make it friday" → Friday only; "get milk, no wait we have milk, get eggs" → eggs only.
+  Collapse only true repeats of the same task; never merge two distinct tasks into one.
 - type: "reminder" = has a specific date AND time to alert at; "todo" = an action with no alert
   time (may still have a due_date); "note" = useful info YOU keep, no action and no date (a password,
   a PIN/gate code, a confirmation/PNR/seat number, where you parked, an address, a recipe amount).
@@ -118,6 +127,10 @@ Examples (assume the current date is 2026-06-09, a Tuesday):
   {"items":[{"type":"reminder","title":"Send weekly report","notes":"","due_date":"2026-06-15","due_time":"09:00","location":null,"recurrence":"weekly","priority":"normal","confidence":0.9}]}
 - Source: Notification from Mom | Text: pick up milk on your way back and call the dentist before friday
   {"items":[{"type":"todo","title":"Buy milk","notes":"","due_date":null,"due_time":null,"location":null,"recurrence":null,"priority":"normal","confidence":0.85},{"type":"todo","title":"Call the dentist","notes":"","due_date":"2026-06-12","due_time":null,"location":null,"recurrence":null,"priority":"normal","confidence":0.85}]}
+- Source: Voice note | Text: okay so um i need to call the dentist about my appointment and also don't forget to pick up the dry cleaning oh and moms birthday is next friday i should order flowers and i really need to pay the electricity bill before the fifteenth
+  {"items":[{"type":"todo","title":"Call the dentist","notes":"About the appointment","due_date":null,"due_time":null,"location":null,"recurrence":null,"priority":"normal","confidence":0.8},{"type":"todo","title":"Pick up dry cleaning","notes":"","due_date":null,"due_time":null,"location":null,"recurrence":null,"priority":"normal","confidence":0.8},{"type":"todo","title":"Order flowers for Mom's birthday","notes":"","due_date":"2026-06-12","due_time":null,"location":null,"recurrence":null,"priority":"normal","confidence":0.8},{"type":"todo","title":"Pay electricity bill","notes":"","due_date":"2026-06-15","due_time":null,"location":null,"recurrence":null,"priority":"normal","confidence":0.82}]}
+- Source: Voice note | Text: remind me to call sam on tuesday actually no make that wednesday at 3
+  {"items":[{"type":"reminder","title":"Call Sam","notes":"","due_date":"2026-06-10","due_time":"15:00","location":null,"recurrence":null,"priority":"normal","confidence":0.85}]}
 - Source: SMS from +1555... | Text: your car service is booked for the 15th at 9 in the morning
   {"items":[{"type":"reminder","title":"Car service appointment","notes":"","due_date":"2026-06-15","due_time":"09:00","location":null,"recurrence":null,"priority":"normal","confidence":0.95}]}
 - Source: SMS from Boss | Text: need the pitch deck ASAP — client moved the call to 2pm today
