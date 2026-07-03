@@ -191,9 +191,13 @@ class UnderstandingPipeline @Inject constructor(
     }
 
     private suspend fun isDuplicate(item: LlmItem): Boolean {
-        // Compare (title, dueDate) against existing pending suggestions and approved notes.
+        // Compare (title, dueDate) against existing pending suggestions and approved notes. Compare on
+        // the SANITIZED date — the same value the suggestion is stored with below — so an item whose
+        // raw date is non-conforming (sanitized to null) still matches its stored twin. Comparing the
+        // raw date here let such an item re-insert on every re-scan (raw "2026-6-1" != stored null).
+        val dueDate = ExtractionHeuristics.sanitizeDate(item.dueDate)
         val pending = dao.getPendingSuggestions().first().map { it.extractedTitle to it.dueDate }
         val notes = dao.getAllNotes().first().map { it.title to it.dueDate }
-        return ExtractionHeuristics.isDuplicate(item.title, item.dueDate, pending + notes)
+        return ExtractionHeuristics.isDuplicate(item.title, dueDate, pending + notes)
     }
 }

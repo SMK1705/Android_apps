@@ -63,6 +63,20 @@ class ExtractionHeuristicsTest {
     }
 
     @Test
+    fun sanitizeDateRejectsShapeValidButCalendarInvalidDates() {
+        // The model can hallucinate a date that matches the shape but isn't a real day; it must be
+        // dropped, else it persists on a reminder whose alarm silently never fires.
+        assertNull(ExtractionHeuristics.sanitizeDate("2026-02-30")) // Feb 30
+        assertNull(ExtractionHeuristics.sanitizeDate("2026-13-01")) // month 13
+        assertNull(ExtractionHeuristics.sanitizeDate("2026-04-31")) // Apr has 30 days
+        assertNull(ExtractionHeuristics.sanitizeDate("2026-00-10")) // month 0
+        assertNull(ExtractionHeuristics.sanitizeDate("2026-06-00")) // day 0
+        // Real dates — including a genuine leap day — survive.
+        assertEquals("2026-02-28", ExtractionHeuristics.sanitizeDate("2026-02-28"))
+        assertEquals("2028-02-29", ExtractionHeuristics.sanitizeDate("2028-02-29"))
+    }
+
+    @Test
     fun sanitizeTimeKeepsValidDropsDatetime() {
         assertEquals("9:30", ExtractionHeuristics.sanitizeTime("9:30"))
         assertEquals("14:05", ExtractionHeuristics.sanitizeTime("14:05"))
