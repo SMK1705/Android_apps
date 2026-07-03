@@ -32,6 +32,10 @@ data class Note(
     // escalating intervals until the note is completed (or deleted). Off by default.
     @ColumnInfo(defaultValue = "0") val nag: Boolean = false,
     // v9 (MIGRATION_8_9): the other party — who you're waiting on (type "waiting_on") or who a
-    // commitment is to. Used to auto-resolve a waiting item when that person next gets in touch.
-    val counterparty: String? = null
+    // commitment is to. Used to prompt a "did they deliver?" check when that person next gets in touch.
+    val counterparty: String? = null,
+    // v11 (MIGRATION_10_11): set to the moment the counterparty got in touch on an open "waiting_on"
+    // item — the note is then awaiting the user's one-tap confirmation of whether they actually
+    // delivered. Nullable (null = not awaiting confirmation), so no @ColumnInfo default.
+    val pendingConfirmSince: Long? = null
 )

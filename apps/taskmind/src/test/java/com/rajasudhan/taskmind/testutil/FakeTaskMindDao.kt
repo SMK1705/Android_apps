@@ -86,6 +86,10 @@ class FakeTaskMindDao : TaskMindDao {
         notes.update { list -> list.map { if (it.id == id) it.copy(nag = nag) else it } }
     }
 
+    override suspend fun setPendingConfirm(id: Int, since: Long?) {
+        notes.update { list -> list.map { if (it.id == id) it.copy(pendingConfirmSince = since) else it } }
+    }
+
     override suspend fun updateNoteLocation(id: Int, lat: Double?, lng: Double?, radius: Double?, label: String?) {
         notes.update { list ->
             list.map {

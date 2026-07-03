@@ -5,30 +5,38 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Auto-resolves a "waiting on <someone>" note the moment that counterparty next gets in touch — the
- * whole point of a waiting list is to stop chasing once they reply. Matching is deliberately
- * conservative (whole-word name tokens, not loose substrings) so an unrelated notification never
- * closes a real item; when in doubt it does nothing and the user resolves it by hand.
+ * When a "waiting on <someone>" counterparty next gets in touch, this raises a one-tap "did they
+ * deliver?" check ([WaitingConfirmNotifier]) instead of closing the item. It deliberately does NOT
+ * complete the note or cancel its nudge — the counterparty resurfacing is the right *moment* to act,
+ * but not proof the awaited thing arrived (they may be asking a question or talking about something
+ * else entirely). Matching is deliberately conservative (whole-word name tokens via [PersonMatch],
+ * not loose substrings) so an unrelated notification never even raises the prompt. The actual close
+ * is an explicit user tap, handled by [WaitingConfirmReceiver].
  */
 @Singleton
 class WaitingOnResolver @Inject constructor(
     private val dao: TaskMindDao,
-    private val alarmScheduler: AlarmScheduler,
+    private val confirmNotifier: WaitingConfirmNotifier,
 ) {
     /**
-     * Marks any open waiting-on note done whose counterparty matches [sender] (the display name /
-     * title of an incoming message), cancelling its follow-up alarm. Returns how many were resolved;
-     * a no-op for a blank/too-short sender or when nothing matches.
+     * For every open waiting-on note whose counterparty matches [sender] (the display name / title of
+     * an incoming message), flags it as awaiting confirmation and raises the "did they deliver?"
+     * prompt — carrying [message] (the incoming body, if any) as a snippet. Never completes a note or
+     * cancels an alarm here. Returns how many prompts were raised; a no-op when nothing matches.
      */
-    suspend fun resolveFrom(sender: String): Int {
-        var resolved = 0
+    suspend fun resolveFrom(sender: String, message: String? = null): Int {
+        var prompted = 0
         for (note in dao.getActiveWaitingOn()) {
             if (PersonMatch.matches(sender, note.counterparty ?: continue)) {
-                dao.setNoteCompleted(note.id, true, System.currentTimeMillis())
-                alarmScheduler.cancel(note.id)
-                resolved++
+                // First contact flips it into the "awaiting your confirmation" state (surfaced by the
+                // Ready-to-close filter); later messages just refresh the prompt without re-stamping.
+                if (note.pendingConfirmSince == null) {
+                    dao.setPendingConfirm(note.id, System.currentTimeMillis())
+                }
+                confirmNotifier.prompt(note, message)
+                prompted++
             }
         }
-        return resolved
+        return prompted
     }
 }

@@ -11,7 +11,7 @@ import com.rajasudhan.taskmind.data.model.Suggestion
 
 @Database(
     entities = [Note::class, Suggestion::class, RejectedPattern::class, NoteEmbedding::class],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 abstract class TaskMindDatabase : RoomDatabase() {
@@ -110,6 +110,17 @@ abstract class TaskMindDatabase : RoomDatabase() {
                         "`noteId` INTEGER NOT NULL, `vector` BLOB NOT NULL, PRIMARY KEY(`noteId`), " +
                         "FOREIGN KEY(`noteId`) REFERENCES `notes`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)"
                 )
+            }
+        }
+
+        /**
+         * v11 adds a nullable `pendingConfirmSince` column to notes — the timestamp a "waiting_on"
+         * item's counterparty got in touch, marking it as awaiting the user's confirmation that they
+         * actually delivered. Nullable, so no DEFAULT (mirrors the entity field).
+         */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE notes ADD COLUMN pendingConfirmSince INTEGER")
             }
         }
     }

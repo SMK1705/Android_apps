@@ -82,18 +82,20 @@ class TaskMindNotificationListener : NotificationListenerService() {
             // Per-app allowlist: empty = monitor all; otherwise only the chosen apps.
             val allowlist = sourceManager.notificationAllowlist.first()
             if (allowlist.isNotEmpty() && sbn.packageName !in allowlist) return@launch
-            // Auto-resolve any "waiting on <this sender>" item — they've now been in touch, so the
-            // open loop is closed without the user lifting a finger. Gate strictly on a genuine
-            // person-to-person message (or a missed call): only there is the title actually a sender
-            // name. An app-generated title ("Your bank statement is ready") must NEVER resolve a
-            // "waiting on the bank" item — that would silently close a real item and cancel its nudge.
+            // A "waiting on <this sender>" item: now they've been in touch, raise a one-tap "did they
+            // deliver?" check (WaitingOnResolver never closes it on its own — they might be messaging
+            // about anything). Gate strictly on a genuine person-to-person message (or a missed call):
+            // only there is the title actually a sender name. An app-generated title ("Your bank
+            // statement is ready") must NEVER even prompt against a "waiting on the bank" item.
             val resolveSender = when {
                 missedCaller != null -> missedCaller
                 isPersonMessage(notification) -> title
                 else -> null
             }
             resolveSender?.let {
-                waitingOnResolver.resolveFrom(it)
+                // Pass the message body so the "did they deliver?" prompt can show a short snippet;
+                // a missed call has none.
+                waitingOnResolver.resolveFrom(it, text)
                 // Person-context: surface any open item tied to this sender, right when they message.
                 personContextNotifier.notifyForContact(it)
             }
