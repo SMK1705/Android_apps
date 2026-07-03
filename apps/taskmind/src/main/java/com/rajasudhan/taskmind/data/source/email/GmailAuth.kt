@@ -37,6 +37,15 @@ sealed interface GmailAuthState {
  * services matches the app by package name + signing SHA-1 against the Android OAuth client you
  * register in Google Cloud.
  *
+ * SETUP — the Google Cloud project (the one whose OAuth consent screen covers this app) must have an
+ * **Android OAuth client** registered for:
+ *   - package: `com.rajasudhan.taskmind`
+ *   - SHA-1:   `CB:5D:68:D2:EA:B0:E1:DD:10:35:F6:F9:1C:35:54:8F:09:81:A3:F4`
+ * That is the fingerprint of the committed debug keystore (`apps/taskmind/debug.keystore`) that every
+ * local, CI, and OTA "debug-latest" build now signs with — one stable SHA-1 to register once. If the
+ * consent flow is cancelled immediately or fails with DEVELOPER_ERROR, this Android OAuth client is
+ * missing or its SHA-1/package doesn't match the installed build.
+ *
  * The access token is used immediately for Gmail REST calls and never persisted; only the connected
  * account email is stored (in [SettingsManager] = EncryptedSharedPreferences) so the UI can show it.
  */
