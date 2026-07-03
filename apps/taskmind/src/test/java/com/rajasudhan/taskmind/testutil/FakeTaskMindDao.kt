@@ -2,6 +2,7 @@ package com.rajasudhan.taskmind.testutil
 
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
+import com.rajasudhan.taskmind.data.model.NoteEmbedding
 import com.rajasudhan.taskmind.data.model.RejectedPattern
 import com.rajasudhan.taskmind.data.model.Suggestion
 import kotlinx.coroutines.flow.Flow
@@ -19,8 +20,13 @@ class FakeTaskMindDao : TaskMindDao {
     private val notes = MutableStateFlow<List<Note>>(emptyList())
     private val suggestions = MutableStateFlow<List<Suggestion>>(emptyList())
     private val patterns = mutableMapOf<Pair<String, String>, RejectedPattern>()
+    private val embeddings = mutableMapOf<Int, NoteEmbedding>()
     private var noteSeq = 0
     private var sugSeq = 0
+
+    override suspend fun upsertEmbedding(embedding: NoteEmbedding) { embeddings[embedding.noteId] = embedding }
+    override suspend fun getAllEmbeddings(): List<NoteEmbedding> = embeddings.values.toList()
+    override suspend fun embeddedNoteIds(): List<Int> = embeddings.keys.toList()
 
     // ---- suggestions ----
     override fun getPendingSuggestions(): Flow<List<Suggestion>> =

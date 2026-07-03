@@ -1,6 +1,8 @@
 package com.rajasudhan.taskmind.di
 
 import com.rajasudhan.taskmind.data.source.email.GmailApi
+import com.rajasudhan.taskmind.data.source.embedding.Embedder
+import com.rajasudhan.taskmind.data.source.embedding.HashingEmbedder
 import com.rajasudhan.taskmind.data.source.understanding.LlmProvider
 import com.rajasudhan.taskmind.data.source.understanding.RoutingLlmProvider
 import com.squareup.moshi.Moshi
@@ -25,6 +27,12 @@ abstract class NetworkModule {
     abstract fun bindLlmProvider(
         routingLlmProvider: RoutingLlmProvider
     ): LlmProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindEmbedder(
+        hashingEmbedder: HashingEmbedder
+    ): Embedder
 
     companion object {
         @Provides
