@@ -39,6 +39,15 @@ sealed interface GmailAuthState {
  * GoogleAuthUtil is per-account (the account is picked from the system chooser), which maps directly
  * onto the app's multi-mailbox model. The access token is fetched on demand and never persisted; only
  * the connected account email is stored (in [SettingsManager] = EncryptedSharedPreferences).
+ *
+ * SETUP — the Google Cloud project (whose OAuth consent screen covers this app) must have an
+ * **Android OAuth client** registered for:
+ *   - package: `com.rajasudhan.taskmind`
+ *   - SHA-1:   `CB:5D:68:D2:EA:B0:E1:DD:10:35:F6:F9:1C:35:54:8F:09:81:A3:F4`
+ * That is the fingerprint of the committed debug keystore (`apps/taskmind/debug.keystore`) that every
+ * local, CI, and OTA "debug-latest" build now signs with — one stable SHA-1 to register once. If the
+ * token call fails with DEVELOPER_ERROR, this Android OAuth client is missing or its SHA-1/package
+ * doesn't match the installed build.
  */
 @Singleton
 class GmailAuth @Inject constructor(
