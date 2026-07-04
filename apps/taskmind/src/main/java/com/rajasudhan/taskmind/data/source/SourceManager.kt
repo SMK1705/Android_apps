@@ -63,9 +63,10 @@ class SourceManager @Inject constructor(
         val KEY_PROCESSED_SMS_IDS = stringSetPreferencesKey("processed_sms_ids")
         const val MAX_PROCESSED_SMS_IDS = 500
 
-        // Notification keys (StatusBarNotification.key) already handled by the live listener, so the
-        // reconnect/boot catch-up sweep of getActiveNotifications() doesn't re-run the LLM on a
-        // notification we already processed. Capped to bound growth.
+        // Notification dedup tokens (StatusBarNotification.key + a hash of the handled content)
+        // already turned into suggestions, so neither an unchanged re-post nor the reconnect/boot
+        // catch-up sweep of getActiveNotifications() re-runs the LLM on content we already processed.
+        // Only the content HASH is stored (never the message text). Capped to bound growth.
         val KEY_PROCESSED_NOTIFICATION_KEYS = stringSetPreferencesKey("processed_notification_keys")
         const val MAX_PROCESSED_NOTIFICATION_KEYS = 300
 
