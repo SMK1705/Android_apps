@@ -76,7 +76,8 @@
 
         <receiver android:name=".data.source.AlarmReceiver" android:exported="false" />
 
-        <!-- Re-arms reminder alarms after a device reboot (alarms are cleared on restart). -->
+        <!-- Re-arms reminder alarms after a device reboot OR an app update (both clear pending exact
+             alarms; without the update trigger, reminders stay silent until the next real reboot). -->
         <receiver
             android:name=".data.source.BootReceiver"
             android:enabled="true"
@@ -85,6 +86,7 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
 

@@ -156,7 +156,10 @@ class NoteDetailViewModel @Inject constructor(
         val value = option.takeIf { it != "None" && it.isNotBlank() }
         viewModelScope.launch {
             dao.updateNoteRecurrence(current.id, value)
-            alarmScheduler.schedule(current.id, current.title, current.dueDate, current.dueTime, value)
+            // schedule() advances a recurring reminder past a stale slot; persist the armed date so the
+            // stored dueDate matches when the reminder will actually next fire.
+            val armed = alarmScheduler.schedule(current.id, current.title, current.dueDate, current.dueTime, value)
+            if (!armed.isNullOrBlank() && armed != current.dueDate) dao.updateNoteDueDate(current.id, armed)
         }
     }
 
@@ -167,7 +170,8 @@ class NoteDetailViewModel @Inject constructor(
             val type = if (dueTime != null) "reminder" else current.type
             dao.updateNote(current.copy(dueDate = dueDate, dueTime = dueTime, type = type))
             if (dueTime != null) {
-                alarmScheduler.schedule(current.id, current.title, dueDate, dueTime, current.recurrence)
+                val armed = alarmScheduler.schedule(current.id, current.title, dueDate, dueTime, current.recurrence)
+                if (!armed.isNullOrBlank() && armed != dueDate) dao.updateNoteDueDate(current.id, armed)
             } else {
                 alarmScheduler.cancel(current.id)
             }

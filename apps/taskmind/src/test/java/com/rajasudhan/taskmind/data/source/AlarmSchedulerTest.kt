@@ -4,6 +4,9 @@ import android.app.AlarmManager
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -77,5 +80,51 @@ class AlarmSchedulerTest {
         scheduler.cancelRefire(1)
 
         assertEquals(1, shadowOf(am).scheduledAlarms.size) // note 2's re-fire untouched
+    }
+
+    // ---- recurring auto-advance (#1/#6) ----
+
+    @Test
+    fun schedule_recurringReminderWithPastSlot_advancesToFutureAndArms() {
+        val pastDate = LocalDate.now().minusDays(3).toString()
+
+        // Previously the past slot was silently dropped (nothing armed); now it advances to the next
+        // future occurrence and arms, so a "Daily" reminder created/edited from a stale date still fires.
+        val armed = scheduler.schedule(1, "Pills", pastDate, "09:00", "daily")
+
+        assertEquals(1, shadowOf(am).scheduledAlarms.size)
+        assertNotEquals(pastDate, armed)
+        assertTrue("armed date must be today or later", !LocalDate.parse(armed).isBefore(LocalDate.now()))
+    }
+
+    @Test
+    fun schedule_recurringReminderWithFutureSlot_armsUnchanged() {
+        val armed = scheduler.schedule(1, "Standup", futureDate, "09:00", "weekly")
+
+        assertEquals(1, shadowOf(am).scheduledAlarms.size)
+        assertEquals(futureDate, armed) // already future -> no advance
+    }
+
+    @Test
+    fun schedule_oneShotWithPastSlot_isDroppedAndReturnsNull() {
+        val pastDate = LocalDate.now().minusDays(1).toString()
+
+        val armed = scheduler.schedule(1, "Pills", pastDate, "09:00", null)
+
+        assertEquals(0, shadowOf(am).scheduledAlarms.size) // a one-shot in the past correctly never fires
+        assertNull(armed)
+    }
+
+    // ---- exact-alarm fallback (#5) ----
+
+    @Test
+    fun schedule_fallsBackToInexact_whenExactAlarmsNotPermitted() {
+        ShadowAlarmManager.setCanScheduleExactAlarms(false)
+
+        val armed = scheduler.schedule(1, "Pills", futureDate, "09:00", null)
+
+        // No exact-alarm permission must NOT silently drop the reminder — an inexact alarm still arms.
+        assertEquals(1, shadowOf(am).scheduledAlarms.size)
+        assertEquals(futureDate, armed)
     }
 }
