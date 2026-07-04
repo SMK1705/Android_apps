@@ -1,5 +1,6 @@
 package com.rajasudhan.taskmind.data.source
 
+import android.app.Notification
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.test.core.app.ApplicationProvider
@@ -7,6 +8,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -78,5 +80,48 @@ class NotificationLedgerTest {
         // A days-old message still sitting in the shade is NOT mined into a fresh, mis-dated task.
         assertFalse(TaskMindNotificationListener.isWithinSweepWindow(now - 7 * hour, now))
         assertFalse(TaskMindNotificationListener.isWithinSweepWindow(now - 48 * hour, now))
+    }
+
+    // ---- #171: relevance consults the FULL body, not just EXTRA_TEXT ----
+
+    @Test
+    fun isRelevant_uncategorizedDM_withBody_isKept_evenWithoutExtraText() {
+        // The #171 fix: an uncategorised app's DM whose body lives only in a MessagingStyle payload
+        // (so hasBody is derived from bestNotificationText, not EXTRA_TEXT) must be kept.
+        assertTrue(TaskMindNotificationListener.isRelevantNotification(0, null, hasBody = true))
+        assertFalse(TaskMindNotificationListener.isRelevantNotification(0, null, hasBody = false))
+    }
+
+    @Test
+    fun isRelevant_categoriesAndFlags() {
+        assertTrue(TaskMindNotificationListener.isRelevantNotification(0, Notification.CATEGORY_MESSAGE, false))
+        assertTrue(TaskMindNotificationListener.isRelevantNotification(0, Notification.CATEGORY_EMAIL, false))
+        assertFalse(TaskMindNotificationListener.isRelevantNotification(0, Notification.CATEGORY_TRANSPORT, true))
+        assertFalse(TaskMindNotificationListener.isRelevantNotification(0, Notification.CATEGORY_CALL, true))
+        // Ongoing / group-summary are dropped regardless of category or body.
+        assertFalse(TaskMindNotificationListener.isRelevantNotification(Notification.FLAG_ONGOING_EVENT, Notification.CATEGORY_MESSAGE, true))
+        assertFalse(TaskMindNotificationListener.isRelevantNotification(Notification.FLAG_GROUP_SUMMARY, Notification.CATEGORY_MESSAGE, true))
+    }
+
+    // ---- #172: dedup token keys on (key + content hash) ----
+
+    @Test
+    fun dedupToken_sameKeyAndContent_matches_butEvolvingContentDoesNot() {
+        val key = "0|com.whatsapp|1|null"
+        // An unchanged re-post -> identical token -> skipped.
+        assertEquals(
+            TaskMindNotificationListener.notificationDedupToken(key, "can we meet at 3?"),
+            TaskMindNotificationListener.notificationDedupToken(key, "can we meet at 3?")
+        )
+        // Evolving content -> different token -> still processed.
+        assertNotEquals(
+            TaskMindNotificationListener.notificationDedupToken(key, "can we meet at 3?"),
+            TaskMindNotificationListener.notificationDedupToken(key, "can we meet at 3?\nactually 4")
+        )
+        // Same content on a different conversation -> different token.
+        assertNotEquals(
+            TaskMindNotificationListener.notificationDedupToken(key, "ok"),
+            TaskMindNotificationListener.notificationDedupToken("0|org.telegram|2|null", "ok")
+        )
     }
 }
