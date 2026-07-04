@@ -44,13 +44,15 @@ class TaskMindApp : Application(), Configuration.Provider {
         TaskMindForegroundService.ensureNotificationChannel(this)
         // Keep the existing schedule on launch; only an explicit settings change replaces it.
         scheduleScan(this, settingsManager.scanFrequencyMinutes.toLong(), replace = false)
-        // Re-arm the daily brief from the saved preference (the WorkManager job is cleared on reinstall
-        // and its exact firing drifts across reboots; enqueueUniquePeriodicWork with UPDATE is idempotent).
+        // Re-arm the brief/recap from the saved preference, KEEPing any already-scheduled job (replace =
+        // false) so a run WorkManager has deferred under Doze past its target time isn't destroyed. This
+        // still arms them after a reinstall (no existing job to keep) and preserves them across reboots;
+        // an explicit settings change re-enqueues fresh (replace defaults true) to apply a new time.
         dailyBriefScheduler.reschedule(
-            settingsManager.dailyBriefEnabled, settingsManager.dailyBriefHour, settingsManager.dailyBriefMinute
+            settingsManager.dailyBriefEnabled, settingsManager.dailyBriefHour, settingsManager.dailyBriefMinute,
+            replace = false
         )
-        // Re-arm the weekly recap from the saved preference, for the same reason as the daily brief.
-        weeklyWinsScheduler.reschedule(settingsManager.weeklyWinsEnabled, settingsManager.weeklyWinsHour)
+        weeklyWinsScheduler.reschedule(settingsManager.weeklyWinsEnabled, settingsManager.weeklyWinsHour, replace = false)
     }
 
     companion object {

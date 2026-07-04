@@ -17,8 +17,17 @@ import javax.inject.Singleton
 class DailyBriefScheduler @Inject constructor(
     private val workManager: WorkManager,
 ) {
-    /** Apply the current preference: enqueue the daily job at [hour]:[minute], or cancel it. */
-    fun reschedule(enabled: Boolean, hour: Int, minute: Int) {
+    /**
+     * Apply the current preference: enqueue the daily job at [hour]:[minute], or cancel it.
+     *
+     * [replace] = false (the launch re-arm) KEEPs any already-scheduled job so a run that WorkManager
+     * has deferred under Doze past the target time isn't destroyed — blindly re-enqueuing on every
+     * launch would cancel the pending occurrence and roll it to the next day, silently skipping today's
+     * brief. [replace] = true (an explicit settings change) re-enqueues fresh so a new delivery time
+     * takes effect immediately. (CANCEL_AND_REENQUEUE, not UPDATE: UPDATE ignores a new initialDelay
+     * once the job has fired, so a changed time would never land.)
+     */
+    fun reschedule(enabled: Boolean, hour: Int, minute: Int, replace: Boolean = true) {
         if (!enabled) {
             workManager.cancelUniqueWork(WORK_NAME)
             return
@@ -26,12 +35,8 @@ class DailyBriefScheduler @Inject constructor(
         val request = PeriodicWorkRequestBuilder<DailyBriefWorker>(24, TimeUnit.HOURS)
             .setInitialDelay(initialDelayMillis(LocalDateTime.now(), hour, minute), TimeUnit.MILLISECONDS)
             .build()
-        // CANCEL_AND_REENQUEUE (not UPDATE): UPDATE keeps the existing periodCount and ignores a new
-        // initialDelay once the job has fired at least once, so a changed delivery time would never
-        // take effect. Re-enqueuing fresh always re-applies the delay to the next occurrence — and
-        // since the delay is recomputed to the next hour:minute every time (launch or settings
-        // change), the brief still lands daily at the chosen time either way.
-        workManager.enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE, request)
+        val policy = if (replace) ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE else ExistingPeriodicWorkPolicy.KEEP
+        workManager.enqueueUniquePeriodicWork(WORK_NAME, policy, request)
     }
 
     companion object {

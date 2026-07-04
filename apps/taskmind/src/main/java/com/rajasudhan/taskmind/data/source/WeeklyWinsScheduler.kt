@@ -19,8 +19,16 @@ import javax.inject.Singleton
 class WeeklyWinsScheduler @Inject constructor(
     private val workManager: WorkManager,
 ) {
-    /** Apply the current preference: enqueue the weekly job at [hour]:00 on [RECAP_DAY], or cancel it. */
-    fun reschedule(enabled: Boolean, hour: Int) {
+    /**
+     * Apply the current preference: enqueue the weekly job at [hour]:00 on [RECAP_DAY], or cancel it.
+     *
+     * [replace] = false (the launch re-arm) KEEPs any already-scheduled job so a recap WorkManager has
+     * deferred under Doze past Sunday's target hour isn't destroyed — blindly re-enqueuing on every
+     * launch would cancel the pending occurrence and roll it a FULL WEEK, silently skipping this week's
+     * recap. [replace] = true (an explicit settings change) re-enqueues fresh so a new hour takes effect
+     * immediately. (CANCEL_AND_REENQUEUE, not UPDATE, for the same reason as the daily brief.)
+     */
+    fun reschedule(enabled: Boolean, hour: Int, replace: Boolean = true) {
         if (!enabled) {
             workManager.cancelUniqueWork(WORK_NAME)
             return
@@ -28,11 +36,8 @@ class WeeklyWinsScheduler @Inject constructor(
         val request = PeriodicWorkRequestBuilder<WeeklyWinsWorker>(7, TimeUnit.DAYS)
             .setInitialDelay(initialDelayMillis(LocalDateTime.now(), RECAP_DAY, hour), TimeUnit.MILLISECONDS)
             .build()
-        // CANCEL_AND_REENQUEUE (not UPDATE): UPDATE keeps the existing periodCount and ignores a new
-        // initialDelay once the job has fired, so a changed recap hour would never take effect.
-        // Re-enqueuing fresh always re-applies the delay to the next occurrence; since the delay is
-        // recomputed to the next Sunday:hour every time, the recap still lands weekly either way.
-        workManager.enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE, request)
+        val policy = if (replace) ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE else ExistingPeriodicWorkPolicy.KEEP
+        workManager.enqueueUniquePeriodicWork(WORK_NAME, policy, request)
     }
 
     companion object {
