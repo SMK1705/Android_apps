@@ -63,6 +63,12 @@ class SourceManager @Inject constructor(
         val KEY_PROCESSED_SMS_IDS = stringSetPreferencesKey("processed_sms_ids")
         const val MAX_PROCESSED_SMS_IDS = 500
 
+        // Notification keys (StatusBarNotification.key) already handled by the live listener, so the
+        // reconnect/boot catch-up sweep of getActiveNotifications() doesn't re-run the LLM on a
+        // notification we already processed. Capped to bound growth.
+        val KEY_PROCESSED_NOTIFICATION_KEYS = stringSetPreferencesKey("processed_notification_keys")
+        const val MAX_PROCESSED_NOTIFICATION_KEYS = 300
+
         // Whether the one-time in-app guide has been shown (re-openable from the ? in the top bar).
         val KEY_HAS_SEEN_GUIDE = booleanPreferencesKey("has_seen_guide")
 
@@ -191,6 +197,22 @@ class SourceManager @Inject constructor(
                     // raw string for any non-numeric id so a stray value can't silently evict real ones.
                     updated.sortedByDescending { it.toLongOrNull() ?: Long.MIN_VALUE }
                         .take(MAX_PROCESSED_SMS_IDS).toSet()
+                else updated
+        }
+    }
+
+    /** Notification keys already handled by the live listener (capped, to avoid unbounded growth). */
+    val processedNotificationKeys: Flow<Set<String>> =
+        context.dataStore.data.map { it[KEY_PROCESSED_NOTIFICATION_KEYS] ?: emptySet() }
+
+    /** Records processed notification keys in a single write; caps by dropping the oldest entries. */
+    suspend fun addProcessedNotificationKeys(keys: Collection<String>) {
+        if (keys.isEmpty()) return
+        context.dataStore.edit { preferences ->
+            val updated = (preferences[KEY_PROCESSED_NOTIFICATION_KEYS] ?: emptySet()) + keys
+            preferences[KEY_PROCESSED_NOTIFICATION_KEYS] =
+                if (updated.size > MAX_PROCESSED_NOTIFICATION_KEYS)
+                    updated.toList().takeLast(MAX_PROCESSED_NOTIFICATION_KEYS).toSet()
                 else updated
         }
     }

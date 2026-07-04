@@ -4,9 +4,12 @@ import android.app.Notification
 import android.content.ComponentName
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Log
+import androidx.annotation.VisibleForTesting
 import androidx.core.app.NotificationCompat
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -30,9 +33,28 @@ class TaskMindNotificationListener : NotificationListenerService() {
     lateinit var personContextNotifier: PersonContextNotifier
 
     private val job = SupervisorJob()
-    private val scope = CoroutineScope(Dispatchers.IO + job)
+    // A handler here is what keeps a failure in the async work (e.g. the cloud LLM path throwing on a
+    // network blip) from propagating uncaught and CRASHING the listener process — which would take
+    // down notification capture entirely until the system rebinds, losing messages in the meantime.
+    private val exceptionHandler = CoroutineExceptionHandler { _, e ->
+        Log.w(TAG, "notification handling failed", e)
+    }
+    private val scope = CoroutineScope(Dispatchers.IO + job + exceptionHandler)
 
     companion object {
+        private const val TAG = "TaskMindNotifListener"
+
+        // The catch-up sweep recovers only RECENT notifications — a realistic listener-downtime gap
+        // (battery-kill, reboot, rebind) — not the entire historical shade. Without this, the first
+        // grant of access (empty ledger) would mine days-old messages still sitting in the shade and
+        // turn them into fresh, wrongly-dated tasks (processText always stamps "today").
+        @VisibleForTesting
+        internal const val SWEEP_MAX_AGE_MS = 6 * 60 * 60 * 1000L // 6h
+
+        @VisibleForTesting
+        internal fun isWithinSweepWindow(postTime: Long, now: Long): Boolean =
+            now - postTime <= SWEEP_MAX_AGE_MS
+
         // System/UI sources that only emit noise (incl. the "Screenshot saved" notification).
         private val IGNORED_PACKAGES = setOf(
             "android",
@@ -57,10 +79,31 @@ class TaskMindNotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         super.onNotificationPosted(sbn)
+        handle(sbn, fromSweep = false)
+    }
 
+    /**
+     * Catch-up sweep for notifications missed while we were unbound. The system does NOT re-deliver
+     * notifications posted while the listener was disconnected (an OEM battery-kill, the window
+     * between boot and rebind, or before the user granted access), so without this a WhatsApp/Telegram
+     * DM that lands in any of those gaps is lost forever — unlike an SMS, which the periodic scanner
+     * recovers. Here we replay whatever is still in the shade at (re)connect through the same path,
+     * deduped against [processedNotificationKeys] so we don't re-run the LLM on ones already handled.
+     */
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        val active = runCatching { activeNotifications }.getOrNull() ?: return
+        // Isolate each row: one malformed notification must not abort the whole sweep.
+        active.forEach { sbn -> runCatching { handle(sbn, fromSweep = true) } }
+    }
+
+    private fun handle(sbn: StatusBarNotification, fromSweep: Boolean) {
         // Never process our own notifications or system/UI noise.
         if (sbn.packageName == applicationContext.packageName) return
         if (sbn.packageName in IGNORED_PACKAGES) return
+        // On the catch-up sweep, recover only recent notifications — never mine the historical shade
+        // (a days-old message would become a fresh, mis-dated task). The live path has no age gate.
+        if (fromSweep && !isWithinSweepWindow(sbn.postTime, System.currentTimeMillis())) return
 
         val notification = sbn.notification
         val title = notification.extras.getString(Notification.EXTRA_TITLE)
@@ -77,11 +120,15 @@ class TaskMindNotificationListener : NotificationListenerService() {
             if (title == null || text == null) return
         }
 
+        val key: String? = sbn.key
         scope.launch {
             if (!sourceManager.isNotificationsEnabled.first()) return@launch
             // Per-app allowlist: empty = monitor all; otherwise only the chosen apps.
             val allowlist = sourceManager.notificationAllowlist.first()
             if (allowlist.isNotEmpty() && sbn.packageName !in allowlist) return@launch
+            // On the reconnect sweep, skip anything the live listener already handled so we don't
+            // re-run the LLM on it. The live path itself is unchanged (it still processes every post).
+            if (fromSweep && key != null && key in sourceManager.processedNotificationKeys.first()) return@launch
             // A "waiting on <this sender>" item: now they've been in touch, raise a one-tap "did they
             // deliver?" check (WaitingOnResolver never closes it on its own — they might be messaging
             // about anything). Gate strictly on a genuine person-to-person message (or a missed call):
@@ -106,6 +153,9 @@ class TaskMindNotificationListener : NotificationListenerService() {
             } else {
                 understandingPipeline.processText("Notification from ${title!!}", text!!)
             }
+            // Record the key (after successful handling) so a later reconnect sweep won't reprocess
+            // it. A throw above skips this — the exception handler logs it — so it's retried next sweep.
+            key?.let { sourceManager.addProcessedNotificationKeys(listOf(it)) }
         }
     }
 
