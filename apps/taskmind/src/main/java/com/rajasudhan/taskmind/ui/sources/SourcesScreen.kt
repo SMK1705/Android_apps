@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.Intent
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -89,11 +88,11 @@ fun SourcesScreen(
     )
 
     val gmailLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartIntentSenderForResult()
+        ActivityResultContracts.StartActivityForResult()
     ) { result -> viewModel.onConsentResult(result.data) }
     LaunchedEffect(Unit) {
-        viewModel.gmailConsent.collect { sender ->
-            gmailLauncher.launch(IntentSenderRequest.Builder(sender).build())
+        viewModel.gmailConsent.collect { intent ->
+            gmailLauncher.launch(intent)
         }
     }
 
