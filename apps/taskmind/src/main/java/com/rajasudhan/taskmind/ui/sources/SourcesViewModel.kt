@@ -2,7 +2,6 @@ package com.rajasudhan.taskmind.ui.sources
 
 import android.content.Context
 import android.content.Intent
-import android.content.IntentSender
 import android.content.pm.PackageManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -135,7 +134,7 @@ class SourcesViewModel @Inject constructor(
     val gmailStatus: StateFlow<String?> = _gmailStatus
 
     /** One-shot events carrying the OAuth consent intent for the screen to launch. */
-    private val _gmailConsent = MutableSharedFlow<IntentSender>(extraBufferCapacity = 1)
+    private val _gmailConsent = MutableSharedFlow<Intent>(extraBufferCapacity = 1)
     val gmailConsent = _gmailConsent.asSharedFlow()
 
     /** One-shot events carrying the Google account-chooser intent for the screen to launch. */
@@ -193,23 +192,40 @@ class SourcesViewModel @Inject constructor(
                 is GmailAuthState.Authorized -> finishConnect(state.accessToken)
                 is GmailAuthState.NeedsConsent -> {
                     _gmailStatus.value = null
-                    _gmailConsent.emit(state.intentSender)
+                    _gmailConsent.emit(state.consentIntent)
                 }
-                is GmailAuthState.Error -> _gmailStatus.value = "Couldn't connect: ${state.message}"
+                is GmailAuthState.Error -> {
+                    pendingAccountEmail = null
+                    _gmailStatus.value = "Couldn't connect: ${state.message}"
+                }
             }
         }
     }
 
-    /** Called by the screen with the result of the consent activity. */
+    /**
+     * Called by the screen after the consent activity returns. The GoogleAuthUtil consent grants (or
+     * the user cancels) the scope but returns no token itself, so we simply re-fetch the token for the
+     * pending account: it now succeeds if consent was granted, or comes back NeedsConsent if the user
+     * backed out.
+     */
     fun onConsentResult(data: Intent?) {
+        val email = pendingAccountEmail
+        if (email.isNullOrBlank()) {
+            _gmailStatus.value = "Gmail connection cancelled."
+            return
+        }
         viewModelScope.launch {
-            val token = gmailAuth.tokenFromConsent(data)
-            if (token == null) {
-                pendingAccountEmail = null
-                _gmailStatus.value = "Gmail connection cancelled."
-                return@launch
+            when (val state = gmailAuth.authorize(email)) {
+                is GmailAuthState.Authorized -> finishConnect(state.accessToken)
+                is GmailAuthState.NeedsConsent -> {
+                    pendingAccountEmail = null
+                    _gmailStatus.value = "Gmail connection cancelled."
+                }
+                is GmailAuthState.Error -> {
+                    pendingAccountEmail = null
+                    _gmailStatus.value = "Couldn't connect: ${state.message}"
+                }
             }
-            finishConnect(token)
         }
     }
 
