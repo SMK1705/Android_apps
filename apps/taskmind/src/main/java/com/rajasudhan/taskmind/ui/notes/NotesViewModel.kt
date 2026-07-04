@@ -122,7 +122,9 @@ class NotesViewModel @Inject constructor(
     fun reschedule(note: Note, newDueDate: String) {
         viewModelScope.launch {
             dao.updateNoteDueDate(note.id, newDueDate)
-            alarmScheduler.schedule(note.id, note.title, newDueDate, note.dueTime, note.recurrence)
+            // schedule() advances a recurring reminder past a stale slot; keep the stored date in step.
+            val armed = alarmScheduler.schedule(note.id, note.title, newDueDate, note.dueTime, note.recurrence)
+            if (!armed.isNullOrBlank() && armed != newDueDate) dao.updateNoteDueDate(note.id, armed)
         }
     }
 

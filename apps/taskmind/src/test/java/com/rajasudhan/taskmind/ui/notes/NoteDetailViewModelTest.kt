@@ -151,6 +151,18 @@ class NoteDetailViewModelTest {
     }
 
     @Test
+    fun updateRecurrence_persistsTheAdvancedDate_whenSchedulerReschedulesPastAStaleSlot() = runTest {
+        val (vm, id) = vmFor(aNote(title = "Rent", type = "reminder", dueDate = "2026-07-01", dueTime = "09:00"))
+        // The scheduler advanced the stale (past) slot to the next weekly occurrence and reports it back.
+        every { alarms.schedule(id, "Rent", "2026-07-01", "09:00", "weekly") } returns "2026-07-08"
+
+        vm.updateRecurrence("weekly")
+
+        // The VM persists that advanced date so the stored dueDate matches when it will actually fire.
+        assertEquals("2026-07-08", dao.getNoteByIdNow(id)!!.dueDate)
+    }
+
+    @Test
     fun setNag_on_persistsWithoutTouchingAlarms() = runTest {
         val (vm, id) = vmFor(aNote(title = "Pills", type = "reminder", dueDate = "2026-07-01", dueTime = "09:00", nag = false))
 

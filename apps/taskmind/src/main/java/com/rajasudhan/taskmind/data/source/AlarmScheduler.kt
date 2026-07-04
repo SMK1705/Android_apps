@@ -20,29 +20,52 @@ import javax.inject.Singleton
 class AlarmScheduler @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    fun schedule(noteId: Int, title: String, dueDate: String?, dueTime: String?, recurrence: String?) {
+    /**
+     * (Re)schedules the note's exact reminder alarm. Returns the date the alarm was actually armed for
+     * (yyyy-MM-dd), or null if nothing was armed.
+     *
+     * For a RECURRING reminder whose stored slot is already in the past, this advances to the next
+     * future occurrence and arms that — so an edit / reschedule / boot re-arm can hand us a stale date
+     * without silently dropping the repeat. (The old contract required *every* caller to pre-advance
+     * via [RecurrenceUtil.firstFutureOccurrence]; three of them didn't, so a "Daily" reminder created
+     * from a past slot never fired.) A one-shot keeps its date and is still dropped if it's in the past.
+     * Callers with DB access should persist the returned date when it differs from what they passed, so
+     * the stored dueDate stays in step with the armed slot.
+     */
+    fun schedule(noteId: Int, title: String, dueDate: String?, dueTime: String?, recurrence: String?): String? {
         // (Re)establishing the main alarm invalidates any pending snooze/nag re-fire from an earlier
         // fire — otherwise a rescheduled or snoozed nag note would keep ringing on its old cadence in
         // parallel with the new schedule. AlarmReceiver's nag branch re-arms the re-fire *after* its
         // recurrence-advance schedule() call, so the live nag loop is unaffected.
         cancelRefire(noteId)
-        if (dueDate == null || dueTime == null) return
+        if (dueDate == null || dueTime == null) return null
         // Parse the time tolerantly via the shared helper — single-digit hours like "9:30" are valid
         // and persisted, and a strict HH parser would reject them and silently drop the alarm.
-        val time = RecurrenceUtil.parseTime(dueTime) ?: return
+        val time = RecurrenceUtil.parseTime(dueTime) ?: return null
+        // A recurring reminder must never be dropped just because its stored slot has passed; land on
+        // the next future occurrence. (firstFutureOccurrence returns the date unchanged when it's
+        // already in the future, and null for an unknown recurrence — in which case fall back to the
+        // stored date and let the past-time guard below decide.)
+        val armDate = if (!recurrence.isNullOrBlank())
+            RecurrenceUtil.firstFutureOccurrence(dueDate, dueTime, recurrence, LocalDateTime.now()) ?: dueDate
+        else dueDate
         val timeMillis = runCatching {
-            LocalDateTime.of(LocalDate.parse(dueDate), time)
+            LocalDateTime.of(LocalDate.parse(armDate), time)
                 .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        }.getOrNull() ?: return
-        if (timeMillis <= System.currentTimeMillis()) return // never fire in the past
+        }.getOrNull() ?: return null
+        if (timeMillis <= System.currentTimeMillis()) return null // never fire in the past
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val pi = pendingIntent(noteId, title, armDate, dueTime, recurrence)
         if (alarmManager.canScheduleExactAlarms()) {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP, timeMillis,
-                pendingIntent(noteId, title, dueDate, dueTime, recurrence)
-            )
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timeMillis, pi)
+        } else {
+            // No exact-alarm permission (rare — the app holds USE_EXACT_ALARM): fall back to an
+            // inexact-but-doze-safe alarm rather than silently dropping the reminder, mirroring
+            // snoozeReminder. It may fire in a maintenance window instead of to-the-minute, but it fires.
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timeMillis, pi)
         }
+        return armDate
     }
 
     /**

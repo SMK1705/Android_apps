@@ -80,7 +80,10 @@ class BootReceiver : BroadcastReceiver() {
             val date = note.dueDate ?: continue
             val time = note.dueTime ?: continue
             if (RecurrenceUtil.parseTime(time) == null) continue
-            alarmScheduler.schedule(note.id, note.title, date, time, note.recurrence)
+            // schedule() advances a recurring follow-up past its stale slot; persist the armed date so
+            // the stored date matches (a recurring waiting-on nudge was previously dropped on reboot).
+            val armed = alarmScheduler.schedule(note.id, note.title, date, time, note.recurrence)
+            if (!armed.isNullOrBlank() && armed != date) dao.updateNoteDueDate(note.id, armed)
         }
 
         // Snoozed suggestions: their resurface alarms died with the reboot too. Re-arm the ones
@@ -98,7 +101,10 @@ class BootReceiver : BroadcastReceiver() {
         val BOOT_ACTIONS = setOf(
             Intent.ACTION_BOOT_COMPLETED,
             "android.intent.action.QUICKBOOT_POWERON",
-            "com.htc.intent.action.QUICKBOOT_POWERON"
+            "com.htc.intent.action.QUICKBOOT_POWERON",
+            // App update clears all pending exact alarms too (only this app's process is notified), so
+            // re-arm on it — otherwise every reminder stays silent until the next actual reboot.
+            Intent.ACTION_MY_PACKAGE_REPLACED
         )
     }
 }
