@@ -31,10 +31,12 @@ class UnderstandingPipeline @Inject constructor(
     private val notifier: SuggestionNotifier,
     private val rejectionLearner: RejectionLearner
 ) {
-    // Serializes the check-then-insert in addCallback so two missed-call notifications arriving at
-    // once (a chat app re-posting its missed-call notification) can't both pass the dedup and create
-    // twin "Call back" cards.
-    private val callbackMutex = Mutex()
+    // Serializes every check-then-insert (the isDuplicate → insertSuggestion region) so two paths
+    // handling the same item at once can't both pass the dedup and insert twins. This is real: the
+    // live SmsObserver and the periodic RecentDataScanner can hand the same SMS to processText
+    // concurrently, and two missed-call notifications (a chat app re-posting) can hit addCallback at
+    // once. Held only around the fast DB check+insert — never around the slow LLM call.
+    private val insertMutex = Mutex()
 
     private companion object {
         // Truncate runaway inputs (a long email/transcript) so the prompt + JSON output stay under
@@ -75,27 +77,32 @@ class UnderstandingPipeline @Inject constructor(
         // Down-rank items from senders the user keeps rejecting (on-device learning).
         val penalty = rejectionLearner.confidencePenalty(source)
 
+        // Serialize the dedup-check + insert so a concurrent invocation (the periodic scanner racing
+        // the live observer over the same SMS) can't read a twin-free snapshot before this one
+        // inserts. The slow LLM call above stays outside the lock.
         var insertedAny = false
-        for (item in items) {
-            val scored = if (penalty > 0) item.copy(confidence = (item.confidence - penalty).coerceAtLeast(0.0)) else item
-            if (ExtractionHeuristics.isAcceptable(scored) && !isDuplicate(item)) {
-                val suggestion = Suggestion(
-                    source = source,
-                    rawSnippet = text,
-                    extractedTitle = item.title,
-                    summary = item.notes.trim(),
-                    dueDate = ExtractionHeuristics.sanitizeDate(item.dueDate),
-                    dueTime = ExtractionHeuristics.sanitizeTime(item.dueTime),
-                    type = item.type,
-                    confidence = scored.confidence,
-                    status = "pending",
-                    location = item.location?.trim()?.ifBlank { null },
-                    recurrence = ExtractionHeuristics.sanitizeRecurrence(item.recurrence),
-                    priority = ExtractionHeuristics.sanitizePriority(item.priority),
-                    counterparty = item.counterparty?.trim()?.ifBlank { null }
-                )
-                dao.insertSuggestion(suggestion)
-                insertedAny = true
+        insertMutex.withLock {
+            for (item in items) {
+                val scored = if (penalty > 0) item.copy(confidence = (item.confidence - penalty).coerceAtLeast(0.0)) else item
+                if (ExtractionHeuristics.isAcceptable(scored) && !isDuplicate(item)) {
+                    val suggestion = Suggestion(
+                        source = source,
+                        rawSnippet = text,
+                        extractedTitle = item.title,
+                        summary = item.notes.trim(),
+                        dueDate = ExtractionHeuristics.sanitizeDate(item.dueDate),
+                        dueTime = ExtractionHeuristics.sanitizeTime(item.dueTime),
+                        type = item.type,
+                        confidence = scored.confidence,
+                        status = "pending",
+                        location = item.location?.trim()?.ifBlank { null },
+                        recurrence = ExtractionHeuristics.sanitizeRecurrence(item.recurrence),
+                        priority = ExtractionHeuristics.sanitizePriority(item.priority),
+                        counterparty = item.counterparty?.trim()?.ifBlank { null }
+                    )
+                    dao.insertSuggestion(suggestion)
+                    insertedAny = true
+                }
             }
         }
 
@@ -130,7 +137,7 @@ class UnderstandingPipeline @Inject constructor(
         val who = named ?: dialable!!
         val title = "Call back $who"
 
-        callbackMutex.withLock {
+        insertMutex.withLock {
             val pending = dao.getPendingSuggestions().first().map { it.extractedTitle to it.dueDate }
             val notes = dao.getAllNotes().first().map { it.title to it.dueDate }
             if (ExtractionHeuristics.isDuplicate(title, null, pending + notes)) return

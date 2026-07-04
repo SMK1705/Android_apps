@@ -34,6 +34,7 @@ class RecentDataScanner @Inject constructor(
     private val personContextNotifier: PersonContextNotifier
 ) {
     private companion object {
+        const val TAG = "RecentDataScanner"
         const val MAX_LOOKBACK_MS = 24 * 60 * 60 * 1000L      // cap a since-last-scan window at 24h
         const val FIRST_RUN_LOOKBACK_MS = 15 * 60 * 1000L     // first ever scan: just the last 15 min
     }
@@ -78,19 +79,37 @@ class RecentDataScanner @Inject constructor(
     }
 
     private suspend fun scanSms(since: Long) {
+        val processed = sourceManager.processedSmsIds.first()
+        val newlyProcessed = mutableListOf<String>()
         context.contentResolver.query(
             Telephony.Sms.Inbox.CONTENT_URI,
-            arrayOf(Telephony.Sms.ADDRESS, Telephony.Sms.BODY),
+            arrayOf(Telephony.Sms._ID, Telephony.Sms.ADDRESS, Telephony.Sms.BODY),
             "${Telephony.Sms.DATE} >= ?",
             arrayOf(since.toString()),
             "${Telephony.Sms.DATE} DESC"
         )?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(Telephony.Sms._ID)
+            val addressCol = cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
+            val bodyCol = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
             while (cursor.moveToNext()) {
-                val address = cursor.getString(0)
-                val body = cursor.getString(1)
-                pipeline.processText("SMS from $address", body)
+                val id = cursor.getLong(idCol).toString()
+                if (id in processed) continue
+                // A null/blank BODY (MMS stub, WAP-push, or a mid-write row) carries no task text.
+                // Skip it per-row WITHOUT aborting the loop — previously the null flowed into the
+                // non-null processText and the NPE aborted the whole batch, and because the watermark
+                // still advanced, every older SMS behind it was permanently dropped. Don't record its
+                // id either, so if a body materialises later it's still picked up.
+                val body = cursor.getString(bodyCol)
+                if (body.isNullOrBlank()) continue
+                val address = cursor.getString(addressCol) ?: "unknown"
+                // Isolate each row: one failing message must not drop the rest of the window.
+                val ok = runCatching { pipeline.processText("SMS from $address", body) }
+                    .onFailure { android.util.Log.w(TAG, "SMS row $id failed", it) }
+                    .isSuccess
+                if (ok) newlyProcessed += id
             }
         }
+        if (newlyProcessed.isNotEmpty()) sourceManager.addProcessedSmsIds(newlyProcessed)
     }
 
     private suspend fun scanCalls(since: Long) {

@@ -56,6 +56,13 @@ class SourceManager @Inject constructor(
         // MediaStore image ids already OCR'd, so a screenshot isn't re-read every scan.
         val KEY_PROCESSED_IMAGE_IDS = stringSetPreferencesKey("processed_image_ids")
 
+        // SMS provider _IDs already turned into suggestions — by the real-time observer or a prior
+        // scan — so the periodic catch-up doesn't re-run the LLM on a message we've already handled.
+        // Capped like the others; the cap keeps the HIGHEST (most recent) ids, since the scan only
+        // ever looks at recent messages.
+        val KEY_PROCESSED_SMS_IDS = stringSetPreferencesKey("processed_sms_ids")
+        const val MAX_PROCESSED_SMS_IDS = 500
+
         // Whether the one-time in-app guide has been shown (re-openable from the ? in the top bar).
         val KEY_HAS_SEEN_GUIDE = booleanPreferencesKey("has_seen_guide")
 
@@ -165,6 +172,25 @@ class SourceManager @Inject constructor(
             preferences[KEY_PROCESSED_IMAGE_IDS] =
                 if (updated.size > MAX_PROCESSED_EMAIL_IDS)
                     updated.toList().takeLast(MAX_PROCESSED_EMAIL_IDS).toSet()
+                else updated
+        }
+    }
+
+    /** SMS provider _IDs already turned into suggestions (capped, keeping the most-recent ids). */
+    val processedSmsIds: Flow<Set<String>> =
+        context.dataStore.data.map { it[KEY_PROCESSED_SMS_IDS] ?: emptySet() }
+
+    /** Records a batch of processed SMS ids in a single write; caps by keeping the highest ids. */
+    suspend fun addProcessedSmsIds(ids: Collection<String>) {
+        if (ids.isEmpty()) return
+        context.dataStore.edit { preferences ->
+            val updated = (preferences[KEY_PROCESSED_SMS_IDS] ?: emptySet()) + ids
+            preferences[KEY_PROCESSED_SMS_IDS] =
+                if (updated.size > MAX_PROCESSED_SMS_IDS)
+                    // SMS ids are monotonic, so "most recent" = numerically highest. Fall back to the
+                    // raw string for any non-numeric id so a stray value can't silently evict real ones.
+                    updated.sortedByDescending { it.toLongOrNull() ?: Long.MIN_VALUE }
+                        .take(MAX_PROCESSED_SMS_IDS).toSet()
                 else updated
         }
     }
