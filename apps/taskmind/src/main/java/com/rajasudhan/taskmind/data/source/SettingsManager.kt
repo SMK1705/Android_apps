@@ -24,6 +24,7 @@ class SettingsManager @Inject constructor(
         private const val KEY_RETENTION_DAYS = "retention_days"
         private const val KEY_SCAN_FREQUENCY_MINUTES = "scan_frequency_minutes"
         private const val KEY_LAST_SCAN_AT = "last_scan_at"
+        private const val KEY_LAST_PROCESSED_SMS_ID = "last_processed_sms_id"
         private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_DAILY_BRIEF_ENABLED = "daily_brief_enabled"
@@ -135,6 +136,16 @@ class SettingsManager @Inject constructor(
     var lastScanAt: Long
         get() = encryptedPrefs.getLong(KEY_LAST_SCAN_AT, 0L)
         set(value) = encryptedPrefs.edit().putLong(KEY_LAST_SCAN_AT, value).apply()
+
+    /**
+     * Highest SMS provider `_ID` the scan has accounted for (processed or intentionally skipped).
+     * Advances contiguously, so a bounded id-recovery pass can catch messages that arrived while the
+     * app was dead longer than the date window's 24h look-back (which the `DATE >= since` clamp misses).
+     * 0 = not yet seeded (the first scan seeds it to the current newest id, so history isn't mined).
+     */
+    var lastProcessedSmsId: Long
+        get() = encryptedPrefs.getLong(KEY_LAST_PROCESSED_SMS_ID, 0L)
+        set(value) = encryptedPrefs.edit().putLong(KEY_LAST_PROCESSED_SMS_ID, value).apply()
 
     // ---- Theme (follow system / light / dark) ----
     // SYSTEM by default so we follow the OS day-night setting until the user chooses otherwise.

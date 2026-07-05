@@ -2,6 +2,7 @@ package com.rajasudhan.taskmind.data.source
 
 import android.content.ContentUris
 import android.content.Context
+import android.database.Cursor
 import android.provider.CallLog
 import android.provider.MediaStore
 import android.provider.Telephony
@@ -37,6 +38,7 @@ class RecentDataScanner @Inject constructor(
         const val TAG = "RecentDataScanner"
         const val MAX_LOOKBACK_MS = 24 * 60 * 60 * 1000L      // cap a since-last-scan window at 24h
         const val FIRST_RUN_LOOKBACK_MS = 15 * 60 * 1000L     // first ever scan: just the last 15 min
+        const val MAX_SMS_RECOVERY_PER_SCAN = 200             // bound the id-recovery so a long gap can't flood
     }
 
     /**
@@ -80,36 +82,82 @@ class RecentDataScanner @Inject constructor(
 
     private suspend fun scanSms(since: Long) {
         val processed = sourceManager.processedSmsIds.first()
-        val newlyProcessed = mutableListOf<String>()
-        context.contentResolver.query(
+        // Primary: the recent date window (real-time-ish; also what the manual refresh uses).
+        val captured = context.contentResolver.query(
             Telephony.Sms.Inbox.CONTENT_URI,
             arrayOf(Telephony.Sms._ID, Telephony.Sms.ADDRESS, Telephony.Sms.BODY),
             "${Telephony.Sms.DATE} >= ?",
             arrayOf(since.toString()),
             "${Telephony.Sms.DATE} DESC"
-        )?.use { cursor ->
-            val idCol = cursor.getColumnIndexOrThrow(Telephony.Sms._ID)
-            val addressCol = cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
-            val bodyCol = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
-            while (cursor.moveToNext()) {
-                val id = cursor.getLong(idCol).toString()
-                if (id in processed) continue
-                // A null/blank BODY (MMS stub, WAP-push, or a mid-write row) carries no task text.
-                // Skip it per-row WITHOUT aborting the loop — previously the null flowed into the
-                // non-null processText and the NPE aborted the whole batch, and because the watermark
-                // still advanced, every older SMS behind it was permanently dropped. Don't record its
-                // id either, so if a body materialises later it's still picked up.
-                val body = cursor.getString(bodyCol)
-                if (body.isNullOrBlank()) continue
-                val address = cursor.getString(addressCol) ?: "unknown"
-                // Isolate each row: one failing message must not drop the rest of the window.
-                val ok = runCatching { pipeline.processText("SMS from $address", body) }
-                    .onFailure { android.util.Log.w(TAG, "SMS row $id failed", it) }
-                    .isSuccess
-                if (ok) newlyProcessed += id
-            }
+        )?.use { consumeSmsRows(it, processed).first } ?: emptyList()
+        if (captured.isNotEmpty()) sourceManager.addProcessedSmsIds(captured)
+        // Gap recovery: the 24h date clamp silently drops a message that arrived while the app was dead
+        // longer than that; recover it by id instead.
+        recoverMissedSmsById()
+    }
+
+    /**
+     * Recovers SMS the [scanSms] date window can't reach — messages that arrived while the app was dead
+     * for longer than [MAX_LOOKBACK_MS], so they're older than `since` at scan time. Walks rows above a
+     * persisted contiguous `_ID` watermark, oldest-first and capped at [MAX_SMS_RECOVERY_PER_SCAN] per
+     * scan (so a long dormancy can't flood the LLM), and advances the watermark past everything it saw.
+     * Already-captured messages (date window or the live observer) are in the ledger, so they're skipped
+     * here, never re-run.
+     */
+    private suspend fun recoverMissedSmsById() {
+        val watermark = settingsManager.lastProcessedSmsId
+        if (watermark <= 0L) {
+            // First run: seed to the current newest id — never mine pre-existing history by id (the
+            // date window already covered the recent slice). Nothing to recover on a fresh install.
+            currentMaxSmsId()?.let { settingsManager.lastProcessedSmsId = it }
+            return
         }
-        if (newlyProcessed.isNotEmpty()) sourceManager.addProcessedSmsIds(newlyProcessed)
+        val processed = sourceManager.processedSmsIds.first()
+        val (captured, maxSeen) = context.contentResolver.query(
+            Telephony.Sms.Inbox.CONTENT_URI,
+            arrayOf(Telephony.Sms._ID, Telephony.Sms.ADDRESS, Telephony.Sms.BODY),
+            "${Telephony.Sms._ID} > ?",
+            arrayOf(watermark.toString()),
+            "${Telephony.Sms._ID} ASC LIMIT $MAX_SMS_RECOVERY_PER_SCAN"
+        )?.use { consumeSmsRows(it, processed) } ?: (emptyList<String>() to 0L)
+        if (captured.isNotEmpty()) sourceManager.addProcessedSmsIds(captured)
+        if (maxSeen > watermark) settingsManager.lastProcessedSmsId = maxSeen
+    }
+
+    /** The newest SMS `_ID` in the inbox, or null if empty/unreadable. */
+    private fun currentMaxSmsId(): Long? =
+        context.contentResolver.query(
+            Telephony.Sms.Inbox.CONTENT_URI,
+            arrayOf(Telephony.Sms._ID),
+            null, null,
+            "${Telephony.Sms._ID} DESC LIMIT 1"
+        )?.use { if (it.moveToFirst()) it.getLong(0) else null }
+
+    /**
+     * Feeds each SMS row through the pipeline, skipping already-processed ids and null/blank bodies (an
+     * MMS stub / mid-write row — never let it abort the batch), isolating each row's failure. Returns
+     * the ids newly captured and the highest `_ID` examined (for the recovery watermark).
+     */
+    private suspend fun consumeSmsRows(cursor: Cursor, processed: Set<String>): Pair<List<String>, Long> {
+        val idCol = cursor.getColumnIndexOrThrow(Telephony.Sms._ID)
+        val addressCol = cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
+        val bodyCol = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
+        val captured = mutableListOf<String>()
+        var maxId = 0L
+        while (cursor.moveToNext()) {
+            val idLong = cursor.getLong(idCol)
+            maxId = maxOf(maxId, idLong)
+            val id = idLong.toString()
+            if (id in processed) continue
+            val body = cursor.getString(bodyCol)
+            if (body.isNullOrBlank()) continue // don't record it — a body may materialise later
+            val address = cursor.getString(addressCol) ?: "unknown"
+            val ok = runCatching { pipeline.processText("SMS from $address", body) }
+                .onFailure { android.util.Log.w(TAG, "SMS row $id failed", it) }
+                .isSuccess
+            if (ok) captured += id
+        }
+        return captured to maxId
     }
 
     private suspend fun scanCalls(since: Long) {
