@@ -3,6 +3,7 @@ package com.rajasudhan.taskmind.data.source
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.LocalDateTime
+import java.time.ZoneId
 
 /** The day-boundary math for the morning brief's first fire. */
 class DailyBriefSchedulerTest {
@@ -35,5 +36,14 @@ class DailyBriefSchedulerTest {
         val now = LocalDateTime.of(2026, 7, 2, 7, 30)
         // 08:15 is 45 min ahead.
         assertEquals(45 * 60 * 1000L, DailyBriefScheduler.initialDelayMillis(now, 8, 15))
+    }
+
+    @Test
+    fun dstSpringForward_delayIsRealElapsed_notWallClock() {
+        // US DST begins 2026-03-08: at 02:00 the clock jumps to 03:00, so 02:00–02:59 don't exist.
+        val ny = ZoneId.of("America/New_York")
+        val now = LocalDateTime.of(2026, 3, 8, 1, 0) // 01:00, before the jump
+        // Wall-clock says 01:00→04:00 = 3h, but only 2h of REAL time elapses across the skipped hour.
+        assertEquals(2 * oneHourMs, DailyBriefScheduler.initialDelayMillis(now, 4, 0, ny))
     }
 }
