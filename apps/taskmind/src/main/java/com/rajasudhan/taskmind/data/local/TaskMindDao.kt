@@ -89,6 +89,11 @@ interface TaskMindDao {
     @Insert
     suspend fun insertNote(note: Note): Long
 
+    /** Bulk insert in a single transaction (Room runs a list @Insert atomically) — all-or-nothing, so a
+     *  mid-way failure during a snapshot restore rolls back rather than leaving a partial, dupe-prone set. */
+    @Insert
+    suspend fun insertNotes(notes: List<Note>): List<Long>
+
     @Update
     suspend fun updateNote(note: Note)
 

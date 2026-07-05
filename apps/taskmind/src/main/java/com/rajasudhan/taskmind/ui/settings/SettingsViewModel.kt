@@ -13,9 +13,11 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rajasudhan.taskmind.TaskMindApp
+import com.rajasudhan.taskmind.data.local.DatabaseRecovery
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.source.BackupManager
+import com.rajasudhan.taskmind.data.source.SnapshotManager
 import com.rajasudhan.taskmind.data.source.EgressLogger
 import com.rajasudhan.taskmind.data.source.ModelDownloader
 import com.rajasudhan.taskmind.data.source.SettingsManager
@@ -53,6 +55,7 @@ class SettingsViewModel @Inject constructor(
     private val ocrEngine: OcrEngine,
     private val modelDownloader: ModelDownloader,
     private val backupManager: BackupManager,
+    private val snapshotManager: SnapshotManager,
     private val moshi: Moshi,
     private val dailyBriefScheduler: com.rajasudhan.taskmind.data.source.DailyBriefScheduler,
     private val weeklyWinsScheduler: com.rajasudhan.taskmind.data.source.WeeklyWinsScheduler,
@@ -316,6 +319,56 @@ class SettingsViewModel @Inject constructor(
                 }.getOrNull()
             }
             _exportStatus.value = if (count != null) "✓ Exported $count note(s)." else "Export failed."
+        }
+    }
+
+    // ---- Local auto-snapshot safety net (#161) ----
+
+    /** A one-line description of the newest automatic snapshot, or null if none has been written yet. */
+    private val _snapshotInfo = MutableStateFlow<String?>(null)
+    val snapshotInfo: StateFlow<String?> = _snapshotInfo
+
+    /** True if the DB was ever reset (quarantined) — surfaces a "restore from snapshot?" nudge. */
+    private val _databaseWasReset = MutableStateFlow(false)
+    val databaseWasReset: StateFlow<Boolean> = _databaseWasReset
+
+    private val _snapshotStatus = MutableStateFlow<String?>(null)
+    val snapshotStatus: StateFlow<String?> = _snapshotStatus
+
+    private fun dbFile(): File = context.getDatabasePath("taskmind_db")
+
+    /** Loads the latest-snapshot summary and reset state. Called from the screen on open (LaunchedEffect). */
+    fun refreshSnapshotInfo() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                _databaseWasReset.value = DatabaseRecovery.hasQuarantine(dbFile())
+                _snapshotInfo.value = snapshotManager.latest()?.let { file ->
+                    val stamp = java.text.SimpleDateFormat("MMM d, HH:mm", java.util.Locale.getDefault())
+                        .format(java.util.Date(file.lastModified()))
+                    "Last automatic snapshot: $stamp"
+                }
+            }
+        }
+    }
+
+    /**
+     * Restores notes from the latest local snapshot (inserted as new rows, reminders/geofences re-armed
+     * — see [SnapshotManager]). Unlike the encrypted restore this doesn't swap the DB file, so no restart
+     * is needed; the notes flow just re-emits. Only clears the quarantine marker on a real success — a
+     * failure (corrupt/unreadable snapshot) is reported distinctly and leaves the reset nudge up.
+     */
+    fun restoreFromSnapshot() {
+        viewModelScope.launch {
+            val outcome = runCatching { snapshotManager.restoreLatest() }
+            when {
+                outcome.isFailure -> _snapshotStatus.value = "Restore failed — the snapshot couldn't be read."
+                outcome.getOrNull() == null -> _snapshotStatus.value = "No local snapshot to restore."
+                else -> {
+                    withContext(Dispatchers.IO) { DatabaseRecovery.clearQuarantine(dbFile()) }
+                    _databaseWasReset.value = false
+                    _snapshotStatus.value = "✓ Restored ${outcome.getOrNull()} note(s) from the last snapshot."
+                }
+            }
         }
     }
 

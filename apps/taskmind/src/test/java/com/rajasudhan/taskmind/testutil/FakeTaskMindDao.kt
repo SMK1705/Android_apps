@@ -117,6 +117,8 @@ class FakeTaskMindDao : TaskMindDao {
         return id.toLong()
     }
 
+    override suspend fun insertNotes(notes: List<Note>): List<Long> = notes.map { insertNote(it) }
+
     override suspend fun updateNote(note: Note) {
         notes.update { list -> list.map { if (it.id == note.id) note else it } }
     }

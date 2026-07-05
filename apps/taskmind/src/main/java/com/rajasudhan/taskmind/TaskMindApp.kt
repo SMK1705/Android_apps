@@ -8,6 +8,7 @@ import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.rajasudhan.taskmind.data.source.AutoSnapshotScheduler
 import com.rajasudhan.taskmind.data.source.DailyBriefScheduler
 import com.rajasudhan.taskmind.data.source.DataCollectionWorker
 import com.rajasudhan.taskmind.data.source.SettingsManager
@@ -32,6 +33,9 @@ class TaskMindApp : Application(), Configuration.Provider {
     @Inject
     lateinit var weeklyWinsScheduler: WeeklyWinsScheduler
 
+    @Inject
+    lateinit var autoSnapshotScheduler: AutoSnapshotScheduler
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -53,6 +57,9 @@ class TaskMindApp : Application(), Configuration.Provider {
             replace = false
         )
         weeklyWinsScheduler.reschedule(settingsManager.weeklyWinsEnabled, settingsManager.weeklyWinsHour, replace = false)
+        // Always-on data safety net: a daily plain-JSON snapshot of notes to app-private storage, so a
+        // Keystore reset that renders the encrypted DB unopenable can never mean a total loss (#161).
+        autoSnapshotScheduler.schedule()
     }
 
     companion object {

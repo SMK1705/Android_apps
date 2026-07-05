@@ -80,4 +80,18 @@ class BriefRecapSchedulerPolicyTest {
             wm.enqueueUniquePeriodicWork(any(), any(), any<PeriodicWorkRequest>())
         }
     }
+
+    // ---- Auto-snapshot safety net (#161) ----
+
+    @Test
+    fun autoSnapshot_schedulesAUniqueDailyJob_withKeepSoALaunchDoesNotRollItForward() {
+        // No user toggle — it's an always-on net — so it just (re)arms with KEEP on every launch, which
+        // must not destroy a pending (Doze-deferred) snapshot occurrence.
+        AutoSnapshotScheduler(wm).schedule()
+        verify {
+            wm.enqueueUniquePeriodicWork(
+                AutoSnapshotScheduler.WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, any<PeriodicWorkRequest>()
+            )
+        }
+    }
 }

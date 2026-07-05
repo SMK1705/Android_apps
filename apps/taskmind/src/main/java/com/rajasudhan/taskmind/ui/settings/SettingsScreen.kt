@@ -76,6 +76,9 @@ fun SettingsScreen(
     val retentionDays by viewModel.retentionDays.collectAsState()
     val scanFrequencyMinutes by viewModel.scanFrequencyMinutes.collectAsState()
     val exportStatus by viewModel.exportStatus.collectAsState()
+    val snapshotInfo by viewModel.snapshotInfo.collectAsState()
+    val snapshotStatus by viewModel.snapshotStatus.collectAsState()
+    val databaseWasReset by viewModel.databaseWasReset.collectAsState()
     val backupStatus by viewModel.backupStatus.collectAsState()
     val restartRequired by viewModel.restartRequired.collectAsState()
     val permissions by viewModel.permissions.collectAsState()
@@ -94,6 +97,7 @@ fun SettingsScreen(
     var passphraseMode by remember { mutableStateOf<String?>(null) } // "backup" | "restore" | null
     var passphraseInput by remember { mutableStateOf("") }
     var pendingPassphrase by remember { mutableStateOf("") }
+    var showSnapshotRestore by remember { mutableStateOf(false) }
     val backupDate = remember { java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault()).format(java.util.Date()) }
     val backupLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")
@@ -111,6 +115,7 @@ fun SettingsScreen(
     LaunchedEffect(Unit) {
         viewModel.loadCalendars()
         viewModel.loadPermissionStatuses()
+        viewModel.refreshSnapshotInfo()
     }
 
     val c = BoldTheme.colors
@@ -447,6 +452,33 @@ fun SettingsScreen(
 
             HorizontalDivider()
             Text(
+                "TaskMind keeps a rolling on-device snapshot of your notes so a database reset is never a " +
+                    "total loss. Nothing leaves your phone.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (databaseWasReset) {
+                Text(
+                    "⚠ Your database was reset. Restore your notes from the last snapshot.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            snapshotInfo?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            OutlinedButton(
+                onClick = { showSnapshotRestore = true },
+                enabled = snapshotInfo != null
+            ) {
+                Text("Restore from last snapshot")
+            }
+            snapshotStatus?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+
+            HorizontalDivider()
+            Text(
                 "How often TaskMind scans recent data in the background. Less frequent saves battery.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -599,6 +631,32 @@ fun SettingsScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+                }
+            )
+        }
+
+        // Confirm before a snapshot restore — it inserts rows, so on a non-empty DB it could duplicate.
+        if (showSnapshotRestore) {
+            AlertDialog(
+                onDismissRequest = { showSnapshotRestore = false },
+                title = { Text("Restore from last snapshot?") },
+                text = {
+                    Text(
+                        "This adds the notes from your latest automatic on-device snapshot back into " +
+                            "TaskMind. Use it after a data loss — if your notes are already here, it may " +
+                            "create duplicates.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showSnapshotRestore = false
+                        viewModel.restoreFromSnapshot()
+                    }) { Text("Restore") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showSnapshotRestore = false }) { Text("Cancel") }
                 }
             )
         }
