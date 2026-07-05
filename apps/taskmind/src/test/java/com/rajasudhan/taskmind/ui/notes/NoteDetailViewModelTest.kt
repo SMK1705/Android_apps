@@ -151,6 +151,17 @@ class NoteDetailViewModelTest {
     }
 
     @Test
+    fun updateRecurrence_monthly_capturesTheDayOfMonthAnchor_andClearsItWhenSwitchingAway() = runTest {
+        val (vm, id) = vmFor(aNote(title = "Rent", type = "reminder", dueDate = "2026-01-31", dueTime = "09:00"))
+
+        vm.updateRecurrence("Monthly")
+        assertEquals(31, dao.getNoteByIdNow(id)!!.recurrenceAnchorDay) // the 31st is anchored
+
+        vm.updateRecurrence("Weekly")
+        assertNull(dao.getNoteByIdNow(id)!!.recurrenceAnchorDay) // no longer monthly → anchor cleared
+    }
+
+    @Test
     fun updateRecurrence_persistsTheAdvancedDate_whenSchedulerReschedulesPastAStaleSlot() = runTest {
         val (vm, id) = vmFor(aNote(title = "Rent", type = "reminder", dueDate = "2026-07-01", dueTime = "09:00"))
         // The scheduler advanced the stale (past) slot to the next weekly occurrence and reports it back.

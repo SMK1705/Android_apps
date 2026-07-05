@@ -11,7 +11,7 @@ import com.rajasudhan.taskmind.data.model.Suggestion
 
 @Database(
     entities = [Note::class, Suggestion::class, RejectedPattern::class, NoteEmbedding::class],
-    version = 11,
+    version = 12,
     exportSchema = true
 )
 abstract class TaskMindDatabase : RoomDatabase() {
@@ -121,6 +121,22 @@ abstract class TaskMindDatabase : RoomDatabase() {
         val MIGRATION_10_11 = object : Migration(10, 11) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE notes ADD COLUMN pendingConfirmSince INTEGER")
+            }
+        }
+
+        /**
+         * v12 adds a nullable `recurrenceAnchorDay` column to notes — the intended day-of-month a
+         * monthly reminder should keep, so stepping doesn't drift the 29th–31st down to the 28th after
+         * February. Backfills existing monthly reminders from their stored day-of-month (best effort:
+         * one already drifted keeps its current day, but future stepping is anchored from here on).
+         */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE notes ADD COLUMN recurrenceAnchorDay INTEGER")
+                db.execSQL(
+                    "UPDATE notes SET recurrenceAnchorDay = CAST(substr(dueDate, 9, 2) AS INTEGER) " +
+                        "WHERE recurrence = 'monthly' AND dueDate IS NOT NULL AND length(dueDate) = 10"
+                )
             }
         }
     }

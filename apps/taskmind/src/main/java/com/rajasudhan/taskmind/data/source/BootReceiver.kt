@@ -64,8 +64,9 @@ class BootReceiver : BroadcastReceiver() {
             // persist a date derived from a midnight fallback.
             if (RecurrenceUtil.parseTime(time) == null) continue
             if (!note.recurrence.isNullOrBlank()) {
-                // Recurring: land on the next slot that's actually in the future.
-                val next = RecurrenceUtil.firstFutureOccurrence(date, time, note.recurrence, now) ?: continue
+                // Recurring: land on the next slot that's actually in the future (anchored so a monthly
+                // reminder keeps its intended day-of-month across short months).
+                val next = RecurrenceUtil.firstFutureOccurrence(date, time, note.recurrence, now, note.recurrenceAnchorDay) ?: continue
                 // Persist the advance only on a reboot (genuine elapsed time). On a clock/timezone
                 // change `now` is user-controlled, so a temporary set-forward-then-back would otherwise
                 // corrupt the stored date and skip an occurrence — re-arm the alarm but leave the date.

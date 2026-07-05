@@ -33,6 +33,45 @@ class RecurrenceUtilTest {
         assertNull(RecurrenceUtil.next("not-a-date", "Daily"))
     }
 
+    // ---------------- monthly anchor (#177: no drift to the 28th) ----------------
+
+    @Test
+    fun monthlyWithoutAnchor_stillDriftsAfterAShortMonth() {
+        // Legacy behaviour (no anchor): a 31st reminder clamps to Feb 28, then stays stuck on the 28th.
+        assertEquals("2026-02-28", RecurrenceUtil.next("2026-01-31", "monthly"))
+        assertEquals("2026-03-28", RecurrenceUtil.next("2026-02-28", "monthly")) // the drift
+    }
+
+    @Test
+    fun monthlyWithAnchor_keepsTheIntendedDayOfMonth() {
+        // Anchored to the 31st: clamps only where the month is short, then returns to 31/30.
+        assertEquals("2026-02-28", RecurrenceUtil.next("2026-01-31", "monthly", anchorDay = 31))
+        assertEquals("2026-03-31", RecurrenceUtil.next("2026-02-28", "monthly", anchorDay = 31)) // NOT the 28th
+        assertEquals("2026-04-30", RecurrenceUtil.next("2026-03-31", "monthly", anchorDay = 31))
+        assertEquals("2026-05-31", RecurrenceUtil.next("2026-04-30", "monthly", anchorDay = 31))
+    }
+
+    @Test
+    fun monthlyAnchor_day30_neverBecomes31() {
+        assertEquals("2026-02-28", RecurrenceUtil.next("2026-01-30", "monthly", anchorDay = 30))
+        assertEquals("2026-03-30", RecurrenceUtil.next("2026-02-28", "monthly", anchorDay = 30)) // 30, not 31
+    }
+
+    @Test
+    fun firstFutureOccurrence_monthlyAnchor_landsOnTheAnchoredDay() {
+        val now = LocalDateTime.of(2026, 4, 15, 12, 0)
+        // A 31st reminder from Jan 31, caught up to April: April has 30 days -> the 30th, not the 28th.
+        assertEquals("2026-04-30", RecurrenceUtil.firstFutureOccurrence("2026-01-31", "09:00", "monthly", now, anchorDay = 31))
+    }
+
+    @Test
+    fun dayOfMonth_extractsOrNull() {
+        assertEquals(31, RecurrenceUtil.dayOfMonth("2026-01-31"))
+        assertEquals(1, RecurrenceUtil.dayOfMonth("2026-06-01"))
+        assertNull(RecurrenceUtil.dayOfMonth(null))
+        assertNull(RecurrenceUtil.dayOfMonth("not-a-date"))
+    }
+
     // ---------------- firstFutureOccurrence (late-fire / reboot catch-up) ----------------
 
     private val now = LocalDateTime.of(2026, 6, 15, 12, 0) // Mon 2026-06-15, noon

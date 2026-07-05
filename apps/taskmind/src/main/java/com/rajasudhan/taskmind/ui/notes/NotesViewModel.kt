@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.source.AlarmScheduler
+import com.rajasudhan.taskmind.data.source.RecurrenceUtil
 import com.rajasudhan.taskmind.data.source.embedding.SemanticIndex
 import com.rajasudhan.taskmind.ui.common.isOverdue
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -122,6 +123,11 @@ class NotesViewModel @Inject constructor(
     fun reschedule(note: Note, newDueDate: String) {
         viewModelScope.launch {
             dao.updateNoteDueDate(note.id, newDueDate)
+            // Moving a monthly reminder's date re-anchors its intended day-of-month (same rule as the
+            // note-detail date change), so the recurrence follows the new day rather than drifting.
+            if (note.recurrence?.lowercase() == "monthly") {
+                dao.updateNoteRecurrenceAnchor(note.id, RecurrenceUtil.dayOfMonth(newDueDate))
+            }
             // schedule() advances a recurring reminder past a stale slot; keep the stored date in step.
             val armed = alarmScheduler.schedule(note.id, note.title, newDueDate, note.dueTime, note.recurrence)
             if (!armed.isNullOrBlank() && armed != newDueDate) dao.updateNoteDueDate(note.id, armed)

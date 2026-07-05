@@ -37,5 +37,10 @@ data class Note(
     // v11 (MIGRATION_10_11): set to the moment the counterparty got in touch on an open "waiting_on"
     // item — the note is then awaiting the user's one-tap confirmation of whether they actually
     // delivered. Nullable (null = not awaiting confirmation), so no @ColumnInfo default.
-    val pendingConfirmSince: Long? = null
+    val pendingConfirmSince: Long? = null,
+    // v12 (MIGRATION_11_12): the intended day-of-month (1–31) for a MONTHLY reminder, captured when the
+    // recurrence is set. Each occurrence is stepped from this anchor (clamped to the month's length)
+    // rather than from the previous — possibly already-clamped — date, so a "31st" reminder doesn't
+    // permanently drift down to the 28th after February. Null for non-monthly / undated notes.
+    val recurrenceAnchorDay: Int? = null
 )
