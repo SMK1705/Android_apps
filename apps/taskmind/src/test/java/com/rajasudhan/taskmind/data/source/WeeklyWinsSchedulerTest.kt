@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.DayOfWeek
 import java.time.LocalDateTime
+import java.time.ZoneId
 
 /** The day-of-week + hour math for the Sunday recap's first fire. */
 class WeeklyWinsSchedulerTest {
@@ -38,5 +39,14 @@ class WeeklyWinsSchedulerTest {
         val now = LocalDateTime.of(2026, 7, 5, 18, 0) // Sunday 18:00 sharp
         // Not strictly after → roll a full week (a 0ms delay would fire immediately).
         assertEquals(7 * oneDayMs, WeeklyWinsScheduler.initialDelayMillis(now, DayOfWeek.SUNDAY, 18))
+    }
+
+    @Test
+    fun dstFallBack_delayIsRealElapsed_notWallClock() {
+        // US DST ends Sunday 2026-11-01: at 02:00 the clock falls back to 01:00, so 01:00–01:59 repeat.
+        val ny = ZoneId.of("America/New_York")
+        val now = LocalDateTime.of(2026, 11, 1, 0, 30) // Sunday 00:30, before the fall-back
+        // Wall-clock says 00:30→04:00 = 3.5h, but the repeated hour makes it 4.5h of REAL time.
+        assertEquals((4 * 60 + 30) * 60 * 1000L, WeeklyWinsScheduler.initialDelayMillis(now, DayOfWeek.SUNDAY, 4, ny))
     }
 }

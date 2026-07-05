@@ -5,6 +5,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import java.time.Duration
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -44,12 +45,18 @@ class DailyBriefScheduler @Inject constructor(
 
         /**
          * Milliseconds from [now] until the next [hour]:[minute] — today if it's still ahead,
-         * otherwise tomorrow. Pure, so the day-boundary math is unit-testable.
+         * otherwise tomorrow. Pure, so the day-boundary math is unit-testable; [zone] is injectable
+         * for the same reason.
+         *
+         * The delay is the REAL elapsed time between the two wall-clock moments, resolved in [zone] —
+         * a naive `Duration.between(LocalDateTime, LocalDateTime)` counts wall-clock hours, so on a
+         * DST-transition day (a skipped or repeated hour between now and the target) it's an hour off
+         * and the brief fires early/late.
          */
-        fun initialDelayMillis(now: LocalDateTime, hour: Int, minute: Int): Long {
+        fun initialDelayMillis(now: LocalDateTime, hour: Int, minute: Int, zone: ZoneId = ZoneId.systemDefault()): Long {
             var next = now.toLocalDate().atTime(hour, minute)
             if (!next.isAfter(now)) next = next.plusDays(1)
-            return Duration.between(now, next).toMillis()
+            return Duration.between(now.atZone(zone).toInstant(), next.atZone(zone).toInstant()).toMillis()
         }
     }
 }
