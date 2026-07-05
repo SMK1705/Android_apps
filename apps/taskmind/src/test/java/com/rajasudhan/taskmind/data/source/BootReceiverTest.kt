@@ -103,6 +103,18 @@ class BootReceiverTest {
     }
 
     @Test
+    fun rearm_restartsTheNagLoopForAFiredWaitingOnNagNote() = runTest {
+        // A nag on a non-'reminder' (waiting_on) note used to never resume on reboot — issue #178.
+        val id = dao.insertNote(
+            aNote(type = "waiting_on", title = "Chase invoice", dueDate = "2026-06-01", dueTime = "09:00", nag = true, counterparty = "Acme")
+        ).toInt()
+
+        receiver().rearm(LocalDateTime.of(2026, 6, 20, 12, 0))
+
+        verify { alarms.snoozeReminder(id, "Chase invoice", AlarmReceiver.NAG_INTERVALS[0], 0) }
+    }
+
+    @Test
     fun rearm_doesNotRestartNagForAFutureNote_norACompletedOne() = runTest {
         dao.insertNote(aNote(type = "reminder", title = "Future", dueDate = "2026-07-01", dueTime = "09:00", nag = true))
         dao.insertNote(aNote(type = "reminder", title = "Done", dueDate = "2026-06-01", dueTime = "09:00", nag = true, completed = true))
