@@ -11,6 +11,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -123,6 +124,38 @@ class BootReceiverTest {
 
         // Future note re-arms normally (no nag restart); completed note does nothing.
         verify(exactly = 0) { alarms.snoozeReminder(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun rearm_forAClockChange_reArmsAlarmsButDoesNotResurfaceOrRepost() = runTest {
+        // A timezone/clock change (reNotify = false): the wall-clock reminder alarm must be re-armed
+        // for the new zone, but the snooze-resurface and review-notification re-post (reboot-only state
+        // restore) must be skipped — they'd be pointless and noisy on every clock change.
+        dao.insertNote(aNote(type = "reminder", title = "Standup", dueDate = "2026-07-01", dueTime = "09:00"))
+        dao.insertSuggestion(
+            aSuggestion(extractedTitle = "Later", status = "pending", snoozedUntil = System.currentTimeMillis() + 3_600_000)
+        )
+
+        receiver().rearm(LocalDateTime.of(2026, 6, 1, 0, 0), reNotify = false)
+
+        verify { alarms.schedule(any(), "Standup", "2026-07-01", "09:00", null) } // reminder re-armed
+        verify(exactly = 0) { notifier.scheduleResurface(any(), any()) }           // no snooze resurface
+        coVerify(exactly = 0) { notifier.notifyPending() }                          // no notification re-post
+    }
+
+    @Test
+    fun rearm_forAClockChange_reArmsRecurring_butDoesNotPersistAnAdvancedDate() = runTest {
+        // A recurring reminder whose stored slot is behind `now`: on a clock change the alarm is re-armed,
+        // but the stored date must NOT advance — a user's temporary clock set-forward-then-back would
+        // otherwise stick a wrong date and skip an occurrence (a reboot DOES persist, tested elsewhere).
+        val id = dao.insertNote(
+            aNote(type = "reminder", title = "Rent", dueDate = "2026-06-01", dueTime = "09:00", recurrence = "weekly")
+        ).toInt()
+
+        receiver().rearm(LocalDateTime.of(2026, 6, 20, 12, 0), reNotify = false)
+
+        verify { alarms.schedule(id, "Rent", any(), "09:00", "weekly") } // alarm still re-armed
+        assertEquals("2026-06-01", dao.getNoteByIdNow(id)!!.dueDate)     // stored date NOT advanced/persisted
     }
 
     @Test

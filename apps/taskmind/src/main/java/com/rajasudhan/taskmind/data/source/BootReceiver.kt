@@ -31,13 +31,16 @@ class BootReceiver : BroadcastReceiver() {
     @Inject lateinit var notifier: SuggestionNotifier
 
     override fun onReceive(context: Context, intent: Intent) {
-        // Only react to a real boot broadcast (BOOT_COMPLETED, or an OEM quick-boot variant).
-        if (intent.action !in BOOT_ACTIONS) return
+        val reNotify = when (intent.action) {
+            in BOOT_ACTIONS -> true    // reboot / app update: alarms AND state were cleared — restore all
+            in CLOCK_ACTIONS -> false  // clock / timezone change: only re-arm the wall-clock alarms
+            else -> return
+        }
 
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                rearm()
+                rearm(reNotify = reNotify)
             } finally {
                 pending.finish()
             }
@@ -47,8 +50,13 @@ class BootReceiver : BroadcastReceiver() {
     /**
      * Re-arms every active timed reminder. Extracted from [onReceive] so it's unit-testable without
      * the broadcast/goAsync plumbing; [now] is injectable to make the recurrence advance deterministic.
+     *
+     * [reNotify] = true (a reboot / app update) also restores state the restart cleared — the pending
+     * snooze-resurface alarms and the review notification. On a clock / timezone change ([reNotify] =
+     * false) that state is intact (a snooze fires at an absolute instant, unaffected by the change, and
+     * the notification was never cleared), so only the wall-clock reminder alarms above need re-arming.
      */
-    internal suspend fun rearm(now: LocalDateTime = LocalDateTime.now()) {
+    internal suspend fun rearm(now: LocalDateTime = LocalDateTime.now(), reNotify: Boolean = true) {
         for (note in dao.getReminderNotes()) {
             val date = note.dueDate ?: continue
             val time = note.dueTime ?: continue
@@ -58,7 +66,10 @@ class BootReceiver : BroadcastReceiver() {
             if (!note.recurrence.isNullOrBlank()) {
                 // Recurring: land on the next slot that's actually in the future.
                 val next = RecurrenceUtil.firstFutureOccurrence(date, time, note.recurrence, now) ?: continue
-                if (next != date) dao.updateNoteDueDate(note.id, next)
+                // Persist the advance only on a reboot (genuine elapsed time). On a clock/timezone
+                // change `now` is user-controlled, so a temporary set-forward-then-back would otherwise
+                // corrupt the stored date and skip an occurrence — re-arm the alarm but leave the date.
+                if (reNotify && next != date) dao.updateNoteDueDate(note.id, next)
                 alarmScheduler.schedule(note.id, note.title, next, time, note.recurrence)
             } else {
                 // One-shot: re-arm as stored. The scheduler drops it if it's already past
@@ -76,13 +87,17 @@ class BootReceiver : BroadcastReceiver() {
             val time = note.dueTime ?: continue
             if (RecurrenceUtil.parseTime(time) == null) continue
             // schedule() advances a recurring follow-up past its stale slot; persist the armed date so
-            // the stored date matches (a recurring waiting-on nudge was previously dropped on reboot).
+            // the stored date matches — but only on a reboot, not a clock change (see the reminder loop).
             val armed = alarmScheduler.schedule(note.id, note.title, date, time, note.recurrence)
-            if (!armed.isNullOrBlank() && armed != date) dao.updateNoteDueDate(note.id, armed)
+            if (reNotify && !armed.isNullOrBlank() && armed != date) dao.updateNoteDueDate(note.id, armed)
             // A waiting-on nag note gets its nag chain restarted too — the restart was previously only
             // in the reminder loop, so a nag on a non-'reminder' note silently died on reboot.
             restartNagIfFired(note, date, time, now)
         }
+
+        // A clock/timezone change clears none of the below, so stop here — the wall-clock alarm
+        // re-arm above is all it needs.
+        if (!reNotify) return
 
         // Snoozed suggestions: their resurface alarms died with the reboot too. Re-arm the ones
         // still in the future, then re-post the review notification — that both restores the
@@ -118,6 +133,16 @@ class BootReceiver : BroadcastReceiver() {
             // App update clears all pending exact alarms too (only this app's process is notified), so
             // re-arm on it — otherwise every reminder stays silent until the next actual reboot.
             Intent.ACTION_MY_PACKAGE_REPLACED
+        )
+
+        // Clock / timezone changes DON'T clear alarms, but an RTC (wall-clock) reminder set for "9am"
+        // then fires at the old zone's 9am instant — the wrong wall-clock time in the new zone. Re-arm
+        // each so its epoch is recomputed for the current zone. These implicit broadcasts are exempt
+        // from the API 26+ manifest-registration limit (Android's broadcast-exceptions list covers them
+        // specifically for clock/alarm apps).
+        val CLOCK_ACTIONS = setOf(
+            Intent.ACTION_TIMEZONE_CHANGED,
+            Intent.ACTION_TIME_CHANGED // "android.intent.action.TIME_SET"
         )
     }
 }

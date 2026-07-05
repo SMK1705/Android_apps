@@ -76,8 +76,9 @@
 
         <receiver android:name=".data.source.AlarmReceiver" android:exported="false" />
 
-        <!-- Re-arms reminder alarms after a device reboot OR an app update (both clear pending exact
-             alarms; without the update trigger, reminders stay silent until the next real reboot). -->
+        <!-- Re-arms reminder alarms after a reboot / app update (both clear pending exact alarms), and
+             re-arms them for the new wall-clock time on a timezone / clock change (TIMEZONE_CHANGED /
+             TIME_SET are exempt from the API 26+ manifest-broadcast limit). -->
         <receiver
             android:name=".data.source.BootReceiver"
             android:enabled="true"
@@ -87,6 +88,8 @@
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
             </intent-filter>
         </receiver>
 
