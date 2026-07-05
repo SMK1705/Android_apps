@@ -6,6 +6,7 @@ import androidx.work.WorkManager
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -48,14 +49,18 @@ class WeeklyWinsScheduler @Inject constructor(
         /**
          * Milliseconds from [now] until the next [day] at [hour]:00 — later today if today is [day]
          * and the hour is still ahead, otherwise the next matching weekday. Pure, so the day-of-week
-         * math is unit-testable.
+         * math is unit-testable; [zone] is injectable for the same reason.
+         *
+         * The delay is the REAL elapsed time between the two wall-clock moments, resolved in [zone], so
+         * a DST transition inside the week (a skipped or repeated hour) doesn't push the recap an hour
+         * off — a naive `Duration.between(LocalDateTime, LocalDateTime)` counts wall-clock hours only.
          */
-        fun initialDelayMillis(now: LocalDateTime, day: DayOfWeek, hour: Int): Long {
+        fun initialDelayMillis(now: LocalDateTime, day: DayOfWeek, hour: Int, zone: ZoneId = ZoneId.systemDefault()): Long {
             var next = now.toLocalDate().atTime(hour, 0)
             while (next.dayOfWeek != day || !next.isAfter(now)) {
                 next = next.plusDays(1)
             }
-            return Duration.between(now, next).toMillis()
+            return Duration.between(now.atZone(zone).toInstant(), next.atZone(zone).toInstant()).toMillis()
         }
     }
 }
