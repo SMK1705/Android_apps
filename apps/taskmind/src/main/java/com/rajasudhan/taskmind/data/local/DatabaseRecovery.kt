@@ -36,4 +36,26 @@ object DatabaseRecovery {
             if (!moved) runCatching { src.delete() }
         }
     }
+
+    /**
+     * True if a prior [quarantine] left `.corrupt-*` files aside for [dbFile] — i.e. the database was
+     * reset under the user at least once. Drives the "your data was reset — restore from a snapshot?"
+     * affordance; the marker persists until the next incident or an explicit [clearQuarantine].
+     */
+    fun hasQuarantine(dbFile: File): Boolean {
+        val dir = dbFile.parentFile ?: return false
+        val prefix = dbFile.name + ".corrupt-"
+        return dir.listFiles { f -> f.name.startsWith(prefix) }?.isNotEmpty() == true
+    }
+
+    /**
+     * Deletes the quarantined `.corrupt-*` files for [dbFile]. Called once the user has recovered
+     * another way (e.g. restored from a JSON snapshot) so the reset nudge clears and the (unopenable)
+     * bytes stop taking up space.
+     */
+    fun clearQuarantine(dbFile: File) {
+        val dir = dbFile.parentFile ?: return
+        val prefix = dbFile.name + ".corrupt-"
+        dir.listFiles { f -> f.name.startsWith(prefix) }?.forEach { runCatching { it.delete() } }
+    }
 }

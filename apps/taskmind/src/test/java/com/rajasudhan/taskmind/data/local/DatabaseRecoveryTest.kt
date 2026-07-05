@@ -78,4 +78,17 @@ class DatabaseRecoveryTest {
         DatabaseRecovery.quarantine(db(), now = 4000L) // must not throw
         assertFalse(File(dir, "taskmind_db.corrupt-4000").exists())
     }
+
+    @Test
+    fun hasQuarantine_reflectsACorruptMarker_andClearRemovesIt() {
+        assertFalse(DatabaseRecovery.hasQuarantine(db())) // clean install: no reset ever happened
+
+        db().writeText("data")
+        DatabaseRecovery.quarantine(db(), now = 1000L)
+        assertTrue(DatabaseRecovery.hasQuarantine(db()))  // a reset left the marker for the restore nudge
+
+        DatabaseRecovery.clearQuarantine(db())
+        assertFalse(DatabaseRecovery.hasQuarantine(db())) // cleared once the user recovered another way
+        assertFalse(File(dir, "taskmind_db.corrupt-1000").exists())
+    }
 }
