@@ -42,5 +42,10 @@ data class Note(
     // recurrence is set. Each occurrence is stepped from this anchor (clamped to the month's length)
     // rather than from the previous — possibly already-clamped — date, so a "31st" reminder doesn't
     // permanently drift down to the 28th after February. Null for non-monthly / undated notes.
-    val recurrenceAnchorDay: Int? = null
+    val recurrenceAnchorDay: Int? = null,
+    // v13 (MIGRATION_12_13): true while a nag reminder's re-fire chain is active — i.e. it fired and the
+    // user hasn't completed/snoozed it or turned nag off. Persisted (independent of the recurrence date,
+    // which advances the moment a recurring reminder fires) so BootReceiver can resume "nag until done"
+    // after a reboot even for a recurring reminder. Off by default.
+    @ColumnInfo(defaultValue = "0") val nagFiring: Boolean = false
 )

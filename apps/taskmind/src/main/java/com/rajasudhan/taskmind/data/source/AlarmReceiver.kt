@@ -84,6 +84,9 @@ class AlarmReceiver : BroadcastReceiver() {
         // stops on its own: Done/complete/delete all cancel the pending re-fire (AlarmScheduler.cancel
         // covers the snooze/nag namespace), and the completed-note guard above eats any straggler.
         if (note != null && note.nag) {
+            // Mark the chain active so it can be resumed after a reboot (even for a recurring reminder,
+            // whose dueDate has just advanced above and so no longer reveals that it fired).
+            dao.setNagFiring(noteId, true)
             val interval = NAG_INTERVALS[nagCount.coerceIn(0, NAG_INTERVALS.size - 1)]
             alarmScheduler.snoozeReminder(noteId, title, interval, nagCount + 1)
         }

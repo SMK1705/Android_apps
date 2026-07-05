@@ -76,6 +76,9 @@ class ReminderActionReceiver : BroadcastReceiver() {
      */
     private suspend fun snooze(note: com.rajasudhan.taskmind.data.model.Note?, at: LocalDateTime) {
         if (note == null) return // deleted meanwhile; nothing to snooze
+        // The user deferred this fire, so end the current nag chain — it must not resume on reboot
+        // before the snooze lands; the next fire re-arms it.
+        if (note.nagFiring) dao.setNagFiring(note.id, false)
         if (note.recurrence.isNullOrBlank()) {
             val dueDate = at.toLocalDate().toString()
             val dueTime = "%02d:%02d".format(at.hour, at.minute)

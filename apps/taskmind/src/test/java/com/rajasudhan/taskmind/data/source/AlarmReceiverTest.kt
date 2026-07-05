@@ -125,6 +125,17 @@ class AlarmReceiverTest {
     }
 
     @Test
+    fun nagNote_marksNagFiring_soTheChainCanResumeAfterReboot() = runTest {
+        val id = dao.insertNote(
+            aNote(type = "reminder", title = "Pills", dueDate = "2026-07-01", dueTime = "09:00", nag = true)
+        ).toInt()
+
+        receiver().handle(context, id, "Pills", null, "2026-07-01", "09:00", nagCount = 0)
+
+        assertTrue(dao.getNoteByIdNow(id)!!.nagFiring) // BootReceiver reads this to resume the nag after a reboot
+    }
+
+    @Test
     fun nonNagNote_neverReFires() = runTest {
         val id = dao.insertNote(
             aNote(type = "reminder", title = "Once", dueDate = "2026-07-01", dueTime = "09:00")

@@ -10,7 +10,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 import java.time.LocalDateTime
 import javax.inject.Inject
 
@@ -76,8 +75,9 @@ class BootReceiver : BroadcastReceiver() {
                 // One-shot: re-arm as stored. The scheduler drops it if it's already past
                 // (it fired, or was missed, while the device was off), which is correct.
                 alarmScheduler.schedule(note.id, note.title, date, time, null)
-                restartNagIfFired(note, date, time, now)
             }
+            // Resume the nag chain if it was mid-nag at shutdown — for one-shot AND recurring reminders.
+            restartNagIfFired(note)
         }
 
         // Waiting-on follow-up nudges are plain one-shot alarms too (scheduled by SuggestionApprover
@@ -93,7 +93,7 @@ class BootReceiver : BroadcastReceiver() {
             if (reNotify && !armed.isNullOrBlank() && armed != date) dao.updateNoteDueDate(note.id, armed)
             // A waiting-on nag note gets its nag chain restarted too — the restart was previously only
             // in the reminder loop, so a nag on a non-'reminder' note silently died on reboot.
-            restartNagIfFired(note, date, time, now)
+            restartNagIfFired(note)
         }
 
         // A clock/timezone change clears none of the below, so stop here — the wall-clock alarm
@@ -112,16 +112,14 @@ class BootReceiver : BroadcastReceiver() {
     }
 
     /**
-     * Restarts a nag note's re-fire chain from the top of the ladder if it had already fired but was
-     * never completed — the transient nag re-fire is a plain alarm that died with the reboot, and
-     * re-arming the main slot alone doesn't resume "nag until done". Driven off [Note.nag], not the
-     * note's type, so a waiting-on nag resumes too. Scoped to one-shot notes; a recurring nag can't be
-     * detected this way (its stored date is advanced when it fires) and is tracked separately.
+     * Resumes a nag note's re-fire chain if it was active when the device went down — the transient nag
+     * re-fire is a plain alarm that died with the reboot, and re-arming the main slot alone doesn't
+     * bring back "nag until done". Driven off the persisted [Note.nagFiring] flag (set on fire, cleared
+     * on complete / snooze / nag-off), so it works for a RECURRING reminder too — whose stored date has
+     * already advanced past the fired occurrence and so can't reveal that it fired.
      */
-    private fun restartNagIfFired(note: Note, date: String, time: String, now: LocalDateTime) {
-        if (!note.nag || note.completed || !note.recurrence.isNullOrBlank()) return
-        val slot = runCatching { LocalDateTime.of(LocalDate.parse(date), RecurrenceUtil.parseTime(time)) }.getOrNull()
-        if (slot != null && slot.isBefore(now)) {
+    private fun restartNagIfFired(note: Note) {
+        if (note.nag && !note.completed && note.nagFiring) {
             alarmScheduler.snoozeReminder(note.id, note.title, AlarmReceiver.NAG_INTERVALS[0], 0)
         }
     }

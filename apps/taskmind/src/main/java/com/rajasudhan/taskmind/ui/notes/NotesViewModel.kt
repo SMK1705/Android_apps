@@ -131,6 +131,9 @@ class NotesViewModel @Inject constructor(
             // schedule() advances a recurring reminder past a stale slot; keep the stored date in step.
             val armed = alarmScheduler.schedule(note.id, note.title, newDueDate, note.dueTime, note.recurrence)
             if (!armed.isNullOrBlank() && armed != newDueDate) dao.updateNoteDueDate(note.id, armed)
+            // Re-arming cancels any in-flight nag re-fire (schedule → cancelRefire); clear the now-stale
+            // flag so a reboot can't resurrect the dead chain (see NoteDetailViewModel.updateTitle).
+            dao.setNagFiring(note.id, false)
         }
     }
 

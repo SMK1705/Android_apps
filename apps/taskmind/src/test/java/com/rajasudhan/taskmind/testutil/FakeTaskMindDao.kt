@@ -63,7 +63,7 @@ class FakeTaskMindDao : TaskMindDao {
     }
 
     override suspend fun setNoteCompleted(id: Int, completed: Boolean, date: Long?) {
-        notes.update { list -> list.map { if (it.id == id) it.copy(completed = completed, completedDate = date) else it } }
+        notes.update { list -> list.map { if (it.id == id) it.copy(completed = completed, completedDate = date, nagFiring = if (completed) false else it.nagFiring) else it } }
     }
 
     override suspend fun updateNoteChecklist(id: Int, checklist: String?) {
@@ -87,7 +87,11 @@ class FakeTaskMindDao : TaskMindDao {
     }
 
     override suspend fun updateNoteNag(id: Int, nag: Boolean) {
-        notes.update { list -> list.map { if (it.id == id) it.copy(nag = nag) else it } }
+        notes.update { list -> list.map { if (it.id == id) it.copy(nag = nag, nagFiring = if (nag) it.nagFiring else false) else it } }
+    }
+
+    override suspend fun setNagFiring(id: Int, firing: Boolean) {
+        notes.update { list -> list.map { if (it.id == id) it.copy(nagFiring = firing) else it } }
     }
 
     override suspend fun setPendingConfirm(id: Int, since: Long?) {
