@@ -7,29 +7,28 @@ import android.content.SharedPreferences
 import android.net.Uri
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.delay
 import net.zetetic.database.sqlcipher.SQLiteDatabase
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
-import java.util.zip.ZipEntry
-import java.util.zip.ZipInputStream
-import java.util.zip.ZipOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Passphrase-encrypted backup & restore of the whole TaskMind database.
+ * Passphrase-encrypted backup & restore of the WHOLE TaskMind profile — the SQLCipher database, its
+ * key, every setting/secret in EncryptedSharedPreferences, and the source-state DataStore (#121).
  *
- * The on-device DB is already SQLCipher-encrypted with a random per-install key kept in
- * EncryptedSharedPreferences ([com.rajasudhan.taskmind.di.DatabaseModule], `db_key`). A backup must
- * therefore bundle BOTH the encrypted DB file AND that key, or it can never be opened again. To keep
- * the resulting file safe at rest — it travels off-device via the Storage Access Framework — the
- * whole bundle is itself encrypted with AES-256-GCM under a key derived from a user passphrase
- * (PBKDF2). Nothing readable leaves the device without the passphrase.
+ * The DB is SQLCipher-encrypted with a random per-install key kept in EncryptedSharedPreferences
+ * (`db_key`). A backup bundles the encrypted DB file AND that key, plus the settings/DataStore, and
+ * seals the whole bundle with AES-256-GCM under a key derived from a user passphrase (PBKDF2). Nothing
+ * readable leaves the device without the passphrase.
  *
- * File layout: ["TMBK1"][version:1][salt:16][iv:12][AES-GCM ciphertext of ZIP{db_key, taskmind_db}].
+ * Secrets never travel as raw Keystore-bound ciphertext (it's device-locked and undecryptable
+ * elsewhere): EncryptedSharedPreferences is snapshotted as decrypted typed JSON ([PrefsSnapshot]) and
+ * re-sealed under the passphrase, and the DataStore is snapshotted/restored THROUGH its own API so the
+ * live single-writer instance stays authoritative — never by copying its backing file, which a
+ * concurrent writer would clobber before the post-restore restart.
  */
 @Singleton
 class BackupManager @Inject constructor(
@@ -42,30 +41,31 @@ class BackupManager @Inject constructor(
         data class Failure(val message: String) : Result
     }
 
-    /** Writes an encrypted backup of the DB to [uri] (from ACTION_CREATE_DOCUMENT). */
-    fun backup(uri: Uri, passphrase: CharArray): Result {
+    /** Writes an encrypted backup of the whole profile to [uri] (from ACTION_CREATE_DOCUMENT). */
+    suspend fun backup(uri: Uri, passphrase: CharArray): Result {
         return try {
-            // Flush the WAL into the main file so a plain file copy is a complete snapshot.
-            runCatching {
-                database.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)").close()
-            }
+            // Fold the WAL into the main file so the single-file copy is a complete snapshot; a busy
+            // reader can leave TRUNCATE incomplete, so retry rather than silently back up stale data.
+            checkpointWal()
 
             val dbKey = encryptedPrefs.getString(DB_KEY_PREF, null)
                 ?: return Result.Failure("No database key found — nothing to back up yet.")
             val dbFile = context.getDatabasePath(DB_NAME)
             if (!dbFile.exists()) return Result.Failure("Database file not found.")
 
-            val bundle = ByteArrayOutputStream().use { bytes ->
-                ZipOutputStream(bytes).use { zip ->
-                    zip.putNextEntry(ZipEntry(ENTRY_KEY))
-                    zip.write(dbKey.toByteArray(Charsets.UTF_8))
-                    zip.closeEntry()
-                    zip.putNextEntry(ZipEntry(ENTRY_DB))
-                    dbFile.inputStream().use { it.copyTo(zip) }
-                    zip.closeEntry()
-                }
-                bytes.toByteArray()
-            }
+            // Settings/secrets live in Keystore-bound EncryptedSharedPreferences (undecryptable off this
+            // device), so snapshot the DECRYPTED values — minus the DB key, which has its own entry. The
+            // DataStore (source toggles + processed-id watermarks) is read through its API so dynamic
+            // per-account keys come along too; both snapshots ride inside the passphrase envelope.
+            val prefsSnapshot = PrefsSnapshot.encode(encryptedPrefs.all)
+            val dataStoreSnapshot = DataStoreSnapshot.encode(context.dataStore)
+
+            val bundle = BackupBundle.encode(
+                dbKey = dbKey.toByteArray(Charsets.UTF_8),
+                dbFile = dbFile,
+                prefs = prefsSnapshot,
+                datastore = dataStoreSnapshot,
+            )
 
             val envelope = BackupCrypto.seal(bundle, passphrase)
 
@@ -82,12 +82,13 @@ class BackupManager @Inject constructor(
     }
 
     /**
-     * Restores the DB from [uri]. On success the on-disk file is atomically replaced and the matching
-     * key stored; the caller must restart the process (see [scheduleRestartAndExit]) so Room reopens
-     * the restored file. A wrong passphrase or bad file returns Failure and leaves the live DB
-     * untouched. The live DB is intentionally NOT closed here — see the swap comment below.
+     * Restores the whole profile from [uri]. The DB is atomically swapped and its key promoted (a bad
+     * restore never corrupts the live install); the caller must then restart (see [scheduleRestartAndExit])
+     * so Room reopens the restored file. Settings and DataStore are replaced afterwards, best-effort — a
+     * failure there can't undo the committed DB restore, and is reported distinctly. The live DB is
+     * intentionally NOT closed here — see the swap comment below.
      */
-    fun restore(uri: Uri, passphrase: CharArray): Result {
+    suspend fun restore(uri: Uri, passphrase: CharArray): Result {
         return try {
             val envelope = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 ?: return Result.Failure("Couldn't open the backup file.")
@@ -98,22 +99,9 @@ class BackupManager @Inject constructor(
                 return Result.Failure(e.message ?: "Couldn't read the backup file.")
             }
 
-            var restoredKey: String? = null
-            var dbBytes: ByteArray? = null
-            ZipInputStream(ByteArrayInputStream(bundle)).use { zip ->
-                var entry: ZipEntry? = zip.nextEntry
-                while (entry != null) {
-                    // Path-traversal guard: accept only our two known basenames, ignore any path.
-                    when (entry.name.substringAfterLast('/')) {
-                        ENTRY_KEY -> restoredKey = zip.readBytes().toString(Charsets.UTF_8)
-                        ENTRY_DB -> dbBytes = zip.readBytes()
-                    }
-                    zip.closeEntry()
-                    entry = zip.nextEntry
-                }
-            }
-            val key = restoredKey
-            val data = dbBytes
+            val parts = BackupBundle.decode(bundle)
+            val key = parts.dbKey
+            val data = parts.db
             if (key.isNullOrBlank() || data == null) {
                 return Result.Failure("Backup is missing data — not restoring.")
             }
@@ -170,11 +158,66 @@ class BackupManager @Inject constructor(
                 staged.delete() // no-op once the move consumed it; cleans up on any failure path
             }
 
-            Result.Success("✓ Restore complete.")
+            // The DB is restored and its key promoted. Now replace settings + source state — only if the
+            // backup carries them (older backups won't). Best-effort: a failure here must not undo the
+            // committed DB restore, so each is guarded and its outcome tracked for an honest message.
+            // Evaluate BOTH independently (no short-circuit) so a prefs failure can't skip the DataStore.
+            val prefsOk = restoreSettings(parts.prefs)
+            val dataStoreOk = restoreDataStore(parts.datastore)
+            val settingsOk = prefsOk && dataStoreOk
+
+            Result.Success(
+                if (settingsOk) "✓ Restore complete."
+                else "✓ Notes restored, but some settings couldn't be restored."
+            )
         } catch (e: Exception) {
             Result.Failure("Restore failed: ${e.message ?: e::class.java.simpleName}")
         } finally {
             passphrase.fill('\u0000')
+        }
+    }
+
+    /**
+     * Replaces EncryptedSharedPreferences with the snapshot — a true REPLACE (clear first), so a foreign
+     * account/API key already on the target device can't survive, matching the UI's "replaces all data"
+     * promise. The just-promoted DB key is preserved across the clear (the snapshot excludes it). Returns
+     * false (not throwing) if the snapshot is unreadable, so the restore reports a partial success.
+     */
+    private fun restoreSettings(prefsBytes: ByteArray?): Boolean {
+        if (prefsBytes == null) return true // pre-#121 backup: nothing to restore, not a failure
+        return runCatching {
+            val dbKey = encryptedPrefs.getString(DB_KEY_PREF, null)
+            val editor = encryptedPrefs.edit().clear()
+            if (dbKey != null) editor.putString(DB_KEY_PREF, dbKey) // survive the clear
+            PrefsSnapshot.apply(editor, PrefsSnapshot.decode(prefsBytes))
+            editor.commit()
+        }.isSuccess
+    }
+
+    /**
+     * Replaces the source-state DataStore THROUGH its own API (clear + put), so the live single-writer
+     * instance is the source of truth and a concurrent scan/notification write in the restore→restart
+     * window can't clobber a raw-file swap. Takes effect immediately, no restart needed for this half.
+     */
+    private suspend fun restoreDataStore(datastoreBytes: ByteArray?): Boolean {
+        if (datastoreBytes == null) return true
+        return runCatching { DataStoreSnapshot.restore(context.dataStore, datastoreBytes) }.isSuccess
+    }
+
+    /**
+     * Runs `wal_checkpoint(TRUNCATE)` and inspects its `busy` result, retrying briefly if a concurrent
+     * reader keeps it busy — otherwise the WAL isn't fully folded into the main file and the single-file
+     * backup would silently miss recent commits.
+     */
+    private suspend fun checkpointWal() {
+        repeat(WAL_CHECKPOINT_TRIES) { attempt ->
+            val busy = runCatching {
+                database.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)").use { c ->
+                    if (c.moveToFirst()) c.getInt(0) else 0
+                }
+            }.getOrDefault(0)
+            if (busy == 0) return
+            if (attempt < WAL_CHECKPOINT_TRIES - 1) delay(WAL_CHECKPOINT_BACKOFF_MS)
         }
     }
 
@@ -214,6 +257,8 @@ class BackupManager @Inject constructor(
     companion object {
         private const val DB_NAME = "taskmind_db"
         private const val DB_KEY_PREF = "db_key"
+        private const val WAL_CHECKPOINT_TRIES = 4
+        private const val WAL_CHECKPOINT_BACKOFF_MS = 50L
 
         /**
          * Pref slot holding a restore's key during the swap→commit window, so an interrupted restore
@@ -221,7 +266,5 @@ class BackupManager @Inject constructor(
          * because the DB open path reads it to promote a pending key.
          */
         const val DB_KEY_PENDING = "db_key_pending"
-        private const val ENTRY_KEY = "db_key"
-        private const val ENTRY_DB = "taskmind_db"
     }
 }

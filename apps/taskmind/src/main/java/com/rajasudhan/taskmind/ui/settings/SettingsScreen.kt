@@ -91,6 +91,9 @@ fun SettingsScreen(
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri -> uri?.let { viewModel.exportNotesToUri(it) } }
+    val exportMarkdownLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/markdown")
+    ) { uri -> uri?.let { viewModel.exportNotesAsMarkdownToUri(it) } }
 
     // ---- Encrypted backup / restore plumbing ----
     // The passphrase is collected first, then carried across the SAF round-trip to the file callback.
@@ -446,6 +449,12 @@ fun SettingsScreen(
             }) {
                 Text("Export Notes (JSON)")
             }
+            OutlinedButton(onClick = {
+                AppLock.expectResult()
+                exportMarkdownLauncher.launch("taskmind-notes.md")
+            }) {
+                Text("Export Notes (Markdown)")
+            }
             exportStatus?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -554,9 +563,9 @@ fun SettingsScreen(
 
         SettingsSectionCard(accent = Color(0xFFAD1457), title = "Encrypted Backup & Restore") {
             Text(
-                "Back up everything — notes, suggestions, and the database key — into a single file " +
-                    "encrypted with a passphrase you choose. Nothing is readable without it. Restore " +
-                    "replaces all current data and restarts the app.",
+                "Back up everything — notes, suggestions, your settings, API keys, linked accounts, and " +
+                    "the database key — into a single file encrypted with a passphrase you choose. Nothing " +
+                    "is readable without it. Restore replaces all current data and restarts the app.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

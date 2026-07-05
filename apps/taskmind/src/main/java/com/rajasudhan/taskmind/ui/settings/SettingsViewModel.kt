@@ -322,6 +322,24 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Exports all notes as plain-text Markdown to [uri] — an open-format "exit ramp" (#121) that stays
+     * readable in any editor, even without TaskMind. Rendering is delegated to the pure [NotesMarkdown].
+     */
+    fun exportNotesAsMarkdownToUri(uri: Uri) {
+        viewModelScope.launch {
+            val count = withContext(Dispatchers.IO) {
+                runCatching {
+                    val notes = dao.getNotesList()
+                    val markdown = com.rajasudhan.taskmind.data.source.NotesMarkdown.render(notes)
+                    context.contentResolver.openOutputStream(uri)?.use { it.write(markdown.toByteArray()) }
+                    notes.size
+                }.getOrNull()
+            }
+            _exportStatus.value = if (count != null) "✓ Exported $count note(s) as Markdown." else "Export failed."
+        }
+    }
+
     // ---- Local auto-snapshot safety net (#161) ----
 
     /** A one-line description of the newest automatic snapshot, or null if none has been written yet. */
