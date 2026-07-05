@@ -53,6 +53,9 @@ interface TaskMindDao {
     @Query("UPDATE notes SET recurrence = :recurrence WHERE id = :id")
     suspend fun updateNoteRecurrence(id: Int, recurrence: String?)
 
+    @Query("UPDATE notes SET recurrenceAnchorDay = :anchor WHERE id = :id")
+    suspend fun updateNoteRecurrenceAnchor(id: Int, anchor: Int?)
+
     @Query("UPDATE notes SET priority = :priority WHERE id = :id")
     suspend fun updateNotePriority(id: Int, priority: String)
 

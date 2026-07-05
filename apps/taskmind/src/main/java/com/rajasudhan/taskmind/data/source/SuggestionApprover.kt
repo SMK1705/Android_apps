@@ -69,7 +69,10 @@ class SuggestionApprover @Inject constructor(
             recurrence = suggestion.recurrence,
             checklist = checklist,
             priority = suggestion.priority,
-            counterparty = suggestion.counterparty
+            counterparty = suggestion.counterparty,
+            // Anchor a monthly reminder to its day-of-month so stepping doesn't drift it to the 28th.
+            recurrenceAnchorDay = if (suggestion.recurrence?.lowercase() == "monthly")
+                RecurrenceUtil.dayOfMonth(suggestion.dueDate) else null
         )
         val noteId = dao.insertNote(note)
 

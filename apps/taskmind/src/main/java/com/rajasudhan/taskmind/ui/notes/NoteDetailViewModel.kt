@@ -7,6 +7,7 @@ import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.source.AlarmScheduler
 import com.rajasudhan.taskmind.data.source.GeofenceManager
+import com.rajasudhan.taskmind.data.source.RecurrenceUtil
 import com.rajasudhan.taskmind.data.source.SettingsManager
 import com.rajasudhan.taskmind.data.source.understanding.LlmProvider
 import com.rajasudhan.taskmind.data.source.understanding.MagicBreakdown
@@ -156,6 +157,10 @@ class NoteDetailViewModel @Inject constructor(
         val value = option.takeIf { it != "None" && it.isNotBlank() }
         viewModelScope.launch {
             dao.updateNoteRecurrence(current.id, value)
+            // Capture the intended day-of-month for a monthly reminder (clear it otherwise), so stepping
+            // keeps the day instead of drifting to the 28th after February.
+            val anchor = if (value?.lowercase() == "monthly") RecurrenceUtil.dayOfMonth(current.dueDate) else null
+            dao.updateNoteRecurrenceAnchor(current.id, anchor)
             // schedule() advances a recurring reminder past a stale slot; persist the armed date so the
             // stored dueDate matches when the reminder will actually next fire.
             val armed = alarmScheduler.schedule(current.id, current.title, current.dueDate, current.dueTime, value)
@@ -170,6 +175,10 @@ class NoteDetailViewModel @Inject constructor(
             val type = if (dueTime != null) "reminder" else current.type
             dao.updateNote(current.copy(dueDate = dueDate, dueTime = dueTime, type = type))
             if (dueTime != null) {
+                // A monthly reminder's intended day-of-month moves with the new date — re-anchor it.
+                if (current.recurrence?.lowercase() == "monthly") {
+                    dao.updateNoteRecurrenceAnchor(current.id, RecurrenceUtil.dayOfMonth(dueDate))
+                }
                 val armed = alarmScheduler.schedule(current.id, current.title, dueDate, dueTime, current.recurrence)
                 if (!armed.isNullOrBlank() && armed != dueDate) dao.updateNoteDueDate(current.id, armed)
             } else {

@@ -49,6 +49,17 @@ class NotesViewModelTest {
     }
 
     @Test
+    fun reschedule_reAnchorsAMonthlyReminderToTheNewDate() = runTest {
+        val id = dao.insertNote(
+            aNote(title = "Rent", type = "reminder", dueDate = "2026-01-31", dueTime = "09:00", recurrence = "monthly")
+        ).toInt()
+
+        vm.reschedule(dao.getNoteByIdNow(id)!!, "2026-02-05")
+
+        assertEquals(5, dao.getNoteByIdNow(id)!!.recurrenceAnchorDay) // anchor follows the new day
+    }
+
+    @Test
     fun kindFilter_keepsOnlyThatTypeAmongActive() = runTest {
         seed()
         vm.setKindFilter("todo")

@@ -16,12 +16,14 @@ import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_7
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_8_9
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_9_10
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_10_11
+import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_11_12
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -90,14 +92,14 @@ class MigrationTest {
     }
 
     @Test
-    fun migrate1To11_preservesData_andRoomValidatesSchema() = runTest {
+    fun migrate1To12_preservesData_andRoomValidatesSchema() = runTest {
         createV1Database()
 
         val db = Room.databaseBuilder(context, TaskMindDatabase::class.java, testDb)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
             .allowMainThreadQueries()
             .build()
-        // Opening runs the 1→11 chain and validates the resulting schema against the current entities.
+        // Opening runs the 1→12 chain and validates the resulting schema against the current entities.
         db.openHelper.writableDatabase
 
         val dao = db.taskMindDao()
@@ -112,6 +114,7 @@ class MigrationTest {
         assertFalse(notes[0].nag)            // added in v8 with DEFAULT 0
         assertNull(notes[0].counterparty)    // added in v9, nullable
         assertNull(notes[0].pendingConfirmSince) // added in v11, nullable
+        assertNull(notes[0].recurrenceAnchorDay) // added in v12, nullable (the note isn't monthly)
 
         val sug = dao.getSuggestionById(1)
         assertNotNull(sug)
@@ -127,5 +130,36 @@ class MigrationTest {
         assertEquals(0, dao.getAllEmbeddings().size)
 
         db.close()
+    }
+
+    @Test
+    fun migration11To12_addsAnchorColumn_andBackfillsMonthlyRemindersFromTheirDay() {
+        // Seed a minimal notes table (the columns the backfill reads) at "v11", then run the REAL
+        // MIGRATION_11_12: it must add recurrenceAnchorDay and backfill it from the day-of-month for
+        // monthly-with-a-date rows only.
+        context.deleteDatabase(testDb)
+        val config = SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name(testDb)
+            .callback(object : SupportSQLiteOpenHelper.Callback(11) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    db.execSQL("CREATE TABLE notes (id INTEGER PRIMARY KEY, dueDate TEXT, recurrence TEXT)")
+                    db.execSQL("INSERT INTO notes (id, dueDate, recurrence) VALUES (1, '2026-01-31', 'monthly')")
+                    db.execSQL("INSERT INTO notes (id, dueDate, recurrence) VALUES (2, '2026-06-15', 'daily')")
+                    db.execSQL("INSERT INTO notes (id, dueDate, recurrence) VALUES (3, NULL, 'monthly')")
+                }
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+            })
+            .build()
+        val helper = FrameworkSQLiteOpenHelperFactory().create(config)
+        val db = helper.writableDatabase
+
+        MIGRATION_11_12.migrate(db)
+
+        db.query("SELECT id, recurrenceAnchorDay FROM notes ORDER BY id").use { c ->
+            c.moveToNext(); assertEquals(1, c.getInt(0)); assertEquals(31, c.getInt(1))  // monthly Jan 31 -> 31
+            c.moveToNext(); assertEquals(2, c.getInt(0)); assertTrue(c.isNull(1))         // daily -> null
+            c.moveToNext(); assertEquals(3, c.getInt(0)); assertTrue(c.isNull(1))         // monthly, no date -> null
+        }
+        helper.close()
     }
 }

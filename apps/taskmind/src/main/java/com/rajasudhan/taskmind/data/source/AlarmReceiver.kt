@@ -71,8 +71,9 @@ class AlarmReceiver : BroadcastReceiver() {
         // actually in the future — otherwise a late delivery (device was asleep/off) would compute a
         // slot already in the past, which the scheduler drops, silently breaking the recurrence forever.
         if (noteId >= 0 && !recurrence.isNullOrBlank() && dueDate != null) {
-            val firstNext = RecurrenceUtil.next(dueDate, recurrence) ?: return
-            val next = RecurrenceUtil.firstFutureOccurrence(firstNext, dueTime, recurrence, now)
+            val anchor = note?.recurrenceAnchorDay
+            val firstNext = RecurrenceUtil.next(dueDate, recurrence, anchor) ?: return
+            val next = RecurrenceUtil.firstFutureOccurrence(firstNext, dueTime, recurrence, now, anchor)
                 ?: firstNext
             dao.updateNoteDueDate(noteId, next)
             alarmScheduler.schedule(noteId, title, next, dueTime, recurrence)
