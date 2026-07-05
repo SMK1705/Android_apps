@@ -195,6 +195,47 @@ class NoteDetailViewModelTest {
         verify(exactly = 0) { alarms.cancel(any()) }
     }
 
+    // A nag reminder that was mid-chain (nagFiring = true) is rescheduled/renamed/repeat-changed. Each
+    // path re-arms via schedule() (or cancel()), which cancels the live nag re-fire — so the persisted
+    // nagFiring flag is now stale and must be cleared, or BootReceiver would resurrect the dead chain on
+    // the next reboot, firing a nag the user never asked to keep. #180 follow-up.
+    @Test
+    fun updateSchedule_clearsAStaleNagFiringFlag() = runTest {
+        val (vm, id) = vmFor(aNote(title = "Pills", type = "reminder", dueDate = "2026-07-01", dueTime = "09:00", nag = true, nagFiring = true))
+
+        vm.updateSchedule("2026-07-02", "15:00")
+
+        assertFalse(dao.getNoteByIdNow(id)!!.nagFiring)
+    }
+
+    @Test
+    fun updateSchedule_clearingTheTime_alsoClearsAStaleNagFiringFlag() = runTest {
+        // Removing the time cancels the alarm (and its re-fire) outright — the flag must clear here too.
+        val (vm, id) = vmFor(aNote(title = "Pills", type = "reminder", dueDate = "2026-07-01", dueTime = "09:00", nag = true, nagFiring = true))
+
+        vm.updateSchedule("2026-07-01", null)
+
+        assertFalse(dao.getNoteByIdNow(id)!!.nagFiring)
+    }
+
+    @Test
+    fun updateRecurrence_clearsAStaleNagFiringFlag() = runTest {
+        val (vm, id) = vmFor(aNote(title = "Pills", type = "reminder", dueDate = "2026-07-01", dueTime = "09:00", nag = true, nagFiring = true))
+
+        vm.updateRecurrence("weekly")
+
+        assertFalse(dao.getNoteByIdNow(id)!!.nagFiring)
+    }
+
+    @Test
+    fun updateTitle_clearsAStaleNagFiringFlag_forATimedReminder() = runTest {
+        val (vm, id) = vmFor(aNote(title = "Old", type = "reminder", dueDate = "2026-07-01", dueTime = "09:00", nag = true, nagFiring = true))
+
+        vm.updateTitle("New")
+
+        assertFalse(dao.getNoteByIdNow(id)!!.nagFiring)
+    }
+
     @Test
     fun delete_tearsDownAlarmAndGeofence_thenRemovesNote_andCallsBack() = runTest {
         val (vm, id) = vmFor(aNote(title = "Gone", type = "reminder", dueDate = "2026-07-01", dueTime = "09:00"))

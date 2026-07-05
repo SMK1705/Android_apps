@@ -41,7 +41,8 @@ interface TaskMindDao {
     @Query("SELECT * FROM notes WHERE title LIKE :q OR summary LIKE :q OR body LIKE :q ORDER BY createdDate DESC")
     fun searchNotes(q: String): Flow<List<Note>>
 
-    @Query("UPDATE notes SET completed = :completed, completedDate = :date WHERE id = :id")
+    // Completing a note also ends any active nag chain (nagFiring cleared), so it can't resume on reboot.
+    @Query("UPDATE notes SET completed = :completed, completedDate = :date, nagFiring = CASE WHEN :completed THEN 0 ELSE nagFiring END WHERE id = :id")
     suspend fun setNoteCompleted(id: Int, completed: Boolean, date: Long?)
 
     @Query("UPDATE notes SET checklist = :checklist WHERE id = :id")
@@ -59,8 +60,14 @@ interface TaskMindDao {
     @Query("UPDATE notes SET priority = :priority WHERE id = :id")
     suspend fun updateNotePriority(id: Int, priority: String)
 
-    @Query("UPDATE notes SET nag = :nag WHERE id = :id")
+    // Turning nag off also ends any active nag chain.
+    @Query("UPDATE notes SET nag = :nag, nagFiring = CASE WHEN :nag THEN nagFiring ELSE 0 END WHERE id = :id")
     suspend fun updateNoteNag(id: Int, nag: Boolean)
+
+    /** Marks/clears whether a nag reminder's re-fire chain is currently active (set on fire, cleared on
+     *  complete / snooze / nag-off / re-arm), so BootReceiver can resume it after a reboot. */
+    @Query("UPDATE notes SET nagFiring = :firing WHERE id = :id")
+    suspend fun setNagFiring(id: Int, firing: Boolean)
 
     /**
      * Flags/clears a "waiting_on" note as awaiting the user's delivery confirmation. Set to the

@@ -92,10 +92,10 @@ class BootReceiverTest {
     }
 
     @Test
-    fun rearm_restartsTheNagLoopForAFiredButUncompletedNagNote() = runTest {
-        // A past-due, uncompleted nag note: its transient re-fire died with the reboot.
+    fun rearm_restartsTheNagLoopForAFiringNagNote() = runTest {
+        // A nag note whose chain was active (nagFiring) when the device went down: resume it.
         val id = dao.insertNote(
-            aNote(type = "reminder", title = "Pills", dueDate = "2026-06-01", dueTime = "09:00", nag = true)
+            aNote(type = "reminder", title = "Pills", dueDate = "2026-06-01", dueTime = "09:00", nag = true, nagFiring = true)
         ).toInt()
 
         receiver().rearm(LocalDateTime.of(2026, 6, 20, 12, 0))
@@ -104,10 +104,25 @@ class BootReceiverTest {
     }
 
     @Test
-    fun rearm_restartsTheNagLoopForAFiredWaitingOnNagNote() = runTest {
+    fun rearm_restartsTheNagLoopForAFiringRecurringNagNote() = runTest {
+        // #180: a RECURRING nag note's date advances the moment it fires, so the old "slot is past"
+        // heuristic never matched and its nag chain died on reboot. The nagFiring flag fixes it.
+        val id = dao.insertNote(
+            aNote(type = "reminder", title = "Take pills", dueDate = "2026-06-21", dueTime = "09:00",
+                recurrence = "daily", nag = true, nagFiring = true) // date already advanced to the future
+        ).toInt()
+
+        receiver().rearm(LocalDateTime.of(2026, 6, 20, 12, 0))
+
+        verify { alarms.snoozeReminder(id, "Take pills", AlarmReceiver.NAG_INTERVALS[0], 0) }
+    }
+
+    @Test
+    fun rearm_restartsTheNagLoopForAFiringWaitingOnNagNote() = runTest {
         // A nag on a non-'reminder' (waiting_on) note used to never resume on reboot — issue #178.
         val id = dao.insertNote(
-            aNote(type = "waiting_on", title = "Chase invoice", dueDate = "2026-06-01", dueTime = "09:00", nag = true, counterparty = "Acme")
+            aNote(type = "waiting_on", title = "Chase invoice", dueDate = "2026-06-01", dueTime = "09:00",
+                nag = true, nagFiring = true, counterparty = "Acme")
         ).toInt()
 
         receiver().rearm(LocalDateTime.of(2026, 6, 20, 12, 0))
@@ -116,13 +131,13 @@ class BootReceiverTest {
     }
 
     @Test
-    fun rearm_doesNotRestartNagForAFutureNote_norACompletedOne() = runTest {
-        dao.insertNote(aNote(type = "reminder", title = "Future", dueDate = "2026-07-01", dueTime = "09:00", nag = true))
-        dao.insertNote(aNote(type = "reminder", title = "Done", dueDate = "2026-06-01", dueTime = "09:00", nag = true, completed = true))
+    fun rearm_doesNotRestartNag_whenNotFiring_orCompleted_orNagOff() = runTest {
+        dao.insertNote(aNote(type = "reminder", title = "NotFiring", dueDate = "2026-06-01", dueTime = "09:00", nag = true, nagFiring = false))
+        dao.insertNote(aNote(type = "reminder", title = "Done", dueDate = "2026-06-01", dueTime = "09:00", nag = true, nagFiring = true, completed = true))
+        dao.insertNote(aNote(type = "reminder", title = "NagOff", dueDate = "2026-06-01", dueTime = "09:00", nag = false, nagFiring = true))
 
         receiver().rearm(LocalDateTime.of(2026, 6, 20, 12, 0))
 
-        // Future note re-arms normally (no nag restart); completed note does nothing.
         verify(exactly = 0) { alarms.snoozeReminder(any(), any(), any(), any()) }
     }
 

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -57,6 +58,19 @@ class NotesViewModelTest {
         vm.reschedule(dao.getNoteByIdNow(id)!!, "2026-02-05")
 
         assertEquals(5, dao.getNoteByIdNow(id)!!.recurrenceAnchorDay) // anchor follows the new day
+    }
+
+    @Test
+    fun reschedule_clearsAStaleNagFiringFlag_soADeferredNagCantResurrectOnReboot() = runTest {
+        // Bumping a mid-chain nag reminder re-arms via schedule() (cancels the live re-fire); the persisted
+        // nagFiring flag is now stale and must clear, or a reboot would resurrect the dead nag. #180.
+        val id = dao.insertNote(
+            aNote(title = "Pills", type = "reminder", dueDate = "2026-07-01", dueTime = "09:00", nag = true, nagFiring = true)
+        ).toInt()
+
+        vm.reschedule(dao.getNoteByIdNow(id)!!, "2026-07-05")
+
+        assertFalse(dao.getNoteByIdNow(id)!!.nagFiring)
     }
 
     @Test

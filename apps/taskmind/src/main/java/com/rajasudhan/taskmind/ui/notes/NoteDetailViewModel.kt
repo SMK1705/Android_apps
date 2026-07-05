@@ -120,6 +120,10 @@ class NoteDetailViewModel @Inject constructor(
             dao.updateNote(current.copy(title = title))
             if (current.type == "reminder" && current.dueTime != null) {
                 alarmScheduler.schedule(current.id, title, current.dueDate, current.dueTime, current.recurrence)
+                // Re-arming cancels any in-flight nag re-fire (schedule → cancelRefire), so the chain is
+                // now dead — clear the persisted flag or a reboot would resurrect it. Unconditional: the
+                // loaded snapshot may predate a fire that set nagFiring, so a guard could miss it.
+                dao.setNagFiring(current.id, false)
             }
         }
     }
@@ -165,6 +169,10 @@ class NoteDetailViewModel @Inject constructor(
             // stored dueDate matches when the reminder will actually next fire.
             val armed = alarmScheduler.schedule(current.id, current.title, current.dueDate, current.dueTime, value)
             if (!armed.isNullOrBlank() && armed != current.dueDate) dao.updateNoteDueDate(current.id, armed)
+            // Changing the schedule cancels any in-flight nag re-fire (schedule → cancelRefire); clear the
+            // now-stale flag so a reboot can't resurrect the dead chain (see updateTitle for why it's
+            // unconditional rather than guarded on the loaded snapshot).
+            dao.setNagFiring(current.id, false)
         }
     }
 
@@ -173,7 +181,9 @@ class NoteDetailViewModel @Inject constructor(
         val current = note.value ?: return
         viewModelScope.launch {
             val type = if (dueTime != null) "reminder" else current.type
-            dao.updateNote(current.copy(dueDate = dueDate, dueTime = dueTime, type = type))
+            // Both branches below tear down any in-flight nag re-fire (schedule/cancel → cancelRefire), so
+            // clear nagFiring in the same write — otherwise a reboot resurrects the now-dead chain.
+            dao.updateNote(current.copy(dueDate = dueDate, dueTime = dueTime, type = type, nagFiring = false))
             if (dueTime != null) {
                 // A monthly reminder's intended day-of-month moves with the new date — re-anchor it.
                 if (current.recurrence?.lowercase() == "monthly") {

@@ -11,7 +11,7 @@ import com.rajasudhan.taskmind.data.model.Suggestion
 
 @Database(
     entities = [Note::class, Suggestion::class, RejectedPattern::class, NoteEmbedding::class],
-    version = 12,
+    version = 13,
     exportSchema = true
 )
 abstract class TaskMindDatabase : RoomDatabase() {
@@ -137,6 +137,18 @@ abstract class TaskMindDatabase : RoomDatabase() {
                     "UPDATE notes SET recurrenceAnchorDay = CAST(substr(dueDate, 9, 2) AS INTEGER) " +
                         "WHERE recurrence = 'monthly' AND dueDate IS NOT NULL AND length(dueDate) = 10"
                 )
+            }
+        }
+
+        /**
+         * v13 adds a `nagFiring` flag to notes — whether a nag reminder's re-fire chain is currently
+         * active — so "nag until done" resumes after a reboot even for a recurring reminder (whose date
+         * advances on fire, hiding the fact that it fired). Existing rows default off (NOT NULL DEFAULT 0,
+         * mirroring the entity); nothing is mid-nag across an upgrade.
+         */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE notes ADD COLUMN nagFiring INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

@@ -29,13 +29,15 @@ fun aNote(
     nag: Boolean = false,
     counterparty: String? = null,
     pendingConfirmSince: Long? = null,
+    recurrenceAnchorDay: Int? = null,
+    nagFiring: Boolean = false,
 ) = Note(
     id = id, title = title, summary = summary, body = body, dueDate = dueDate, dueTime = dueTime,
     source = source, createdDate = createdDate, type = type, completed = completed,
     completedDate = completedDate, recurrence = recurrence, checklist = checklist,
     locationLat = locationLat, locationLng = locationLng, locationRadius = locationRadius,
     locationLabel = locationLabel, priority = priority, nag = nag, counterparty = counterparty,
-    pendingConfirmSince = pendingConfirmSince,
+    pendingConfirmSince = pendingConfirmSince, recurrenceAnchorDay = recurrenceAnchorDay, nagFiring = nagFiring,
 )
 
 fun aSuggestion(
