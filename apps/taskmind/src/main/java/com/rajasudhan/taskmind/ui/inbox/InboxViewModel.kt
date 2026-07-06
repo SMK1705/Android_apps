@@ -139,7 +139,7 @@ class InboxViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             var message = "Couldn't add that — please try again."
             try {
-                pipeline.processText("Manual entry", text)
+                pipeline.processText("Manual entry", text, seedSchedule = true)
                 message = "Added to your inbox for review."
             } catch (e: Exception) {
                 message = "Couldn't add that — please try again."
@@ -183,7 +183,7 @@ class InboxViewModel @Inject constructor(
                 }
                 val transcript = runCatching { voskTranscriber.transcribe(Uri.fromFile(file)) }.getOrNull()
                 if (transcript.isNullOrBlank()) return@launch
-                pipeline.processText("Voice note", transcript)
+                pipeline.processText("Voice note", transcript, seedSchedule = true)
                 message = "Added to your inbox for review."
             } catch (e: Exception) {
                 message = "Couldn't process the recording."

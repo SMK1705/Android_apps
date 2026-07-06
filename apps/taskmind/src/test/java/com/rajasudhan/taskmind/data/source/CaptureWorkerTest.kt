@@ -39,7 +39,8 @@ class CaptureWorkerTest {
         val result = worker("source" to "Manual test", "text" to "buy milk on the way home").doWork()
 
         assertEquals(ListenableWorker.Result.success(), result)
-        coVerify { pipeline.processText("Manual test", "buy milk on the way home") }
+        // Typed capture seeds the deterministic date parser (#116).
+        coVerify { pipeline.processText("Manual test", "buy milk on the way home", seedSchedule = true) }
     }
 
     @Test
@@ -47,6 +48,6 @@ class CaptureWorkerTest {
         val result = worker("source" to "Shared", "text" to "   ").doWork()
 
         assertEquals(ListenableWorker.Result.success(), result)
-        coVerify(exactly = 0) { pipeline.processText(any(), any()) }
+        coVerify(exactly = 0) { pipeline.processText(any(), any(), any()) }
     }
 }

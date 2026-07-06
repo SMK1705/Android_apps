@@ -2,6 +2,8 @@ package com.rajasudhan.taskmind.data.source.understanding
 
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Suggestion
+import com.rajasudhan.taskmind.data.source.NaturalDate
+import com.rajasudhan.taskmind.data.source.ParsedSchedule
 import com.rajasudhan.taskmind.data.source.PhoneUtil
 import com.rajasudhan.taskmind.data.source.RejectionLearner
 import com.rajasudhan.taskmind.data.source.SuggestionNotifier
@@ -42,9 +44,13 @@ class UnderstandingPipeline @Inject constructor(
         // Truncate runaway inputs (a long email/transcript) so the prompt + JSON output stay under
         // the on-device model's 2048-token KV-cache. ~4 chars/token leaves ample headroom.
         const val MAX_INPUT_CHARS = 4000
+
+        // Confidence for a reminder synthesized from the deterministic parse alone — well above the
+        // acceptance bar, since the user typed it and the schedule is parsed deterministically.
+        private const val FALLBACK_CONFIDENCE = 0.9
     }
 
-    suspend fun processText(source: String, text: String) {
+    suspend fun processText(source: String, text: String, seedSchedule: Boolean = false) {
         // Cheap pre-filter: skip obvious non-actionable noise (OTPs, promos, opt-outs)
         // before spending battery/LLM cycles on it.
         if (text.isBlank() || ExtractionHeuristics.isLikelyNoise(text)) return
@@ -72,7 +78,21 @@ class UnderstandingPipeline @Inject constructor(
             parsedResult = tryParse(jsonResult)
         }
 
-        val items = parsedResult?.items ?: return
+        // #116: for a user-typed capture, run the deterministic on-device date parse once.
+        val parsed = if (seedSchedule) NaturalDate.parse(text, currentDateTime).takeIf { !it.isEmpty } else null
+
+        // If the extractor produced nothing (it's unavailable — no on-device model and no cloud key — or
+        // it saw no task) but the user typed a clear DATE, still stand up a reminder from the parse alone,
+        // so capture works with extraction disabled. A date anchors it; a bare time/recurrence is too
+        // ambiguous to auto-create. The parse's spans strip the date phrase out for a clean title.
+        val llmItems = parsedResult?.items ?: emptyList()
+        val items = if (parsed?.date != null && llmItems.isEmpty()) listOf(fallbackItem(text, parsed)) else llmItems
+        if (items.isEmpty()) return
+
+        // A deterministic parse OVERRIDES the LLM's date/time/recurrence (the model is unreliable at
+        // relative-date math). Gated to a single item so a parsed date isn't smeared across a multi-task
+        // brain-dump; the synthesized fallback item is itself a single item already built from the parse.
+        val seeded = parsed?.takeIf { items.size == 1 }
 
         // Down-rank items from senders the user keeps rejecting (on-device learning).
         val penalty = rejectionLearner.confidencePenalty(source)
@@ -84,19 +104,30 @@ class UnderstandingPipeline @Inject constructor(
         insertMutex.withLock {
             for (item in items) {
                 val scored = if (penalty > 0) item.copy(confidence = (item.confidence - penalty).coerceAtLeast(0.0)) else item
-                if (ExtractionHeuristics.isAcceptable(scored) && !isDuplicate(item)) {
+                // Reconcile the deterministic seed with the LLM's fields into ONE coherent schedule:
+                //  - date: the parsed date wins (deterministic beats the model's shaky relative-date math);
+                //  - time: the parsed time only overrides when it came WITH a parsed date, so a stray bare
+                //    time can't clobber the model's coherent (date,time) pair or strand a past-due slot;
+                //  - recurrence: only seeded onto a schedulable item, so a plain note can't silently repeat.
+                val seededDate = seeded?.dueDate()
+                val effectiveDate = seededDate ?: ExtractionHeuristics.sanitizeDate(item.dueDate)
+                val effectiveTime = if (seededDate != null) seeded?.dueTime() ?: ExtractionHeuristics.sanitizeTime(item.dueTime)
+                    else ExtractionHeuristics.sanitizeTime(item.dueTime) ?: seeded?.dueTime()
+                val effectiveRecurrence = seeded?.recurrence?.takeIf { item.type == "reminder" || item.type == "todo" }
+                    ?: ExtractionHeuristics.sanitizeRecurrence(item.recurrence)
+                if (ExtractionHeuristics.isAcceptable(scored) && !isDuplicate(item, effectiveDate)) {
                     val suggestion = Suggestion(
                         source = source,
                         rawSnippet = text,
                         extractedTitle = item.title,
                         summary = item.notes.trim(),
-                        dueDate = ExtractionHeuristics.sanitizeDate(item.dueDate),
-                        dueTime = ExtractionHeuristics.sanitizeTime(item.dueTime),
+                        dueDate = effectiveDate,
+                        dueTime = effectiveTime,
                         type = item.type,
                         confidence = scored.confidence,
                         status = "pending",
                         location = item.location?.trim()?.ifBlank { null },
-                        recurrence = ExtractionHeuristics.sanitizeRecurrence(item.recurrence),
+                        recurrence = effectiveRecurrence,
                         priority = ExtractionHeuristics.sanitizePriority(item.priority),
                         counterparty = item.counterparty?.trim()?.ifBlank { null }
                     )
@@ -197,12 +228,26 @@ class UnderstandingPipeline @Inject constructor(
         null
     }
 
-    private suspend fun isDuplicate(item: LlmItem): Boolean {
-        // Compare (title, dueDate) against existing pending suggestions and approved notes. Compare on
-        // the SANITIZED date — the same value the suggestion is stored with below — so an item whose
-        // raw date is non-conforming (sanitized to null) still matches its stored twin. Comparing the
-        // raw date here let such an item re-insert on every re-scan (raw "2026-6-1" != stored null).
-        val dueDate = ExtractionHeuristics.sanitizeDate(item.dueDate)
+    /**
+     * A reminder synthesized purely from the deterministic parse — used when the extractor yields no
+     * items but the user typed a clear date (#116). The parse's spans strip the date phrase out so the
+     * title is just the task ("call mom tomorrow 5pm" → "call mom"). High confidence: it's user-typed and
+     * deterministic. It still lands as a PENDING suggestion for review, so the user can reject it.
+     */
+    private fun fallbackItem(text: String, parsed: ParsedSchedule): LlmItem = LlmItem(
+        type = "reminder",
+        title = NaturalDate.stripSchedule(text, parsed.spans).ifBlank { text.trim() },
+        dueDate = parsed.dueDate(),
+        dueTime = parsed.dueTime(),
+        recurrence = parsed.recurrence,
+        confidence = FALLBACK_CONFIDENCE,
+    )
+
+    private suspend fun isDuplicate(item: LlmItem, dueDate: String?): Boolean {
+        // Compare (title, dueDate) against existing pending suggestions and approved notes on [dueDate] —
+        // the EFFECTIVE date the suggestion is actually stored with (seeded parse if any, else the
+        // sanitized LLM date). Keying on a different value than it's stored under lets an item re-insert
+        // its own twin (the raw-vs-sanitized bug, and — once #116 seeds dates — the LLM-vs-seeded bug).
         val pending = dao.getPendingSuggestions().first().map { it.extractedTitle to it.dueDate }
         val notes = dao.getAllNotes().first().map { it.title to it.dueDate }
         return ExtractionHeuristics.isDuplicate(item.title, dueDate, pending + notes)
