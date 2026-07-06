@@ -80,6 +80,33 @@ class InboxViewModelTest {
     }
 
     @Test
+    fun mergeDuplicate_dismissesWithoutARejectionPenalty_andUndoRepends() = runTest {
+        // #145: Merge dismisses the re-capture, but must NOT penalise the sender (it isn't noise — you
+        // already have the item), unlike reject which records a penalty.
+        dao.insertSuggestion(aSuggestion(source = "SMS from +15551234567", extractedTitle = "Pay rent", status = "pending", possibleDuplicateOf = "Pay rent"))
+        val s = pending().single()
+
+        vm.mergeDuplicate(s)
+        assertTrue(pending().isEmpty())
+        assertNull(dao.rejectedPatternFor("sender", "+15551234567")) // no learning penalty from a merge
+
+        vm.undoLast()
+        assertEquals(listOf("Pay rent"), pending().map { it.extractedTitle })
+    }
+
+    @Test
+    fun keepBoth_clearsTheDuplicateFlag_keepingTheSuggestion() = runTest {
+        dao.insertSuggestion(aSuggestion(extractedTitle = "Buy milk", status = "pending", possibleDuplicateOf = "Buy groceries"))
+        val s = pending().single()
+
+        vm.keepBoth(s)
+
+        val after = pending().single()
+        assertEquals("Buy milk", after.extractedTitle) // still present
+        assertNull(after.possibleDuplicateOf)           // flag cleared
+    }
+
+    @Test
     fun snooze_setsSnoozedUntil_andUndoClearsIt() = runTest {
         dao.insertSuggestion(aSuggestion(extractedTitle = "Later", status = "pending"))
         val s = pending().single()

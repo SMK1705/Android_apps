@@ -30,5 +30,9 @@ data class Suggestion(
     @ColumnInfo(defaultValue = "'normal'") val priority: String = "normal",
     // v14 (MIGRATION_13_14): auto-tags (#123) — 0–2 from the closed taxonomy, comma-separated (see
     // [Tags]). Sanitised from the model's `tags` array; copied onto the note on approval. Nullable.
-    val tags: String? = null
+    val tags: String? = null,
+    // v15 (MIGRATION_14_15): safe semantic dedup (#145) — the title of an existing note/suggestion this
+    // capture is likely a re-capture of, surfaced as a dismissable "possible duplicate" flag in the
+    // Inbox. Never used to DROP a capture (similarity is unreliable); nullable (null = not flagged).
+    val possibleDuplicateOf: String? = null
 )

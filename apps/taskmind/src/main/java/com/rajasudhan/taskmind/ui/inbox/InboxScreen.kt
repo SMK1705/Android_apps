@@ -317,7 +317,9 @@ fun InboxScreen(
                                 onReject = { doReject(it) },
                                 onEdit = { viewModel.updateSuggestion(it) },
                                 onFixIt = { s, instruction, cb -> viewModel.editWithInstruction(s, instruction, cb) },
-                                onSnoozeClick = { snoozeFor = suggestion }
+                                onSnoozeClick = { snoozeFor = suggestion },
+                                onMerge = { viewModel.mergeDuplicate(suggestion); showUndo("Merged — kept the existing one") },
+                                onKeepBoth = { viewModel.keepBoth(suggestion) }
                             )
                         }
                     }
@@ -902,6 +904,46 @@ private fun BoldCaptureSheet(
     }
 }
 
+/**
+ * Non-destructive near-duplicate flag (#145): shows what a capture may duplicate, with one-tap Merge
+ * (dismiss this — the existing item covers it) or Keep both (they're different; clear the flag). The
+ * capture is never auto-dropped, so this is purely advisory.
+ */
+@Composable
+private fun DuplicateBanner(duplicateOfTitle: String, onMerge: () -> Unit, onKeepBoth: () -> Unit) {
+    val c = BoldTheme.colors
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(c.accentGlow)
+            .border(1.dp, c.accent.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+            .padding(horizontal = 11.dp, vertical = 9.dp),
+        verticalArrangement = Arrangement.spacedBy(9.dp)
+    ) {
+        Text(
+            "Possible duplicate of “$duplicateOfTitle”",
+            style = BoldType.detailMeta.copy(fontSize = 11.5.sp), color = c.accent,
+            maxLines = 2, overflow = TextOverflow.Ellipsis
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // "Keep both" is the prominent (filled) default — it never loses the capture.
+            DupAction("Merge", filled = false, onClick = onMerge)
+            DupAction("Keep both", filled = true, onClick = onKeepBoth)
+        }
+    }
+}
+
+@Composable
+private fun DupAction(label: String, filled: Boolean, onClick: () -> Unit) {
+    val c = BoldTheme.colors
+    Box(
+        Modifier.clip(RoundedCornerShape(8.dp))
+            .background(if (filled) c.accent else c.surface2)
+            .clickable(onClick = onClick, onClickLabel = label, role = Role.Button)
+            .padding(horizontal = 14.dp, vertical = 7.dp)
+    ) {
+        Text(label, style = BoldType.detailMeta.copy(fontSize = 11.5.sp), color = if (filled) BoldOnAccent else c.ink2)
+    }
+}
+
 @Composable
 private fun BoldSuggestionCard(
     suggestion: Suggestion,
@@ -909,7 +951,9 @@ private fun BoldSuggestionCard(
     onReject: (Suggestion) -> Unit,
     onEdit: (Suggestion) -> Unit,
     onFixIt: (Suggestion, String, (EditResult) -> Unit) -> Unit,
-    onSnoozeClick: () -> Unit
+    onSnoozeClick: () -> Unit,
+    onMerge: () -> Unit,
+    onKeepBoth: () -> Unit
 ) {
     val c = BoldTheme.colors
     var expanded by remember { mutableStateOf(false) }
@@ -1059,6 +1103,12 @@ private fun BoldSuggestionCard(
                     }
                     BoldSourcePill(suggestion.source, modifier = Modifier.weight(1f, fill = false))
                     BoldKindDot(kind)
+                }
+                // Safe dedup (#145): a near-duplicate is kept and flagged here — never dropped. The
+                // user reviews: Merge (the existing item covers it) or Keep both (they're different).
+                suggestion.possibleDuplicateOf?.let { dupTitle ->
+                    Spacer(Modifier.height(11.dp))
+                    DuplicateBanner(dupTitle, onMerge = onMerge, onKeepBoth = onKeepBoth)
                 }
                 Spacer(Modifier.height(11.dp))
                 Text(
