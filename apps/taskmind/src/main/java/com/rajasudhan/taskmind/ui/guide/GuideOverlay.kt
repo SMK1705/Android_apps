@@ -34,11 +34,15 @@ import kotlinx.coroutines.launch
 
 private data class GuidePage(val icon: ImageVector, val title: String, val body: String)
 
-private val guidePages = listOf(
+private fun guidePages(isOnDevice: Boolean) = listOf(
     GuidePage(
         Icons.Filled.WavingHand, "Welcome to TaskMind",
-        "Your private, on-device assistant. It identifies action items in your messages, calls, email " +
-            "and recordings — and saves nothing until you approve it."
+        if (isOnDevice)
+            "Your private, on-device assistant. It identifies action items in your messages, calls, email " +
+                "and recordings — and saves nothing until you approve it."
+        else
+            "Your assistant for messages, calls, email and recordings. You've chosen the cloud engine, so " +
+                "understanding runs on Gemini — and it still saves nothing until you approve it."
     ),
     GuidePage(
         Icons.Filled.Tune, "Choose your sources",
@@ -62,17 +66,23 @@ private val guidePages = listOf(
     ),
     GuidePage(
         Icons.Filled.Lock, "Private by design",
-        "Everything runs on your phone, behind a biometric lock. Open Settings → Data Egress at any " +
-            "time to confirm nothing has left your device. Reopen this guide from the help icon in the top bar."
+        if (isOnDevice)
+            "Everything runs on your phone, behind a biometric lock. Open Settings → Data Egress at any " +
+                "time to confirm nothing has left your device. Reopen this guide from the help icon in the top bar."
+        else
+            "Your notes are encrypted on your phone, behind a biometric lock. You've chosen the cloud engine, so " +
+                "message text is sent to Gemini for understanding — Settings → Data Egress logs every call. " +
+                "Reopen this guide from the help icon in the top bar."
     ),
 )
 
 /** First-run (and re-openable) walkthrough of the core flow. [onDismiss] both closes and marks seen. */
 @Composable
-fun GuideOverlay(onDismiss: () -> Unit) {
-    val pagerState = rememberPagerState(pageCount = { guidePages.size })
+fun GuideOverlay(onDismiss: () -> Unit, isOnDevice: Boolean) {
+    val pages = guidePages(isOnDevice)
+    val pagerState = rememberPagerState(pageCount = { pages.size })
     val scope = rememberCoroutineScope()
-    val isLast = pagerState.currentPage == guidePages.lastIndex
+    val isLast = pagerState.currentPage == pages.lastIndex
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
@@ -89,7 +99,7 @@ fun GuideOverlay(onDismiss: () -> Unit) {
                     state = pagerState,
                     modifier = Modifier.weight(1f).fillMaxWidth()
                 ) { page ->
-                    val p = guidePages[page]
+                    val p = pages[page]
                     Column(
                         modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -131,7 +141,7 @@ fun GuideOverlay(onDismiss: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    repeat(guidePages.size) { i ->
+                    repeat(pages.size) { i ->
                         val selected = i == pagerState.currentPage
                         Box(
                             modifier = Modifier

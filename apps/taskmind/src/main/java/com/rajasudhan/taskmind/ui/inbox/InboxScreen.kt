@@ -76,6 +76,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.rajasudhan.taskmind.data.model.Suggestion
 import com.rajasudhan.taskmind.data.source.resolveCallNumber
 import com.rajasudhan.taskmind.data.source.transcription.AudioRecorder
@@ -139,6 +142,17 @@ fun InboxScreen(
     // null = first load not finished yet (skeleton); empty list = caught up (empty state).
     val suggestions by viewModel.pendingSuggestions.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    // Effective engine for honest "on-device"/"cloud" labels (#197); re-read on resume so a change
+    // made in Settings (or a model appearing/disappearing) is reflected when the user comes back.
+    val onDeviceEngine by viewModel.onDeviceEngine.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refreshEngine()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     var showApproveAllDialog by remember { mutableStateOf(false) }
     var overflowMenu by remember { mutableStateOf(false) }
     // Quick-capture sheet (Type / Speak) — the single entry point for adding an item by hand.
@@ -246,6 +260,7 @@ fun InboxScreen(
                     item {
                         InboxHeader(
                             count = current.size,
+                            isOnDevice = onDeviceEngine,
                             isDark = isDark,
                             onToggleTheme = onToggleTheme,
                             overflowExpanded = overflowMenu,
@@ -258,7 +273,7 @@ fun InboxScreen(
                         )
                     }
                     if (isRefreshing) {
-                        item { ScanningPipelineCard() }
+                        item { ScanningPipelineCard(isOnDevice = onDeviceEngine) }
                     }
                     if (isEmpty) {
                         item {
@@ -337,6 +352,7 @@ fun InboxScreen(
             BoldCaptureSheet(
                 isRecording = isRecording,
                 isProcessingVoice = isProcessingVoice,
+                isOnDevice = onDeviceEngine,
                 onDismiss = { recorder.cancel(); isRecording = false; showCaptureSheet = false },
                 onSubmitText = { text ->
                     showCaptureSheet = false
@@ -382,6 +398,7 @@ fun InboxScreen(
 @Composable
 private fun InboxHeader(
     count: Int,
+    isOnDevice: Boolean,
     isDark: Boolean,
     onToggleTheme: () -> Unit,
     overflowExpanded: Boolean,
@@ -403,7 +420,10 @@ private fun InboxHeader(
             Text("Inbox", style = BoldType.screenTitle, color = c.ink)
             Spacer(Modifier.height(6.dp))
             Text(
-                if (count == 0) "All caught up · on-device" else "$count pending · on-device",
+                buildString {
+                    append(if (count == 0) "All caught up" else "$count pending")
+                    append(if (isOnDevice) " · on-device" else " · cloud")
+                },
                 style = BoldType.srcLabel.copy(fontSize = 11.5.sp, letterSpacing = 0.3.sp),
                 color = c.ink2
             )
@@ -470,7 +490,7 @@ private fun HeaderIconButton(onClick: () -> Unit, label: String, content: @Compo
  * read → understand → draft sequence rather than reporting true progress.
  */
 @Composable
-private fun ScanningPipelineCard() {
+private fun ScanningPipelineCard(isOnDevice: Boolean) {
     val c = BoldTheme.colors
     var stage by remember { mutableStateOf(0) }
     LaunchedEffect(Unit) {
@@ -508,9 +528,12 @@ private fun ScanningPipelineCard() {
             horizontalArrangement = Arrangement.spacedBy(9.dp)
         ) {
             Box(Modifier.size(7.dp).clip(CircleShape).background(c.accent.copy(alpha = pulse)))
-            Text("ANALYSING ON-DEVICE", style = BoldType.srcLabel.copy(fontSize = 11.sp, letterSpacing = 0.5.sp), color = c.accent)
+            Text(
+                if (isOnDevice) "ANALYSING ON-DEVICE" else "ANALYSING IN CLOUD",
+                style = BoldType.srcLabel.copy(fontSize = 11.sp, letterSpacing = 0.5.sp), color = c.accent
+            )
             Spacer(Modifier.weight(1f))
-            Text("Gemma · local", style = BoldType.detailMeta, color = c.ink2)
+            Text(if (isOnDevice) "Gemma · local" else "Gemini · cloud", style = BoldType.detailMeta, color = c.ink2)
         }
         HorizontalDivider(color = c.ink.copy(alpha = 0.06f))
         Column(
@@ -760,6 +783,7 @@ private fun schedulePreview(p: ParsedSchedule): String? {
 private fun BoldCaptureSheet(
     isRecording: Boolean,
     isProcessingVoice: Boolean,
+    isOnDevice: Boolean,
     onDismiss: () -> Unit,
     onSubmitText: (String) -> Unit,
     onStartRecording: () -> Unit,
@@ -771,7 +795,7 @@ private fun BoldCaptureSheet(
     BoldBottomSheet(
         title = "Quick capture",
         onDismiss = onDismiss,
-        subtitle = "Type it or speak it — understood on-device, then sent to your Inbox to approve."
+        subtitle = "Type it or speak it — understood ${if (isOnDevice) "on-device" else "in the cloud"}, then sent to your Inbox to approve."
     ) {
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp)).background(c.bg2)
@@ -844,7 +868,7 @@ private fun BoldCaptureSheet(
                     .then(if (enabled) Modifier.clickable { onSubmitText(text.trim()) } else Modifier)
                     .semantics { role = Role.Button },
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center
-            ) { Text("ANALYSE ON-DEVICE", style = BoldType.monoBtn, color = if (enabled) BoldOnAccent else c.ink3) }
+            ) { Text(if (isOnDevice) "ANALYSE ON-DEVICE" else "ANALYSE IN CLOUD", style = BoldType.monoBtn, color = if (enabled) BoldOnAccent else c.ink3) }
         } else {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(

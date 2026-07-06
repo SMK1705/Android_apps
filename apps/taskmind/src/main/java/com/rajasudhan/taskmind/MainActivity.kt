@@ -455,7 +455,7 @@ fun TaskMindAppContent(
 
     // First-run walkthrough (and re-openable from the "?" action).
     if (showGuide) {
-        GuideOverlay(onDismiss = { guideViewModel.dismiss() })
+        GuideOverlay(onDismiss = { guideViewModel.dismiss() }, isOnDevice = guideViewModel.isOnDeviceEngine())
     }
 }
 
