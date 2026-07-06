@@ -191,6 +191,30 @@ object NaturalDate {
         return null
     }
 
+    // Connective words that dangle at the title's edges once the date phrase is cut out ("call mom at" → "call mom").
+    private val TRIM_WORDS = setOf("at", "on", "by", "for", "in", "the", "this", "next", "every", "starting", "a")
+
+    /**
+     * The input with the parsed schedule phrases ([spans]) removed and tidied — a clean task title, used
+     * when the deterministic parse must stand up a reminder on its own (extractor unavailable). Pure.
+     */
+    fun stripSchedule(text: String, spans: List<IntRange>): String {
+        if (spans.isEmpty()) return text.trim()
+        val sb = StringBuilder()
+        var i = 0
+        for (r in spans.sortedBy { it.first }) {
+            val start = r.first.coerceIn(0, text.length)
+            val end = (r.last + 1).coerceIn(start, text.length)
+            if (start > i) sb.append(text, i, start)
+            if (end > i) i = end
+        }
+        if (i < text.length) sb.append(text, i, text.length)
+        val words = sb.toString().split(Regex("\\s+")).filter { it.isNotBlank() }
+            .dropLastWhile { it.trim(',', '.', '!').lowercase() in TRIM_WORDS }
+            .dropWhile { it.trim(',', '.', '!').lowercase() in TRIM_WORDS }
+        return words.joinToString(" ").trim().trimEnd(',', '.', '-', ' ')
+    }
+
     /** The [wd] (1=Mon…7=Sun) occurring this week if still ahead (today allowed), else next week; [next] adds a week. */
     private fun nextWeekday(today: LocalDate, wd: Int, next: Boolean): LocalDate {
         val delta = ((wd - today.dayOfWeek.value) % 7 + 7) % 7 // 0 = today

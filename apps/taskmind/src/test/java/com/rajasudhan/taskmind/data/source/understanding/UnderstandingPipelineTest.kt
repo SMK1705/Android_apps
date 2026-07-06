@@ -157,6 +157,41 @@ class UnderstandingPipelineTest {
     }
 
     @Test
+    fun extractorReturnsNothing_butDatedCapture_stillCreatesAReminder() = runTest {
+        // #116: the extractor is unavailable (or saw no task) but the user typed a clear date — the
+        // deterministic parse stands up the reminder on its own, so capture works with extraction disabled.
+        val tomorrow = java.time.LocalDate.now().plusDays(1).toString()
+
+        pipeline(FakeLlmProvider(llmResponse())) // {"items":[]}
+            .processText("Manual entry", "call mom tomorrow 5pm", seedSchedule = true)
+
+        val s = dao.getPendingSuggestions().first().single()
+        assertEquals("reminder", s.type)
+        assertEquals("call mom", s.extractedTitle) // the date phrase is stripped out of the title
+        assertEquals(tomorrow, s.dueDate)
+        assertEquals("17:00", s.dueTime)
+    }
+
+    @Test
+    fun extractorReturnsNothing_andNoDate_createsNothing() = runTest {
+        // No task from the model AND no anchoring date → nothing to auto-create (a bare time is too ambiguous).
+        pipeline(FakeLlmProvider(llmResponse()))
+            .processText("Manual entry", "just some random thoughts", seedSchedule = true)
+
+        assertTrue(dao.getPendingSuggestions().first().isEmpty())
+    }
+
+    @Test
+    fun passiveSource_withNoItems_neverSynthesizesAReminder() = runTest {
+        // The fallback is opt-in (seedSchedule): a passive SMS the model ignored must NOT become a reminder
+        // just because it contains the word "tomorrow".
+        pipeline(FakeLlmProvider(llmResponse()))
+            .processText("SMS from +10000000000", "see you tomorrow!") // seedSchedule defaults false
+
+        assertTrue(dao.getPendingSuggestions().first().isEmpty())
+    }
+
+    @Test
     fun rejectionPenalty_dropsABorderlineItem() = runTest {
         dao.upsertRejectedPattern(RejectedPattern("sender", "+15551234567", 3, 1L))
         val llm = FakeLlmProvider(llmResponse(llmItem(title = "spammy", confidence = 0.8)))

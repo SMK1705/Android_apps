@@ -133,6 +133,18 @@ class NaturalDateTest {
         assertEquals(LocalTime.of(17, 0), r.time)
     }
 
+    // ---- title stripping (fallback reminder) ----
+
+    @Test fun stripSchedule_removesTheDatePhrase_leavingACleanTitle() {
+        assertEquals("call mom", NaturalDate.stripSchedule("call mom tomorrow 5pm", parse("call mom tomorrow 5pm").spans))
+        assertEquals("standup", NaturalDate.stripSchedule("standup every friday", parse("standup every friday").spans))
+        assertEquals("gym", NaturalDate.stripSchedule("gym every tuesday 6am", parse("gym every tuesday 6am").spans))
+    }
+
+    @Test fun stripSchedule_noSpans_returnsTrimmedText() {
+        assertEquals("buy milk", NaturalDate.stripSchedule("buy milk", emptyList()))
+    }
+
     @Test fun spans_indexTheOriginalText_soHighlightAligns() {
         val text = "call mom tomorrow"
         val r = parse(text)
