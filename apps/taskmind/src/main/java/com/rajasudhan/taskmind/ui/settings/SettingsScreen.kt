@@ -58,7 +58,8 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val llmApiKey by viewModel.llmApiKey.collectAsState()
-    val sttApiKey by viewModel.sttApiKey.collectAsState()
+    val whisperSecondPass by viewModel.whisperSecondPass.collectAsState()
+    val whisperModelPresent by viewModel.whisperModelPresent.collectAsState()
     val transcriptionStatus by viewModel.transcriptionStatus.collectAsState()
     val transcriptionModelPath = viewModel.transcriptionModelPath
     val ocrStatus by viewModel.ocrStatus.collectAsState()
@@ -264,13 +265,27 @@ fun SettingsScreen(
             transcriptionStatus?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            OutlinedTextField(
-                value = sttApiKey,
-                onValueChange = { viewModel.updateSttApiKey(it) },
-                label = { Text("Cloud STT API Key (optional, future)") },
-                visualTransformation = PasswordVisualTransformation(),
+            Spacer(Modifier.height(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth()
-            )
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Whisper second pass", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "A more accurate re-transcription for accents and Hindi/Tamil/English code-switching. " +
+                            (if (whisperModelPresent) "Model present. " else "Push a ggml model to ${viewModel.whisperModelPath}. ") +
+                            "On-device Whisper inference ships in an upcoming update.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                com.rajasudhan.taskmind.ui.bold.BoldSwitch(
+                    checked = whisperSecondPass,
+                    onCheckedChange = { viewModel.setWhisperSecondPass(it) }
+                )
+            }
         }
 
         SettingsSectionCard(accent = OcrAccent, title = "Screenshot OCR") {

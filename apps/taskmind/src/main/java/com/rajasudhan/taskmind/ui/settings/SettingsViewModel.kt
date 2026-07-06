@@ -24,6 +24,7 @@ import com.rajasudhan.taskmind.data.source.SettingsManager
 import com.rajasudhan.taskmind.data.source.dataStore
 import com.rajasudhan.taskmind.data.source.ocr.OcrEngine
 import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
+import com.rajasudhan.taskmind.data.source.transcription.WhisperTranscriber
 import com.rajasudhan.taskmind.data.source.understanding.OnDeviceLlmProvider
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
 import com.rajasudhan.taskmind.ui.theme.ThemeMode
@@ -52,6 +53,7 @@ class SettingsViewModel @Inject constructor(
     private val understandingPipeline: UnderstandingPipeline,
     private val egressLogger: EgressLogger,
     private val voskTranscriber: VoskTranscriber,
+    private val whisperTranscriber: WhisperTranscriber,
     private val ocrEngine: OcrEngine,
     private val modelDownloader: ModelDownloader,
     private val backupManager: BackupManager,
@@ -160,8 +162,16 @@ class SettingsViewModel @Inject constructor(
     private val _llmApiKey = MutableStateFlow(settingsManager.llmApiKey)
     val llmApiKey: StateFlow<String> = _llmApiKey
 
-    private val _sttApiKey = MutableStateFlow(settingsManager.sttApiKey)
-    val sttApiKey: StateFlow<String> = _sttApiKey
+    // Whisper second pass (#126): the on/off toggle plus whether its ggml model is present. The native
+    // engine is deferred (#207), so the toggle can be on while the pass is still a no-op.
+    private val _whisperSecondPass = MutableStateFlow(settingsManager.whisperSecondPassEnabled)
+    val whisperSecondPass: StateFlow<Boolean> = _whisperSecondPass
+
+    private val _whisperModelPresent = MutableStateFlow(whisperTranscriber.isModelPresent())
+    val whisperModelPresent: StateFlow<Boolean> = _whisperModelPresent
+
+    /** Where to adb-push the quantized ggml Whisper model. */
+    val whisperModelPath: String get() = whisperTranscriber.modelPath()
 
     private val _useOnDeviceLlm = MutableStateFlow(settingsManager.useOnDeviceLlm)
     val useOnDeviceLlm: StateFlow<Boolean> = _useOnDeviceLlm
@@ -180,10 +190,13 @@ class SettingsViewModel @Inject constructor(
         _llmApiKey.value = key
     }
 
-    fun updateSttApiKey(key: String) {
-        settingsManager.sttApiKey = key
-        _sttApiKey.value = key
+    fun setWhisperSecondPass(enabled: Boolean) {
+        settingsManager.whisperSecondPassEnabled = enabled
+        _whisperSecondPass.value = enabled
     }
+
+    /** Re-check whether the Whisper model is present (after an adb push). */
+    fun refreshWhisperModel() { _whisperModelPresent.value = whisperTranscriber.isModelPresent() }
 
     fun updateUseOnDeviceLlm(useOnDevice: Boolean) {
         settingsManager.useOnDeviceLlm = useOnDevice
@@ -254,7 +267,7 @@ class SettingsViewModel @Inject constructor(
 
             // Reflect the reset in the UI immediately.
             _llmApiKey.value = settingsManager.llmApiKey
-            _sttApiKey.value = settingsManager.sttApiKey
+            _whisperSecondPass.value = settingsManager.whisperSecondPassEnabled
             _useOnDeviceLlm.value = settingsManager.useOnDeviceLlm
             _eventDurationMinutes.value = settingsManager.eventDurationMinutes
             _calendarId.value = settingsManager.calendarId
