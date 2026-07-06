@@ -176,4 +176,47 @@ class NotesViewModelTest {
         vm.toggleTag("Money")
         assertTrue(vm.canSaveCurrentFilter())
     }
+
+    // ---- Task Fade + bankruptcy (#125) ----
+
+    private val dayMs = 24L * 60 * 60 * 1000
+    private fun old() = System.currentTimeMillis() - (TaskFade.FADE_AFTER_DAYS + 1) * dayMs
+
+    private suspend fun seedFading() {
+        dao.insertNote(aNote(title = "Old chore", type = "todo", createdDate = old()))          // fading
+        dao.insertNote(aNote(title = "Older errand", type = "todo", createdDate = old()))        // fading
+        dao.insertNote(aNote(title = "Fresh todo", type = "todo", createdDate = System.currentTimeMillis())) // too new
+        dao.insertNote(aNote(title = "Old reminder", type = "reminder", dueDate = "2026-08-01", createdDate = old())) // dated
+    }
+
+    @Test
+    fun fadingCount_countsOldUndatedTodosOnly() = runTest {
+        seedFading()
+        assertEquals(2, vm.kindCounts.first { it.isNotEmpty() }["fading"])
+    }
+
+    @Test
+    fun fadingFilter_showsOnlyFadingItems() = runTest {
+        seedFading()
+        vm.setKindFilter("fading")
+        assertEquals(setOf("Old chore", "Older errand"), vm.notes.filterNotNull().first().map { it.title }.toSet())
+    }
+
+    @Test
+    fun declareBankruptcy_archivesFadingItems_offTheActiveList_intoArchived() = runTest {
+        seedFading()
+        vm.declareBankruptcy()
+        assertEquals(2, vm.archivedCount.first { it > 0 }) // waits for the archive to land
+        vm.setKindFilter(null)
+        assertEquals(setOf("Fresh todo", "Old reminder"), vm.notes.filterNotNull().first().map { it.title }.toSet())
+    }
+
+    @Test
+    fun restoreAllArchived_bringsThemBackToActive() = runTest {
+        seedFading()
+        vm.declareBankruptcy()
+        assertEquals(2, vm.archivedCount.first { it > 0 })
+        vm.restoreAllArchived()
+        assertEquals(0, vm.archivedCount.first { it == 0 })
+    }
 }

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -58,6 +59,7 @@ class NotesViewModel @Inject constructor(
     val kindCounts: StateFlow<Map<String, Int>> =
         dao.getActiveNotes()
             .map { list ->
+                val now = System.currentTimeMillis()
                 mapOf(
                     "all" to list.size,
                     "todo" to list.count { it.type == "todo" },
@@ -67,10 +69,16 @@ class NotesViewModel @Inject constructor(
                     // Waiting-on items whose counterparty got back in touch — awaiting the user's
                     // one-tap "did they deliver?" answer (see WaitingConfirmNotifier).
                     "ready_to_close" to list.count { it.pendingConfirmSince != null },
-                    "overdue" to list.count { isOverdue(it.dueDate, it.dueTime) }
+                    "overdue" to list.count { isOverdue(it.dueDate, it.dueTime) },
+                    // Stale undated to-dos (#125) — the Fading shelf + bankruptcy prompt.
+                    "fading" to list.count { TaskFade.isFading(it.type, it.dueDate, it.completed, it.archived, it.createdDate, now) }
                 )
             }
             .stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
+
+    /** Count of archived (bankruptcy'd) items (#125), for the "Archived" chip + Archived view. */
+    val archivedCount: StateFlow<Int> =
+        dao.getArchivedNotes().map { it.size }.stateIn(viewModelScope, SharingStarted.Lazily, 0)
 
     /** Live per-tag counts over the *active* notes, for the tag filter-chip badges (#123). */
     val tagCounts: StateFlow<Map<String, Int>> =
@@ -100,18 +108,22 @@ class NotesViewModel @Inject constructor(
     val notes: StateFlow<List<Note>?> =
         combine(_query, _showCompleted, _kindFilter, _tagFilter) { q, c, k, t -> Filters(q, c, k, t) }
             .flatMapLatest { (q, completed, kind, tags) ->
+                val now = System.currentTimeMillis()
+                // OR within the tag set: a note matches if it carries any selected tag.
+                fun keepTags(n: Note) = tags.isEmpty() || Tags.decode(n.tags).any { it in tags }
                 fun keep(n: Note): Boolean {
                     val keepKind = when (kind) {
                         null -> true
                         "overdue" -> isOverdue(n.dueDate, n.dueTime)
                         "ready_to_close" -> n.pendingConfirmSince != null
+                        "fading" -> TaskFade.isFading(n.type, n.dueDate, n.completed, n.archived, n.createdDate, now)
                         else -> n.type == kind
                     }
-                    // OR within the tag set: a note matches if it carries any selected tag.
-                    val keepTags = tags.isEmpty() || Tags.decode(n.tags).any { it in tags }
-                    return keepKind && keepTags
+                    return keepKind && keepTags(n)
                 }
                 when {
+                    // Archived (#125) is its own source — those items are off the active/done lists.
+                    kind == "archived" -> dao.getArchivedNotes().map { list -> list.filter { keepTags(it) } }
                     q.isNotBlank() -> {
                         // Semantic + lexical search: keep every substring match, plus notes the query
                         // is semantically close to (meaning, not just keywords), ranked by relevance.
@@ -134,6 +146,24 @@ class NotesViewModel @Inject constructor(
 
     /** Filter the active list by kind (null = all); leaves the Done view. */
     fun setKindFilter(kind: String?) { _kindFilter.value = kind; _showCompleted.value = false }
+
+    /**
+     * "Declare bankruptcy" (#125): archive every currently-fading item in one tap. Non-destructive —
+     * archived items leave the active list for the Archived view and can be restored; nothing is deleted.
+     */
+    fun declareBankruptcy() {
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            dao.getActiveNotes().first()
+                .filter { TaskFade.isFading(it.type, it.dueDate, it.completed, it.archived, it.createdDate, now) }
+                .forEach { dao.updateNoteArchived(it.id, true) }
+        }
+    }
+
+    /** Restore every archived item at once (#125). */
+    fun restoreAllArchived() {
+        viewModelScope.launch { dao.getArchivedNotes().first().forEach { dao.updateNoteArchived(it.id, false) } }
+    }
 
     /** Toggle a tag in/out of the active tag filter (#123); leaves the Done view. */
     fun toggleTag(tag: String) {
