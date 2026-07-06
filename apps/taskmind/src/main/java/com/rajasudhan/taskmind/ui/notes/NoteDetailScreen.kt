@@ -310,6 +310,26 @@ fun NoteDetailScreen(
                     }
                 }
 
+                // Completion-based recurrence (#124): reschedule the next occurrence from when the task
+                // is finished, not its due date — so an early or late finish never stacks overdue copies.
+                // Only meaningful once a repeat is set.
+                if (n.recurrence != null) {
+                    Spacer(Modifier.height(10.dp))
+                    DetailCard {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Repeat from completion", style = BoldType.body.copy(fontSize = 14.sp), color = c.ink)
+                                Text(
+                                    "Schedule the next one from when you finish, not its due date",
+                                    style = BoldType.noteSrcMeta,
+                                    color = c.ink3
+                                )
+                            }
+                            Switch(checked = n.repeatFromCompletion, onCheckedChange = { viewModel.updateRepeatFromCompletion(it) })
+                        }
+                    }
+                }
+
                 Spacer(Modifier.height(10.dp))
                 if (n.locationLabel != null) {
                     val lat = n.locationLat

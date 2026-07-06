@@ -64,6 +64,19 @@ object RecurrenceUtil {
     }
 
     /**
+     * The next occurrence for a COMPLETION-BASED repeat (#124): advance one period from [completedDate]
+     * (the day the user actually finished, NOT the item's — possibly overdue — due date), then skip to
+     * the first slot strictly after [now] at [time]. This is what stops "every! N" from stacking overdue
+     * copies: finishing early or late reschedules from when you did it. Pure; null on bad inputs/recurrence.
+     */
+    fun nextFromCompletion(
+        completedDate: String, time: String?, recurrence: String?, now: LocalDateTime, anchorDay: Int? = null
+    ): String? {
+        val firstNext = next(completedDate, recurrence, anchorDay) ?: return null
+        return firstFutureOccurrence(firstNext, time, recurrence, now, anchorDay) ?: firstNext
+    }
+
+    /**
      * Parses a stored due time ("9:30", "09:30", "14:05") into a [LocalTime]; null if absent or
      * malformed. Tolerant of single-digit hours, so callers that arm alarms / calendar events agree
      * with [firstFutureOccurrence] on which times are valid (a strict HH parser would silently reject

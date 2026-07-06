@@ -65,6 +65,10 @@ interface TaskMindDao {
     @Query("UPDATE notes SET recurrenceAnchorDay = :anchor WHERE id = :id")
     suspend fun updateNoteRecurrenceAnchor(id: Int, anchor: Int?)
 
+    /** Completion-based recurrence flag (#124) — set from the note-detail "Repeat from completion" toggle. */
+    @Query("UPDATE notes SET repeatFromCompletion = :fromCompletion WHERE id = :id")
+    suspend fun updateNoteRepeatFromCompletion(id: Int, fromCompletion: Boolean)
+
     @Query("UPDATE notes SET priority = :priority WHERE id = :id")
     suspend fun updateNotePriority(id: Int, priority: String)
 

@@ -37,6 +37,32 @@ class NaturalDateTest {
 
     // ---- weekdays: assert the resolved day-of-week + that it lands in the right week ----
 
+    // ---- completion-based marker (#124): a "!" on the repeat phrase ----
+
+    @Test fun bang_onDaily_marksCompletionBased() {
+        val r = parse("water plants daily!")
+        assertEquals("daily", r.recurrence)
+        assertTrue(r.repeatFromCompletion)
+    }
+
+    @Test fun bang_onEvery_marksCompletionBased() {
+        val r = parse("review every! week")
+        assertEquals("weekly", r.recurrence)
+        assertTrue(r.repeatFromCompletion)
+    }
+
+    @Test fun bang_onMonthly_marksCompletionBased() {
+        val r = parse("pay rent monthly!")
+        assertEquals("monthly", r.recurrence)
+        assertTrue(r.repeatFromCompletion)
+    }
+
+    @Test fun plainRepeat_isNotCompletionBased() {
+        val r = parse("standup daily")
+        assertEquals("daily", r.recurrence)
+        assertFalse(r.repeatFromCompletion)
+    }
+
     @Test fun bareWeekday_isTheUpcomingOne() {
         val d = parse("gym friday").date!!
         assertEquals(DayOfWeek.FRIDAY, d.dayOfWeek)

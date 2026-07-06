@@ -75,7 +75,10 @@ class SuggestionApprover @Inject constructor(
             tags = suggestion.tags,
             // Anchor a monthly reminder to its day-of-month so stepping doesn't drift it to the 28th.
             recurrenceAnchorDay = if (suggestion.recurrence?.lowercase() == "monthly")
-                RecurrenceUtil.dayOfMonth(suggestion.dueDate) else null
+                RecurrenceUtil.dayOfMonth(suggestion.dueDate) else null,
+            // Completion-based recurrence (#124) carries over from the "every!" marker / auto-detected
+            // pattern, so completing the created note reschedules it from the finish time.
+            repeatFromCompletion = suggestion.repeatFromCompletion
         )
         val noteId = dao.insertNote(note)
 

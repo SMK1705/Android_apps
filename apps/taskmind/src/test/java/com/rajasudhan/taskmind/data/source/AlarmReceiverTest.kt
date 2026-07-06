@@ -69,6 +69,21 @@ class AlarmReceiverTest {
     }
 
     @Test
+    fun completionBasedReminder_doesNotAdvanceOnFire() = runTest {
+        // #124: a "repeat from completion" reminder stays on its due date when it fires — only finishing
+        // it reschedules (via CompletionRecurrence). Firing must not silently roll it to the next day.
+        val id = dao.insertNote(
+            aNote(type = "reminder", title = "Water plants", dueDate = "2026-06-01", dueTime = "09:00",
+                recurrence = "daily", repeatFromCompletion = true)
+        ).toInt()
+
+        receiver().handle(context, id, "Water plants", "daily", "2026-06-01", "09:00", LocalDateTime.of(2026, 6, 20, 12, 0))
+
+        assertEquals("2026-06-01", dao.getNoteByIdNow(id)!!.dueDate)
+        verify(exactly = 0) { alarms.schedule(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
     fun oneShotReminder_notifiesWithoutRescheduling() = runTest {
         val id = dao.insertNote(
             aNote(type = "reminder", title = "Once", dueDate = "2026-07-01", dueTime = "09:00")

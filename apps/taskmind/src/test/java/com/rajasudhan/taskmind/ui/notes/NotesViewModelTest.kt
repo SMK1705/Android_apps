@@ -40,7 +40,8 @@ class NotesViewModelTest {
             com.rajasudhan.taskmind.data.source.embedding.SemanticIndex(
                 com.rajasudhan.taskmind.data.source.embedding.HashingEmbedder(), dao
             ),
-            savedFilterStore
+            savedFilterStore,
+            com.rajasudhan.taskmind.data.source.CompletionRecurrence(dao, mockk(relaxed = true))
         )
     }
 

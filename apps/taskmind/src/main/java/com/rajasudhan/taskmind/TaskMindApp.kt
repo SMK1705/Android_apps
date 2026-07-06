@@ -11,6 +11,7 @@ import androidx.work.WorkManager
 import com.rajasudhan.taskmind.data.source.AutoSnapshotScheduler
 import com.rajasudhan.taskmind.data.source.DailyBriefScheduler
 import com.rajasudhan.taskmind.data.source.DataCollectionWorker
+import com.rajasudhan.taskmind.data.source.RecurrenceDetectorScheduler
 import com.rajasudhan.taskmind.data.source.SettingsManager
 import com.rajasudhan.taskmind.data.source.TaskMindForegroundService
 import com.rajasudhan.taskmind.data.source.WeeklyWinsScheduler
@@ -36,6 +37,9 @@ class TaskMindApp : Application(), Configuration.Provider {
     @Inject
     lateinit var autoSnapshotScheduler: AutoSnapshotScheduler
 
+    @Inject
+    lateinit var recurrenceDetectorScheduler: RecurrenceDetectorScheduler
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -60,6 +64,9 @@ class TaskMindApp : Application(), Configuration.Provider {
         // Always-on data safety net: a daily plain-JSON snapshot of notes to app-private storage, so a
         // Keystore reset that renders the encrypted DB unopenable can never mean a total loss (#161).
         autoSnapshotScheduler.schedule()
+        // Mine captured history a few times a week for a habit that keeps repeating, and offer to make it
+        // recurring (#124). KEEPs any existing schedule so a deferred run isn't reset on launch.
+        recurrenceDetectorScheduler.schedule()
     }
 
     companion object {

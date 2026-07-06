@@ -89,6 +89,10 @@ class FakeTaskMindDao : TaskMindDao {
         notes.update { list -> list.map { if (it.id == id) it.copy(recurrenceAnchorDay = anchor) else it } }
     }
 
+    override suspend fun updateNoteRepeatFromCompletion(id: Int, fromCompletion: Boolean) {
+        notes.update { list -> list.map { if (it.id == id) it.copy(repeatFromCompletion = fromCompletion) else it } }
+    }
+
     override suspend fun updateNotePriority(id: Int, priority: String) {
         notes.update { list -> list.map { if (it.id == id) it.copy(priority = priority) else it } }
     }

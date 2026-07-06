@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.source.AlarmScheduler
+import com.rajasudhan.taskmind.data.source.CompletionRecurrence
 import com.rajasudhan.taskmind.data.source.GeofenceManager
 import com.rajasudhan.taskmind.data.source.PlaceGeocoder
 import com.rajasudhan.taskmind.data.source.RecurrenceUtil
@@ -31,6 +32,7 @@ class NoteDetailViewModel @Inject constructor(
     private val llm: LlmProvider,
     private val settingsManager: SettingsManager,
     private val placeGeocoder: PlaceGeocoder,
+    private val completionRecurrence: CompletionRecurrence,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -57,8 +59,22 @@ class NoteDetailViewModel @Inject constructor(
     fun setCompleted(completed: Boolean) {
         val current = note.value ?: return
         viewModelScope.launch {
-            dao.setNoteCompleted(current.id, completed, if (completed) System.currentTimeMillis() else null)
+            val at = if (completed) System.currentTimeMillis() else null
+            dao.setNoteCompleted(current.id, completed, at)
+            // Completion-based recurrence (#124): completing rolls the item forward from now.
+            if (at != null) completionRecurrence.rollForwardIfCompletionBased(current, at)
         }
+    }
+
+    /**
+     * Toggle completion-based recurrence (#124) — reschedule from when the task is finished rather than
+     * its due date, so an early/late finish never leaves a pile of overdue copies. Only meaningful while
+     * a repeat is set; the UI exposes it only then.
+     */
+    fun updateRepeatFromCompletion(fromCompletion: Boolean) {
+        val current = note.value ?: return
+        if (fromCompletion == current.repeatFromCompletion) return
+        viewModelScope.launch { dao.updateNoteRepeatFromCompletion(current.id, fromCompletion) }
     }
 
     /** Persists a toggled/reordered checklist (encoded by [Checklist.encode]). */

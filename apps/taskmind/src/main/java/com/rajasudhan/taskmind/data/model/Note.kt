@@ -55,5 +55,11 @@ data class Note(
     // v16 (MIGRATION_15_16): Task Fade / bankruptcy (#125) — the user batch-archived this stale item
     // instead of finishing or deleting it. Hidden from the active list but never deleted (recoverable
     // from the Archived view). Off by default (NOT NULL DEFAULT 0, mirroring the migration).
-    @ColumnInfo(defaultValue = "0") val archived: Boolean = false
+    @ColumnInfo(defaultValue = "0") val archived: Boolean = false,
+    // v17 (MIGRATION_16_17): completion-based recurrence (#124) — when true, a repeating reminder's next
+    // occurrence is scheduled from when the user COMPLETES it, not from its due date, so finishing early
+    // or late never stacks a pile of overdue copies (Todoist's "every!"). Only meaningful alongside
+    // [recurrence]. Off by default (NOT NULL DEFAULT 0, mirroring the migration) — existing repeats stay
+    // date-based.
+    @ColumnInfo(defaultValue = "0") val repeatFromCompletion: Boolean = false
 )
