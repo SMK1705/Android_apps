@@ -18,7 +18,7 @@ It makes **real (paid) API calls**, so it is **manual — not wired into CI**.
 
 ## Dataset
 
-[`golden_set.jsonl`](golden_set.jsonl) holds 166 labelled cases spanning genuine reminders / to-dos /
+[`golden_set.jsonl`](golden_set.jsonl) holds 207 labelled cases spanning genuine reminders / to-dos /
 notes and — heavily — the **noise that must produce nothing**: social pings, promos & fake urgency,
 shipping/order updates, payment/account/subscription notices, OTP/security alerts, and app/system/news
 notifications. Many are drawn from real-world notification wording. Roughly half are `none`, so the
@@ -64,7 +64,8 @@ Append one JSON object per line to `golden_set.jsonl`:
 - `expect` is either `{"items": 0}` (the model must extract nothing) **or** a list of matchers;
   each matcher must be satisfied by at least one returned item. Supported matcher keys:
   `type`, `title_contains`, `notes_contains`, `location_contains`, `location` (exact, incl.
-  `null`), `due_date`, `due_time`, `recurrence`, `min_confidence`.
+  `null`), `due_date`, `due_time`, `recurrence`, `tags` (exact array), `tags_contains` (substring
+  in any tag), `min_confidence`.
 
 Keep assertions loose where the wording is the model's choice (`title_contains`, not an exact
 title) and tight where correctness matters (dates, times, recurrence, the no-item cases).

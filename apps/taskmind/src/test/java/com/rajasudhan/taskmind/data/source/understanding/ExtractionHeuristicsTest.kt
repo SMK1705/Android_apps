@@ -108,6 +108,25 @@ class ExtractionHeuristicsTest {
         assertEquals("normal", ExtractionHeuristics.sanitizePriority(null))
     }
 
+    // ---------------- tags (#123) ----------------
+
+    @Test
+    fun sanitizeTagsKeepsTaxonomyCanonicalisesCasingDropsRest() {
+        assertEquals("Money,Work", ExtractionHeuristics.sanitizeTags(listOf("Money", "Work")))
+        assertEquals("Money,Work", ExtractionHeuristics.sanitizeTags(listOf("money", "WORK"))) // canonical casing
+        assertEquals("Health", ExtractionHeuristics.sanitizeTags(listOf(" health "))) // trimmed
+        assertEquals("Work", ExtractionHeuristics.sanitizeTags(listOf("Work", "Urgent"))) // drops off-taxonomy
+    }
+
+    @Test
+    fun sanitizeTagsDeDupesAndCapsAtTwoAndNullsOutTheEmpty() {
+        assertEquals("Money", ExtractionHeuristics.sanitizeTags(listOf("Money", "money", "MONEY"))) // de-dup
+        assertEquals("Money,Health", ExtractionHeuristics.sanitizeTags(listOf("Money", "Health", "Work"))) // cap 2
+        assertNull(ExtractionHeuristics.sanitizeTags(null))
+        assertNull(ExtractionHeuristics.sanitizeTags(emptyList()))
+        assertNull(ExtractionHeuristics.sanitizeTags(listOf("Urgent", "Personal"))) // all off-taxonomy -> null
+    }
+
     // ---------------- JSON fence stripping ----------------
 
     @Test

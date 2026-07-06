@@ -11,7 +11,7 @@ import com.rajasudhan.taskmind.data.model.Suggestion
 
 @Database(
     entities = [Note::class, Suggestion::class, RejectedPattern::class, NoteEmbedding::class],
-    version = 13,
+    version = 14,
     exportSchema = true
 )
 abstract class TaskMindDatabase : RoomDatabase() {
@@ -149,6 +149,18 @@ abstract class TaskMindDatabase : RoomDatabase() {
         val MIGRATION_12_13 = object : Migration(12, 13) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE notes ADD COLUMN nagFiring INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v14 adds a nullable `tags` column to both notes and suggestions — 0–2 auto-tags from the
+         * closed taxonomy (#123), stored comma-separated. Nullable (null = untagged), so no DEFAULT
+         * (mirrors the entity fields); existing rows are simply untagged until re-extracted.
+         */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE notes ADD COLUMN tags TEXT")
+                db.execSQL("ALTER TABLE suggestions ADD COLUMN tags TEXT")
             }
         }
     }

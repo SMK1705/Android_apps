@@ -1,5 +1,6 @@
 package com.rajasudhan.taskmind.data.source.understanding
 
+import com.rajasudhan.taskmind.data.model.Tags
 import java.time.LocalDate
 
 /**
@@ -76,6 +77,20 @@ object ExtractionHeuristics {
      */
     fun sanitizePriority(raw: String?): String =
         if (raw?.trim()?.lowercase() == "high") "high" else "normal"
+
+    /**
+     * Clamps the model's tags to the closed [Tags] taxonomy: canonicalises casing, drops anything
+     * outside the list (the model can hallucinate a tag despite the schema/prompt), de-dupes, and
+     * keeps at most [Tags.MAX_TAGS]. Returns the stored comma-separated form, or null when nothing
+     * valid remains — so a missing, empty, or all-invalid tag list is indistinguishable from "no
+     * tags" downstream (the column is nullable, like recurrence/location).
+     */
+    fun sanitizeTags(raw: List<String>?): String? =
+        raw?.mapNotNull { Tags.canonical(it) }
+            ?.distinct()
+            ?.take(Tags.MAX_TAGS)
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { Tags.encode(it) }
 
     /**
      * Strips markdown code fences the LLM sometimes wraps JSON in, despite instructions. Trims the

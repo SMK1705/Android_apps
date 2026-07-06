@@ -4,8 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
+import com.rajasudhan.taskmind.data.model.SavedFilter
+import com.rajasudhan.taskmind.data.model.Tags
 import com.rajasudhan.taskmind.data.source.AlarmScheduler
 import com.rajasudhan.taskmind.data.source.RecurrenceUtil
+import com.rajasudhan.taskmind.data.source.SavedFilterStore
 import com.rajasudhan.taskmind.data.source.embedding.SemanticIndex
 import com.rajasudhan.taskmind.ui.common.isOverdue
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,7 +30,8 @@ import javax.inject.Inject
 class NotesViewModel @Inject constructor(
     private val dao: TaskMindDao,
     private val alarmScheduler: AlarmScheduler,
-    private val semanticIndex: SemanticIndex
+    private val semanticIndex: SemanticIndex,
+    private val savedFilterStore: SavedFilterStore
 ) : ViewModel() {
 
     init {
@@ -44,6 +48,11 @@ class NotesViewModel @Inject constructor(
     // null = all kinds; otherwise "todo" | "reminder" | "note". Mutually exclusive with the Done view.
     private val _kindFilter = MutableStateFlow<String?>(null)
     val kindFilter: StateFlow<String?> = _kindFilter
+
+    // Selected auto-tags (#123); empty = no tag constraint. AND-ed with the kind filter, OR within the
+    // set (a note matches if it carries ANY selected tag). Applies to the Active list only, like kind.
+    private val _tagFilter = MutableStateFlow<Set<String>>(emptySet())
+    val tagFilter: StateFlow<Set<String>> = _tagFilter
 
     /** Per-kind counts of the *active* notes, for the filter-chip badges. Key "all" = total. */
     val kindCounts: StateFlow<Map<String, Int>> =
@@ -63,6 +72,16 @@ class NotesViewModel @Inject constructor(
             }
             .stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
 
+    /** Live per-tag counts over the *active* notes, for the tag filter-chip badges (#123). */
+    val tagCounts: StateFlow<Map<String, Int>> =
+        dao.getActiveNotes()
+            .map { list -> list.flatMap { Tags.decode(it.tags) }.groupingBy { it }.eachCount() }
+            .stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
+
+    /** The user's pinned smart filters (#123), shown as custom chips; empty until one is saved. */
+    val savedFilters: StateFlow<List<SavedFilter>> =
+        savedFilterStore.filters.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
     /** Total completed notes — feeds the "Done · N" segment in the redesigned header. */
     val completedCount: StateFlow<Int> =
         dao.getCompletedNotes()
@@ -79,13 +98,18 @@ class NotesViewModel @Inject constructor(
     // list = loaded but nothing matches (UI shows the empty state). Both come from this one flow, so
     // the loading and empty states are always derived from the *displayed* query — never a stale one.
     val notes: StateFlow<List<Note>?> =
-        combine(_query, _showCompleted, _kindFilter) { q, c, k -> Triple(q, c, k) }
-            .flatMapLatest { (q, completed, kind) ->
-                fun keep(n: Note) = when (kind) {
-                    null -> true
-                    "overdue" -> isOverdue(n.dueDate, n.dueTime)
-                    "ready_to_close" -> n.pendingConfirmSince != null
-                    else -> n.type == kind
+        combine(_query, _showCompleted, _kindFilter, _tagFilter) { q, c, k, t -> Filters(q, c, k, t) }
+            .flatMapLatest { (q, completed, kind, tags) ->
+                fun keep(n: Note): Boolean {
+                    val keepKind = when (kind) {
+                        null -> true
+                        "overdue" -> isOverdue(n.dueDate, n.dueTime)
+                        "ready_to_close" -> n.pendingConfirmSince != null
+                        else -> n.type == kind
+                    }
+                    // OR within the tag set: a note matches if it carries any selected tag.
+                    val keepTags = tags.isEmpty() || Tags.decode(n.tags).any { it in tags }
+                    return keepKind && keepTags
                 }
                 when {
                     q.isNotBlank() -> {
@@ -101,10 +125,51 @@ class NotesViewModel @Inject constructor(
             .stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     fun setQuery(q: String) { _query.value = q }
-    fun setShowCompleted(c: Boolean) { _showCompleted.value = c; if (c) _kindFilter.value = null }
+
+    // Switching to the Done view drops both filter dimensions so it shows every completed item.
+    fun setShowCompleted(c: Boolean) {
+        _showCompleted.value = c
+        if (c) { _kindFilter.value = null; _tagFilter.value = emptySet() }
+    }
 
     /** Filter the active list by kind (null = all); leaves the Done view. */
     fun setKindFilter(kind: String?) { _kindFilter.value = kind; _showCompleted.value = false }
+
+    /** Toggle a tag in/out of the active tag filter (#123); leaves the Done view. */
+    fun toggleTag(tag: String) {
+        _showCompleted.value = false
+        _tagFilter.value = _tagFilter.value.let { if (tag in it) it - tag else it + tag }
+    }
+
+    /** True when something is actually being filtered, so a "Save filter" affordance is worth offering. */
+    fun canSaveCurrentFilter(): Boolean = _kindFilter.value != null || _tagFilter.value.isNotEmpty()
+
+    /** Pins the current kind + tags selection under [name] (no-op on a blank name / empty selection). */
+    fun saveCurrentFilter(name: String) {
+        if (name.isBlank() || !canSaveCurrentFilter()) return
+        val filter = SavedFilter(name.trim(), _kindFilter.value, _tagFilter.value.toList())
+        viewModelScope.launch { savedFilterStore.save(filter) }
+    }
+
+    /** Re-applies a saved filter's kind + tags to the live selection; leaves the Done view. */
+    fun applySavedFilter(filter: SavedFilter) {
+        _showCompleted.value = false
+        _kindFilter.value = filter.kind
+        _tagFilter.value = filter.tags.toSet()
+    }
+
+    /** Removes a pinned filter by name. */
+    fun deleteSavedFilter(name: String) {
+        viewModelScope.launch { savedFilterStore.delete(name) }
+    }
+
+    // Holds the four filter dimensions combined into the [notes] flow (Kotlin has no Quadruple).
+    private data class Filters(
+        val query: String,
+        val completed: Boolean,
+        val kind: String?,
+        val tags: Set<String>
+    )
 
     /** Toggle a single inline checklist item and persist the new encoded block. */
     fun toggleChecklistItem(note: Note, index: Int) {

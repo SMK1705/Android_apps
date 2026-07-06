@@ -27,5 +27,8 @@ data class Suggestion(
     val recurrence: String? = null,
     // v7 (MIGRATION_6_7): the model's suggested priority — "normal" | "high" (extraction never emits
     // "low"). Copied onto the created Note.priority on approval. Default mirrors MIGRATION_6_7.
-    @ColumnInfo(defaultValue = "'normal'") val priority: String = "normal"
+    @ColumnInfo(defaultValue = "'normal'") val priority: String = "normal",
+    // v14 (MIGRATION_13_14): auto-tags (#123) — 0–2 from the closed taxonomy, comma-separated (see
+    // [Tags]). Sanitised from the model's `tags` array; copied onto the note on approval. Nullable.
+    val tags: String? = null
 )

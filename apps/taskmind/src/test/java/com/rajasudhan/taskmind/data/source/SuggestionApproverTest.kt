@@ -111,6 +111,15 @@ class SuggestionApproverTest {
     }
 
     @Test
+    fun approve_carriesAutoTagsOntoTheNote() = runTest {
+        val s = insertPending(aSuggestion(extractedTitle = "Pay rent", type = "todo", tags = "Money,Home"))
+
+        val noteId = approver.approve(s)
+
+        assertEquals("Money,Home", dao.getNoteByIdNow(noteId.toInt())!!.tags)
+    }
+
+    @Test
     fun reminderWithoutATime_isNotScheduled() = runTest {
         val s = insertPending(aSuggestion(extractedTitle = "Someday", type = "reminder", dueDate = "2026-07-01", dueTime = null))
 

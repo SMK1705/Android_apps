@@ -18,6 +18,7 @@ import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_9
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_10_11
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_11_12
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_12_13
+import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_13_14
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -93,14 +94,14 @@ class MigrationTest {
     }
 
     @Test
-    fun migrate1To13_preservesData_andRoomValidatesSchema() = runTest {
+    fun migrate1To14_preservesData_andRoomValidatesSchema() = runTest {
         createV1Database()
 
         val db = Room.databaseBuilder(context, TaskMindDatabase::class.java, testDb)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
             .allowMainThreadQueries()
             .build()
-        // Opening runs the 1→13 chain and validates the resulting schema against the current entities.
+        // Opening runs the 1→14 chain and validates the resulting schema against the current entities.
         db.openHelper.writableDatabase
 
         val dao = db.taskMindDao()
@@ -117,6 +118,7 @@ class MigrationTest {
         assertNull(notes[0].pendingConfirmSince) // added in v11, nullable
         assertNull(notes[0].recurrenceAnchorDay) // added in v12, nullable (the note isn't monthly)
         assertFalse(notes[0].nagFiring)      // added in v13 with DEFAULT 0
+        assertNull(notes[0].tags)            // added in v14, nullable
 
         val sug = dao.getSuggestionById(1)
         assertNotNull(sug)
@@ -127,6 +129,7 @@ class MigrationTest {
         assertNull(sug.recurrence)           // v5
         assertEquals("normal", sug.priority) // added in v7 with DEFAULT 'normal'
         assertNull(sug.counterparty)         // added in v9, nullable
+        assertNull(sug.tags)                 // added in v14, nullable
 
         // v10 added the note_embeddings table — it must exist and be queryable (empty at this point).
         assertEquals(0, dao.getAllEmbeddings().size)

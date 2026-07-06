@@ -129,7 +129,8 @@ class UnderstandingPipeline @Inject constructor(
                         location = item.location?.trim()?.ifBlank { null },
                         recurrence = effectiveRecurrence,
                         priority = ExtractionHeuristics.sanitizePriority(item.priority),
-                        counterparty = item.counterparty?.trim()?.ifBlank { null }
+                        counterparty = item.counterparty?.trim()?.ifBlank { null },
+                        tags = ExtractionHeuristics.sanitizeTags(item.tags)
                     )
                     dao.insertSuggestion(suggestion)
                     insertedAny = true
