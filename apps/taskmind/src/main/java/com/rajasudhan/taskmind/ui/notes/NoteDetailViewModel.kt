@@ -7,6 +7,7 @@ import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.source.AlarmScheduler
 import com.rajasudhan.taskmind.data.source.GeofenceManager
+import com.rajasudhan.taskmind.data.source.PlaceGeocoder
 import com.rajasudhan.taskmind.data.source.RecurrenceUtil
 import com.rajasudhan.taskmind.data.source.SettingsManager
 import com.rajasudhan.taskmind.data.source.understanding.LlmProvider
@@ -29,6 +30,7 @@ class NoteDetailViewModel @Inject constructor(
     private val onDeviceLlm: OnDeviceLlmProvider,
     private val llm: LlmProvider,
     private val settingsManager: SettingsManager,
+    private val placeGeocoder: PlaceGeocoder,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -203,6 +205,27 @@ class NoteDetailViewModel @Inject constructor(
         viewModelScope.launch {
             dao.updateNoteLocation(current.id, lat, lng, RADIUS_METERS, label)
             geofenceManager.add(current.id, lat, lng, RADIUS_METERS.toFloat())
+        }
+    }
+
+    /**
+     * Attach a place reminder for a TYPED place name (not just the current location), resolving it to
+     * coordinates with [PlaceGeocoder] — the same geocoder the approval path already uses. [onResult]
+     * gets false when the place can't be resolved so the caller can prompt the user to refine it.
+     */
+    fun setLocationReminderByPlace(placeName: String, label: String, onResult: (Boolean) -> Unit) {
+        val current = note.value ?: return
+        viewModelScope.launch {
+            // The geocoder reaches out to the system Geocoder (IO); treat it as fallible. runCatching keeps
+            // a thrown error (not just a null result) from killing the coroutine and leaving onResult —
+            // and the UI waiting on it — hanging with no feedback.
+            val ok = runCatching {
+                val coords = placeGeocoder.geocode(placeName) ?: return@runCatching false
+                dao.updateNoteLocation(current.id, coords.first, coords.second, RADIUS_METERS, label)
+                geofenceManager.add(current.id, coords.first, coords.second, RADIUS_METERS.toFloat())
+                true
+            }.getOrDefault(false)
+            onResult(ok)
         }
     }
 

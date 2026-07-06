@@ -137,10 +137,6 @@ class NotesViewModel @Inject constructor(
         }
     }
 
-    fun deleteNote(note: Note) {
-        viewModelScope.launch { dao.deleteNote(note) }
-    }
-
     /**
      * Rank [notes] for search query [q]: substring (lexical) hits always show and sort to the top,
      * plus notes the query is semantically close to (via the embedding index), by relevance. Falls

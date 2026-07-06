@@ -63,6 +63,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true // exposes VERSION_NAME/VERSION_CODE so the Settings footer never goes stale
     }
     testOptions {
         unitTests {

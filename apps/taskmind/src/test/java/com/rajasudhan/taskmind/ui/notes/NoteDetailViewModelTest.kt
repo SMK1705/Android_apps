@@ -37,11 +37,12 @@ class NoteDetailViewModelTest {
     private val onDeviceLlm = mockk<OnDeviceLlmProvider>(relaxed = true)
     private val llm = mockk<LlmProvider>(relaxed = true)
     private val settingsManager = mockk<SettingsManager>(relaxed = true)
+    private val placeGeocoder = mockk<com.rajasudhan.taskmind.data.source.PlaceGeocoder>()
 
     /** Insert [note], build a VM bound to its id, and wait for the note flow to load. */
     private suspend fun vmFor(note: Note): Pair<NoteDetailViewModel, Int> {
         val id = dao.insertNote(note).toInt()
-        val vm = NoteDetailViewModel(dao, alarms, geofence, onDeviceLlm, llm, settingsManager, SavedStateHandle(mapOf("noteId" to id)))
+        val vm = NoteDetailViewModel(dao, alarms, geofence, onDeviceLlm, llm, settingsManager, placeGeocoder, SavedStateHandle(mapOf("noteId" to id)))
         vm.note.filterNotNull().first()
         return vm to id
     }
@@ -234,6 +235,50 @@ class NoteDetailViewModelTest {
         vm.updateTitle("New")
 
         assertFalse(dao.getNoteByIdNow(id)!!.nagFiring)
+    }
+
+    // #132: a place reminder can be set from a TYPED place name, not just the current location.
+    @Test
+    fun setLocationReminderByPlace_geocodesTheName_persistsCoords_andArmsTheGeofence() = runTest {
+        val (vm, id) = vmFor(aNote(title = "Lunch", type = "reminder"))
+        coEvery { placeGeocoder.geocode("Panda Express, Dunwoody") } returns (10.0 to 20.0)
+        var resolved: Boolean? = null
+
+        vm.setLocationReminderByPlace("Panda Express, Dunwoody", "Lunch spot") { resolved = it }
+
+        assertEquals(true, resolved)
+        val note = dao.getNoteByIdNow(id)!!
+        assertEquals(10.0, note.locationLat!!, 0.0001)
+        assertEquals(20.0, note.locationLng!!, 0.0001)
+        assertEquals("Lunch spot", note.locationLabel)
+        verify { geofence.add(id, 10.0, 20.0, any()) }
+    }
+
+    @Test
+    fun setLocationReminderByPlace_reportsFailure_andChangesNothing_whenUnresolvable() = runTest {
+        val (vm, id) = vmFor(aNote(title = "Lunch", type = "reminder"))
+        coEvery { placeGeocoder.geocode(any()) } returns null
+        var resolved: Boolean? = null
+
+        vm.setLocationReminderByPlace("nowhere at all", "x") { resolved = it }
+
+        assertEquals(false, resolved)
+        assertNull(dao.getNoteByIdNow(id)!!.locationLat)
+        verify(exactly = 0) { geofence.add(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun setLocationReminderByPlace_reportsFailure_whenTheGeocoderThrows() = runTest {
+        // The geocoder does IO; a thrown error must surface as onResult(false), not a hung coroutine.
+        val (vm, id) = vmFor(aNote(title = "Lunch", type = "reminder"))
+        coEvery { placeGeocoder.geocode(any()) } throws java.io.IOException("geocoder offline")
+        var resolved: Boolean? = null
+
+        vm.setLocationReminderByPlace("somewhere", "x") { resolved = it }
+
+        assertEquals(false, resolved)
+        assertNull(dao.getNoteByIdNow(id)!!.locationLat)
+        verify(exactly = 0) { geofence.add(any(), any(), any(), any()) }
     }
 
     @Test

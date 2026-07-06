@@ -240,6 +240,14 @@ private fun BoldNoteCard(
                             ) {
                                 Text("HIGH", style = BoldType.detailMeta.copy(fontSize = 8.5.sp, letterSpacing = 0.5.sp), color = c.skip)
                             }
+                        } else if (note.priority == "low") {
+                            // Muted, so a low item reads as de-prioritised instead of identical to normal.
+                            Box(
+                                Modifier.clip(RoundedCornerShape(4.dp)).background(c.ink3.copy(alpha = 0.15f))
+                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                            ) {
+                                Text("LOW", style = BoldType.detailMeta.copy(fontSize = 8.5.sp, letterSpacing = 0.5.sp), color = c.ink3)
+                            }
                         }
                         Text(
                             note.source,

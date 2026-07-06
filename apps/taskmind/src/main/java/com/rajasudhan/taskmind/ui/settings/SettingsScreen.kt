@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.rajasudhan.taskmind.AppLock
+import com.rajasudhan.taskmind.BuildConfig
 import com.rajasudhan.taskmind.data.source.SettingsManager
 import com.rajasudhan.taskmind.ui.bold.BoldFilterChip
 import com.rajasudhan.taskmind.ui.theme.BoldTheme
@@ -614,7 +615,7 @@ fun SettingsScreen(
             )
         }
         Text(
-            "TASKMIND · UPDATE 4 · v4.0",
+            "TASKMIND · v${BuildConfig.VERSION_NAME}",
             style = BoldType.detailMeta.copy(letterSpacing = 0.5.sp), color = c.ink3,
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center
