@@ -14,7 +14,7 @@ class SettingsManager @Inject constructor(
 ) {
     companion object {
         private const val KEY_LLM_API_KEY = "llm_api_key"
-        private const val KEY_STT_API_KEY = "stt_api_key"
+        private const val KEY_WHISPER_SECOND_PASS = "whisper_second_pass"
         private const val KEY_USE_ON_DEVICE_LLM = "use_on_device_llm"
         private const val KEY_EVENT_DURATION_MINUTES = "event_duration_minutes"
         private const val KEY_CALENDAR_ID = "calendar_id"
@@ -44,9 +44,14 @@ class SettingsManager @Inject constructor(
         get() = encryptedPrefs.getString(KEY_LLM_API_KEY, "") ?: ""
         set(value) = encryptedPrefs.edit().putString(KEY_LLM_API_KEY, value).apply()
 
-    var sttApiKey: String
-        get() = encryptedPrefs.getString(KEY_STT_API_KEY, "") ?: ""
-        set(value) = encryptedPrefs.edit().putString(KEY_STT_API_KEY, value).apply()
+    /**
+     * Whether the Whisper second pass (#126) runs on saved recordings after the Vosk first pass. Off by
+     * default — an opt-in enhancement that also needs a ggml model pushed to the device and the native
+     * engine linked (#207); until then it's a no-op even when on.
+     */
+    var whisperSecondPassEnabled: Boolean
+        get() = encryptedPrefs.getBoolean(KEY_WHISPER_SECOND_PASS, false)
+        set(value) = encryptedPrefs.edit().putBoolean(KEY_WHISPER_SECOND_PASS, value).apply()
 
     var useOnDeviceLlm: Boolean
         // On-device is the privacy-preserving default.
@@ -183,7 +188,7 @@ class SettingsManager @Inject constructor(
     fun clearSettings() {
         encryptedPrefs.edit()
             .remove(KEY_LLM_API_KEY)
-            .remove(KEY_STT_API_KEY)
+            .remove(KEY_WHISPER_SECOND_PASS)
             .remove(KEY_USE_ON_DEVICE_LLM)
             .remove(KEY_EVENT_DURATION_MINUTES)
             .remove(KEY_CALENDAR_ID)

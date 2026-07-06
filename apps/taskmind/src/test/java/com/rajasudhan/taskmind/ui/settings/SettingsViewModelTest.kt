@@ -8,6 +8,7 @@ import com.rajasudhan.taskmind.data.source.ModelDownloader
 import com.rajasudhan.taskmind.data.source.SettingsManager
 import com.rajasudhan.taskmind.data.source.ocr.OcrEngine
 import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
+import com.rajasudhan.taskmind.data.source.transcription.WhisperTranscriber
 import com.rajasudhan.taskmind.data.source.understanding.OnDeviceLlmProvider
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
 import com.rajasudhan.taskmind.testutil.MainDispatcherRule
@@ -41,6 +42,7 @@ class SettingsViewModelTest {
         mockk<UnderstandingPipeline>(relaxed = true),
         mockk<EgressLogger>(relaxed = true),
         mockk<VoskTranscriber>(relaxed = true),
+        mockk<WhisperTranscriber>(relaxed = true),
         mockk<OcrEngine>(relaxed = true),
         mockk<ModelDownloader>(relaxed = true),
         mockk<BackupManager>(relaxed = true),

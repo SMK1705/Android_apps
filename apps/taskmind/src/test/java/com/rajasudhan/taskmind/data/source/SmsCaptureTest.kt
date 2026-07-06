@@ -71,7 +71,7 @@ class SmsCaptureTest {
         gmailAuth = mockk(relaxed = true),
         gmailCollector = mockk(relaxed = true),
         appUsageCollector = mockk(relaxed = true),
-        voskTranscriber = mockk(relaxed = true),
+        transcriber = mockk(relaxed = true),
         ocrEngine = mockk(relaxed = true),
         personContextNotifier = mockk(relaxed = true),
     )

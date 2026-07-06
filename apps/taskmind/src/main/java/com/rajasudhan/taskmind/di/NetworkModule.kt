@@ -3,6 +3,8 @@ package com.rajasudhan.taskmind.di
 import com.rajasudhan.taskmind.data.source.email.GmailApi
 import com.rajasudhan.taskmind.data.source.embedding.Embedder
 import com.rajasudhan.taskmind.data.source.embedding.HashingEmbedder
+import com.rajasudhan.taskmind.data.source.transcription.NativeWhisperEngine
+import com.rajasudhan.taskmind.data.source.transcription.WhisperEngine
 import com.rajasudhan.taskmind.data.source.understanding.LlmProvider
 import com.rajasudhan.taskmind.data.source.understanding.RoutingLlmProvider
 import com.squareup.moshi.Moshi
@@ -33,6 +35,14 @@ abstract class NetworkModule {
     abstract fun bindEmbedder(
         hashingEmbedder: HashingEmbedder
     ): Embedder
+
+    // The native whisper.cpp engine isn't linked yet (#207); this binding makes the second pass a
+    // graceful no-op until it is. Swap the implementation here when the JNI engine lands.
+    @Binds
+    @Singleton
+    abstract fun bindWhisperEngine(
+        nativeWhisperEngine: NativeWhisperEngine
+    ): WhisperEngine
 
     companion object {
         @Provides

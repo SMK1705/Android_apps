@@ -9,7 +9,7 @@ import android.provider.Telephony
 import com.rajasudhan.taskmind.data.source.email.GmailAuth
 import com.rajasudhan.taskmind.data.source.email.GmailCollector
 import com.rajasudhan.taskmind.data.source.ocr.OcrEngine
-import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
+import com.rajasudhan.taskmind.data.source.transcription.Transcriber
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -30,7 +30,7 @@ class RecentDataScanner @Inject constructor(
     private val gmailAuth: GmailAuth,
     private val gmailCollector: GmailCollector,
     private val appUsageCollector: AppUsageCollector,
-    private val voskTranscriber: VoskTranscriber,
+    private val transcriber: Transcriber,
     private val ocrEngine: OcrEngine,
     private val personContextNotifier: PersonContextNotifier
 ) {
@@ -199,7 +199,7 @@ class RecentDataScanner @Inject constructor(
      * since [since]; already-transcribed ids are skipped. Skips silently if no Vosk model is present.
      */
     private suspend fun scanAudio(since: Long) {
-        if (!voskTranscriber.isModelPresent()) {
+        if (!transcriber.isModelPresent()) {
             android.util.Log.w("RecentDataScanner", "Audio enabled but no Vosk model present; skipping")
             return
         }
@@ -229,9 +229,14 @@ class RecentDataScanner @Inject constructor(
                 if (id.toString() in processed) continue
                 val name = cursor.getString(nameCol) ?: "recording"
                 val uri = ContentUris.withAppendedId(collection, id)
-                val transcript = runCatching { voskTranscriber.transcribe(uri) }.getOrNull()
+                val result = runCatching { transcriber.transcribe(uri) }.getOrNull()
+                val transcript = result?.text
                 sourceManager.addProcessedAudioId(id.toString())
-                android.util.Log.i("RecentDataScanner", "Transcribed $name -> ${transcript?.length ?: 0} chars")
+                android.util.Log.i(
+                    "RecentDataScanner",
+                    "Transcribed $name -> ${transcript?.length ?: 0} chars" +
+                        if (result?.secondPassUsed == true) " (Whisper 2nd pass)" else ""
+                )
                 if (!transcript.isNullOrBlank()) {
                     pipeline.processText("Recording: $name", transcript)
                 }
