@@ -206,11 +206,18 @@ class RecentDataScanner @Inject constructor(
         val processed = sourceManager.processedAudioIds.first()
         val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         val projection = arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DISPLAY_NAME)
+        // Honour the user-configured Call / Voice recording folders (Settings → Sources) instead of a
+        // hardcoded filter; fall back to the common folder names if both are blank so we never build an
+        // empty clause (which would match nothing) or an unbounded one.
+        val patterns = listOf(
+            sourceManager.callRecordingPath.first(),
+            sourceManager.voiceRecordingPath.first(),
+        ).mapNotNull { RecordingPaths.relativePattern(it) }.distinct()
+            .ifEmpty { listOf("Recordings", "Call") }
+        val pathClause = patterns.joinToString(" OR ") { "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?" }
         val selection = "${MediaStore.Audio.Media.DATE_MODIFIED} >= ? AND " +
-            "${MediaStore.Audio.Media.IS_MUSIC} = 0 AND " +
-            "(${MediaStore.Audio.Media.RELATIVE_PATH} LIKE '%Recordings%' OR " +
-            "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE '%Call%')"
-        val args = arrayOf((since / 1000).toString())
+            "${MediaStore.Audio.Media.IS_MUSIC} = 0 AND ($pathClause)"
+        val args = (listOf((since / 1000).toString()) + patterns.map { "%$it%" }).toTypedArray()
         context.contentResolver.query(
             collection, projection, selection, args,
             "${MediaStore.Audio.Media.DATE_MODIFIED} DESC"

@@ -968,7 +968,8 @@ private fun BoldSuggestionCard(
                         // Override the model's suggested priority before keeping.
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                             Text("PRIORITY", style = BoldType.detailMeta.copy(letterSpacing = 0.5.sp), color = c.ink3)
-                            KindPickerChip("Normal", suggestion.priority != "high") { onEdit(suggestion.copy(priority = "normal")) }
+                            KindPickerChip("Low", suggestion.priority == "low") { onEdit(suggestion.copy(priority = "low")) }
+                            KindPickerChip("Normal", suggestion.priority == "normal") { onEdit(suggestion.copy(priority = "normal")) }
                             KindPickerChip("High", suggestion.priority == "high") { onEdit(suggestion.copy(priority = "high")) }
                         }
                         Spacer(Modifier.height(10.dp))

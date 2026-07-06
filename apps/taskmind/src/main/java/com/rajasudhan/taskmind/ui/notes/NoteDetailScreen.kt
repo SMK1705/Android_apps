@@ -109,14 +109,28 @@ fun NoteDetailScreen(
     var showLocationDialog by remember { mutableStateOf(false) }
     var showReminderSheet by remember { mutableStateOf(false) }
     var locationLabel by remember { mutableStateOf("") }
+    var placeQuery by remember { mutableStateOf("") }
     var pendingLabel by remember { mutableStateOf<String?>(null) }
+    // When set, geocode this typed place instead of capturing the current location — both still gate on
+    // location permission below, because the geofence can't register without it either way.
+    var pendingPlace by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(fineLocation.status.isGranted, pendingLabel) {
         val label = pendingLabel
         if (label != null && fineLocation.status.isGranted) {
             if (!backgroundLocation.status.isGranted) backgroundLocation.launchPermissionRequest()
-            captureCurrentLocation(context) { lat, lng -> viewModel.setLocationReminder(lat, lng, label) }
+            val place = pendingPlace
+            if (place != null) {
+                viewModel.setLocationReminderByPlace(place, label) { resolved ->
+                    if (!resolved) Toast.makeText(
+                        context, "Couldn't find that place — try adding a city.", Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } else {
+                captureCurrentLocation(context) { lat, lng -> viewModel.setLocationReminder(lat, lng, label) }
+            }
             pendingLabel = null
+            pendingPlace = null
         }
     }
 
@@ -326,7 +340,7 @@ fun NoteDetailScreen(
                     }
                 } else {
                     BoldActionButton("Remind me at a place", Icons.Default.Place, filled = false) {
-                        locationLabel = ""; showLocationDialog = true
+                        locationLabel = ""; placeQuery = ""; showLocationDialog = true
                     }
                 }
             }
@@ -387,12 +401,19 @@ fun NoteDetailScreen(
 
     if (showLocationDialog) {
         AlertDialog(
-            onDismissRequest = { showLocationDialog = false },
+            onDismissRequest = { showLocationDialog = false; placeQuery = "" },
             title = { Text("Remind me at a place") },
             text = {
                 Column {
-                    Text("Saves your current location; you'll be reminded when you return here.")
+                    Text("Type a place, or leave it blank to use your current location. You'll be reminded when you arrive.")
                     Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = placeQuery,
+                        onValueChange = { placeQuery = it },
+                        label = { Text("Place (e.g. Panda Express, Dunwoody)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = locationLabel,
                         onValueChange = { locationLabel = it },
@@ -403,14 +424,19 @@ fun NoteDetailScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    val label = locationLabel.trim().ifBlank { "Saved location" }
+                    val place = placeQuery.trim()
+                    val label = locationLabel.trim().ifBlank { place.ifBlank { "Saved location" } }
                     showLocationDialog = false
-                    pendingLabel = label // captured by the LaunchedEffect once location permission is granted
+                    placeQuery = ""
+                    // Both paths gate on location permission (the geofence needs it); the LaunchedEffect
+                    // then geocodes the typed place, or falls back to the current location when blank.
+                    pendingPlace = place.ifBlank { null }
+                    pendingLabel = label
                     if (!fineLocation.status.isGranted) fineLocation.launchPermissionRequest()
-                }) { Text("Use current location") }
+                }) { Text("Set reminder") }
             },
             dismissButton = {
-                TextButton(onClick = { showLocationDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showLocationDialog = false; placeQuery = "" }) { Text("Cancel") }
             }
         )
     }
@@ -421,7 +447,7 @@ fun NoteDetailScreen(
             onDismiss = { showReminderSheet = false },
             onSchedule = { date, time -> viewModel.updateSchedule(date, time); showReminderSheet = false },
             onSetRecurrence = { viewModel.updateRecurrence(it) },
-            onUseLocation = { showReminderSheet = false; locationLabel = ""; showLocationDialog = true }
+            onUseLocation = { showReminderSheet = false; locationLabel = ""; placeQuery = ""; showLocationDialog = true }
         )
     }
 }
