@@ -23,6 +23,7 @@ import javax.inject.Singleton
 class CompletionRecurrence @Inject constructor(
     private val dao: TaskMindDao,
     private val alarmScheduler: AlarmScheduler,
+    private val calendarMirror: CalendarMirror,
 ) {
     /**
      * If [note] is a completion-based repeat, reschedule it from [completedAtMillis] and clear its
@@ -53,7 +54,10 @@ class CompletionRecurrence @Inject constructor(
         dao.updateNoteDueDate(note.id, next)
         dao.setNoteCompleted(note.id, false, null)
         val armed = alarmScheduler.schedule(note.id, note.title, next, note.dueTime, note.recurrence)
-        if (!armed.isNullOrBlank() && armed != next) dao.updateNoteDueDate(note.id, armed)
+        val finalDate = armed?.takeIf { it.isNotBlank() } ?: next
+        if (finalDate != next) dao.updateNoteDueDate(note.id, finalDate)
+        // Move the mirrored calendar event (#119) onto the new occurrence too, so it doesn't drift stale.
+        note.calendarEventId?.let { calendarMirror.update(it, note.title, finalDate, note.dueTime) }
         return true
     }
 }

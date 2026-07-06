@@ -28,6 +28,7 @@ class ReminderActionReceiverTest {
     private lateinit var dao: TaskMindDao
     private val alarms = mockk<AlarmScheduler>(relaxed = true)
     private val geofences = mockk<GeofenceManager>(relaxed = true)
+    private val calendarMirror = mockk<CalendarMirror>(relaxed = true)
 
     @Before
     fun setUp() {
@@ -44,7 +45,8 @@ class ReminderActionReceiverTest {
         r.dao = dao
         r.alarmScheduler = alarms
         r.geofenceManager = geofences
-        r.completionRecurrence = CompletionRecurrence(dao, alarms)
+        r.completionRecurrence = CompletionRecurrence(dao, alarms, calendarMirror)
+        r.calendarMirror = calendarMirror
         return r
     }
 
@@ -80,6 +82,19 @@ class ReminderActionReceiverTest {
         verify { alarms.schedule(id, "Call back", note.dueDate, note.dueTime, null) }
         verify(exactly = 0) { alarms.snoozeReminder(any(), any(), any()) }
         verify(exactly = 0) { alarms.cancel(any()) }
+    }
+
+    @Test
+    fun snoozeOnAOneShot_movesItsMirroredCalendarEvent() = runTest {
+        val id = dao.insertNote(
+            aNote(type = "reminder", title = "Call back", dueDate = "2026-07-01", dueTime = "09:00", calendarEventId = 9L)
+        ).toInt()
+
+        receiver().handle(context, ReminderActionReceiver.ACTION_SNOOZE, id, "Call back")
+
+        // A snooze is a reschedule — the mirrored event follows the note to its new slot (#119).
+        val note = dao.getNoteByIdNow(id)!!
+        verify { calendarMirror.update(9L, "Call back", note.dueDate!!, note.dueTime!!) }
     }
 
     @Test

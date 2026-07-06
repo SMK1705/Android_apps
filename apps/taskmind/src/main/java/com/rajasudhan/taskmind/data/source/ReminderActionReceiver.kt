@@ -25,6 +25,7 @@ class ReminderActionReceiver : BroadcastReceiver() {
     @Inject lateinit var alarmScheduler: AlarmScheduler
     @Inject lateinit var geofenceManager: GeofenceManager
     @Inject lateinit var completionRecurrence: CompletionRecurrence
+    @Inject lateinit var calendarMirror: CalendarMirror
 
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
@@ -58,6 +59,8 @@ class ReminderActionReceiver : BroadcastReceiver() {
                 if (!completionRecurrence.rollForwardIfCompletionBased(note, at)) {
                     alarmScheduler.cancel(noteId)
                     geofenceManager.remove(noteId)
+                    // Remove the mirrored calendar event too (#119) — the task is done.
+                    note?.calendarEventId?.let { calendarMirror.delete(it); dao.updateNoteCalendarEventId(noteId, null) }
                 }
             }
             ACTION_SNOOZE -> snooze(dao.getNoteByIdNow(noteId), LocalDateTime.now().plusMinutes(SNOOZE_MINUTES))
@@ -91,6 +94,8 @@ class ReminderActionReceiver : BroadcastReceiver() {
             val dueTime = "%02d:%02d".format(at.hour, at.minute)
             dao.updateNote(note.copy(dueDate = dueDate, dueTime = dueTime))
             alarmScheduler.schedule(note.id, note.title, dueDate, dueTime, null)
+            // A snooze is a reschedule: move the mirrored calendar event to the new slot too (#119).
+            note.calendarEventId?.let { calendarMirror.update(it, note.title, dueDate, dueTime) }
         } else {
             // Round UP to whole minutes: the target was computed from an earlier now(), so a plain
             // toMinutes() would land at 59 for a "1 hour" snooze.

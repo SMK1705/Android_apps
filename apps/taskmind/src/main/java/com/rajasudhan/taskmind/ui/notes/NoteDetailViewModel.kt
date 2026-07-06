@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.source.AlarmScheduler
+import com.rajasudhan.taskmind.data.source.CalendarMirror
 import com.rajasudhan.taskmind.data.source.CompletionRecurrence
 import com.rajasudhan.taskmind.data.source.GeofenceManager
 import com.rajasudhan.taskmind.data.source.PlaceGeocoder
@@ -33,6 +34,7 @@ class NoteDetailViewModel @Inject constructor(
     private val settingsManager: SettingsManager,
     private val placeGeocoder: PlaceGeocoder,
     private val completionRecurrence: CompletionRecurrence,
+    private val calendarMirror: CalendarMirror,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -51,6 +53,8 @@ class NoteDetailViewModel @Inject constructor(
         viewModelScope.launch {
             alarmScheduler.cancel(current.id)
             geofenceManager.remove(current.id)
+            // Tear down the mirrored calendar event too (#119) — a deleted task shouldn't leave one behind.
+            current.calendarEventId?.let { calendarMirror.delete(it) }
             dao.deleteNote(current)
             onDeleted()
         }
@@ -61,8 +65,15 @@ class NoteDetailViewModel @Inject constructor(
         viewModelScope.launch {
             val at = if (completed) System.currentTimeMillis() else null
             dao.setNoteCompleted(current.id, completed, at)
-            // Completion-based recurrence (#124): completing rolls the item forward from now.
-            if (at != null) completionRecurrence.rollForwardIfCompletionBased(current, at)
+            // Completion-based recurrence (#124) rolls the item forward (moving its calendar event too);
+            // a normal completion instead removes the mirrored event (#119) — the task is done.
+            if (at != null) {
+                val rolled = completionRecurrence.rollForwardIfCompletionBased(current, at)
+                if (!rolled) current.calendarEventId?.let {
+                    calendarMirror.delete(it)
+                    dao.updateNoteCalendarEventId(current.id, null)
+                }
+            }
         }
     }
 
@@ -143,6 +154,8 @@ class NoteDetailViewModel @Inject constructor(
                 // loaded snapshot may predate a fire that set nagFiring, so a guard could miss it.
                 dao.setNagFiring(current.id, false)
             }
+            // Rename the mirrored calendar event to match (#119).
+            current.calendarEventId?.let { calendarMirror.update(it, title, current.dueDate, current.dueTime) }
         }
     }
 
@@ -187,6 +200,9 @@ class NoteDetailViewModel @Inject constructor(
             // stored dueDate matches when the reminder will actually next fire.
             val armed = alarmScheduler.schedule(current.id, current.title, current.dueDate, current.dueTime, value)
             if (!armed.isNullOrBlank() && armed != current.dueDate) dao.updateNoteDueDate(current.id, armed)
+            // If schedule() advanced a recurring reminder past a stale slot, move its calendar event too (#119).
+            val effective = armed?.takeIf { it.isNotBlank() } ?: current.dueDate
+            current.calendarEventId?.let { calendarMirror.update(it, current.title, effective, current.dueTime) }
             // Changing the schedule cancels any in-flight nag re-fire (schedule → cancelRefire); clear the
             // now-stale flag so a reboot can't resurrect the dead chain (see updateTitle for why it's
             // unconditional rather than guarded on the loaded snapshot).
@@ -202,15 +218,22 @@ class NoteDetailViewModel @Inject constructor(
             // Both branches below tear down any in-flight nag re-fire (schedule/cancel → cancelRefire), so
             // clear nagFiring in the same write — otherwise a reboot resurrects the now-dead chain.
             dao.updateNote(current.copy(dueDate = dueDate, dueTime = dueTime, type = type, nagFiring = false))
+            val finalDate: String?
             if (dueTime != null) {
                 // A monthly reminder's intended day-of-month moves with the new date — re-anchor it.
                 if (current.recurrence?.lowercase() == "monthly") {
                     dao.updateNoteRecurrenceAnchor(current.id, RecurrenceUtil.dayOfMonth(dueDate))
                 }
                 val armed = alarmScheduler.schedule(current.id, current.title, dueDate, dueTime, current.recurrence)
-                if (!armed.isNullOrBlank() && armed != dueDate) dao.updateNoteDueDate(current.id, armed)
+                finalDate = if (!armed.isNullOrBlank() && armed != dueDate) { dao.updateNoteDueDate(current.id, armed); armed } else dueDate
             } else {
                 alarmScheduler.cancel(current.id)
+                finalDate = dueDate
+            }
+            // Mirror the reschedule (#119): move the event to the new slot, or delete it if the date cleared.
+            current.calendarEventId?.let { ev ->
+                if (finalDate != null) calendarMirror.update(ev, current.title, finalDate, dueTime)
+                else { calendarMirror.delete(ev); dao.updateNoteCalendarEventId(current.id, null) }
             }
         }
     }

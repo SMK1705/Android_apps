@@ -38,11 +38,12 @@ class NoteDetailViewModelTest {
     private val llm = mockk<LlmProvider>(relaxed = true)
     private val settingsManager = mockk<SettingsManager>(relaxed = true)
     private val placeGeocoder = mockk<com.rajasudhan.taskmind.data.source.PlaceGeocoder>()
+    private val calendarMirror = mockk<com.rajasudhan.taskmind.data.source.CalendarMirror>(relaxed = true)
 
     /** Insert [note], build a VM bound to its id, and wait for the note flow to load. */
     private suspend fun vmFor(note: Note): Pair<NoteDetailViewModel, Int> {
         val id = dao.insertNote(note).toInt()
-        val vm = NoteDetailViewModel(dao, alarms, geofence, onDeviceLlm, llm, settingsManager, placeGeocoder, com.rajasudhan.taskmind.data.source.CompletionRecurrence(dao, alarms), SavedStateHandle(mapOf("noteId" to id)))
+        val vm = NoteDetailViewModel(dao, alarms, geofence, onDeviceLlm, llm, settingsManager, placeGeocoder, com.rajasudhan.taskmind.data.source.CompletionRecurrence(dao, alarms, calendarMirror), calendarMirror, SavedStateHandle(mapOf("noteId" to id)))
         vm.note.filterNotNull().first()
         return vm to id
     }
@@ -51,6 +52,24 @@ class NoteDetailViewModelTest {
     fun loadsNoteByNavArgId() = runTest {
         val (vm, _) = vmFor(aNote(title = "Detail"))
         assertEquals("Detail", vm.note.filterNotNull().first().title)
+    }
+
+    @Test
+    fun deleteNote_removesTheMirroredCalendarEvent() = runTest {
+        val (vm, _) = vmFor(aNote(type = "reminder", title = "X", dueDate = "2026-07-01", dueTime = "09:00", calendarEventId = 3L))
+
+        vm.deleteNote {}
+
+        verify { calendarMirror.delete(3L) }
+    }
+
+    @Test
+    fun updateSchedule_movesTheMirroredCalendarEvent() = runTest {
+        val (vm, _) = vmFor(aNote(type = "reminder", title = "X", dueDate = "2026-07-01", dueTime = "09:00", calendarEventId = 3L))
+
+        vm.updateSchedule("2026-07-05", "10:00")
+
+        verify { calendarMirror.update(3L, "X", "2026-07-05", "10:00") }
     }
 
     @Test

@@ -18,7 +18,8 @@ class CompletionRecurrenceTest {
 
     private val dao = FakeTaskMindDao()
     private val alarms = mockk<AlarmScheduler>(relaxed = true)
-    private val handler = CompletionRecurrence(dao, alarms)
+    private val calendarMirror = mockk<CalendarMirror>(relaxed = true)
+    private val handler = CompletionRecurrence(dao, alarms, calendarMirror)
     private val now = LocalDateTime.of(2026, 6, 15, 12, 0)
 
     /** Epoch millis for noon on [date] in the default zone — round-trips back to the same LocalDate. */
@@ -67,6 +68,20 @@ class CompletionRecurrenceTest {
     fun archivedItem_isNotResurrected() = runTest {
         val note = aNote(type = "todo", recurrence = "weekly", repeatFromCompletion = true, archived = true)
         assertFalse(handler.rollForwardIfCompletionBased(note, at("2026-06-15"), now))
+    }
+
+    @Test
+    fun completionBasedRepeat_movesItsMirroredCalendarEvent() = runTest {
+        val id = dao.insertNote(
+            aNote(type = "reminder", title = "Water plants", dueDate = "2026-06-10", dueTime = "09:00",
+                recurrence = "daily", repeatFromCompletion = true, calendarEventId = 42L)
+        ).toInt()
+        val note = dao.getNoteByIdNow(id)!!
+
+        handler.rollForwardIfCompletionBased(note, at("2026-06-15"), now)
+
+        // The mirror follows the item to its next occurrence, computed from the completion day.
+        verify { calendarMirror.update(42L, "Water plants", "2026-06-16", "09:00") }
     }
 
     @Test

@@ -1,23 +1,13 @@
 package com.rajasudhan.taskmind.data.source
 
-import android.app.AlarmManager
-import android.app.PendingIntent
-import android.content.ContentValues
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.provider.CalendarContract
 import androidx.core.content.ContextCompat
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.model.Suggestion
 import com.rajasudhan.taskmind.ui.notes.Checklist
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.ZoneId
-import java.time.ZoneOffset
-import java.util.TimeZone
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,7 +19,7 @@ import javax.inject.Singleton
 @Singleton
 class SuggestionApprover @Inject constructor(
     private val dao: TaskMindDao,
-    private val settingsManager: SettingsManager,
+    private val calendarMirror: CalendarMirror,
     private val alarmScheduler: AlarmScheduler,
     private val placeGeocoder: PlaceGeocoder,
     private val geofenceManager: GeofenceManager,
@@ -109,116 +99,26 @@ class SuggestionApprover @Inject constructor(
             if (!armed.isNullOrBlank() && armed != suggestion.dueDate) dao.updateNoteDueDate(noteId.toInt(), armed)
             // Mirror the calendar event onto the SAME occurrence the alarm + note landed on — schedule()
             // may have advanced a recurring reminder past a stale slot, so using the original (past)
-            // dueDate here would put a stale calendar entry on a day the reminder no longer fires.
+            // dueDate here would put a stale calendar entry on a day the reminder no longer fires. The
+            // mirror gates itself on the Calendar source toggle; capture its event id so the note's later
+            // reschedule/rename/complete/delete can keep the same event in step (#119).
             val calDate = armed?.takeIf { it.isNotBlank() } ?: suggestion.dueDate
-            if (addCalendar) addToCalendar(suggestion.extractedTitle, note.body, calDate, suggestion.dueTime, durationMinutes)
+            if (addCalendar) {
+                calendarMirror.insert(suggestion.extractedTitle, note.body, calDate, suggestion.dueTime, durationMinutes)
+                    ?.let { dao.updateNoteCalendarEventId(noteId.toInt(), it) }
+            }
         } else if (suggestion.type == "waiting_on" && suggestion.dueDate != null && suggestion.dueTime != null) {
             // A waiting-on item with a follow-up time gets a nudge to chase it up — no calendar event,
             // since you're not attending anything, just reminding yourself to follow up.
             val armed = alarmScheduler.schedule(noteId.toInt(), suggestion.extractedTitle, suggestion.dueDate, suggestion.dueTime, suggestion.recurrence)
             if (!armed.isNullOrBlank() && armed != suggestion.dueDate) dao.updateNoteDueDate(noteId.toInt(), armed)
         } else if (suggestion.type == "todo" && suggestion.dueDate != null) {
-            if (addCalendar) addToCalendar(suggestion.extractedTitle, note.body, suggestion.dueDate, null, durationMinutes)
+            if (addCalendar) {
+                calendarMirror.insert(suggestion.extractedTitle, note.body, suggestion.dueDate, null, durationMinutes)
+                    ?.let { dao.updateNoteCalendarEventId(noteId.toInt(), it) }
+            }
         }
         return noteId
-    }
-
-    /**
-     * Inserts an event into the user's default calendar. Timed event if [dueTime] is set, otherwise
-     * all-day on [dueDate]. No-ops if WRITE_CALENDAR isn't granted or no writable calendar exists.
-     */
-    private fun addToCalendar(title: String, description: String?, dueDate: String?, dueTime: String?, durationMinutes: Int? = null) {
-        if (dueDate == null) return
-        if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.WRITE_CALENDAR)
-            != PackageManager.PERMISSION_GRANTED
-        ) return
-
-        try {
-            val calendarId = getWritableCalendarId() ?: return
-            val isTimed = dueTime != null
-            val startMs: Long
-            val endMs: Long
-            val timeZone: String
-            val allDay: Boolean
-            if (isTimed) {
-                // Tolerant time parse (shared with AlarmScheduler) so a single-digit-hour time like
-                // "9:30" still produces a calendar event instead of being silently skipped.
-                val time = RecurrenceUtil.parseTime(dueTime) ?: return
-                startMs = LocalDateTime.of(LocalDate.parse(dueDate), time)
-                    .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                endMs = startMs + (durationMinutes ?: settingsManager.eventDurationMinutes).toLong() * 60 * 1000
-                timeZone = TimeZone.getDefault().id
-                allDay = false
-            } else {
-                startMs = LocalDate.parse(dueDate).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-                endMs = startMs + 24 * 60 * 60 * 1000
-                timeZone = "UTC"
-                allDay = true
-            }
-
-            if (calendarEventExists(calendarId, title, startMs)) return
-
-            val values = ContentValues().apply {
-                put(CalendarContract.Events.CALENDAR_ID, calendarId)
-                put(CalendarContract.Events.TITLE, title)
-                if (!description.isNullOrBlank()) put(CalendarContract.Events.DESCRIPTION, description)
-                put(CalendarContract.Events.DTSTART, startMs)
-                put(CalendarContract.Events.DTEND, endMs)
-                put(CalendarContract.Events.EVENT_TIMEZONE, timeZone)
-                if (allDay) put(CalendarContract.Events.ALL_DAY, 1)
-            }
-            context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    /** True if an event with the same title already exists within ±1 day of [startMs]. */
-    private fun calendarEventExists(calendarId: Long, title: String, startMs: Long): Boolean {
-        val window = 24 * 60 * 60 * 1000L
-        return try {
-            context.contentResolver.query(
-                CalendarContract.Events.CONTENT_URI,
-                arrayOf(CalendarContract.Events._ID),
-                "${CalendarContract.Events.CALENDAR_ID} = ? AND ${CalendarContract.Events.TITLE} = ? AND " +
-                    "${CalendarContract.Events.DTSTART} BETWEEN ? AND ?",
-                arrayOf(
-                    calendarId.toString(), title,
-                    (startMs - window).toString(), (startMs + window).toString()
-                ),
-                null
-            )?.use { it.count > 0 } ?: false
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    /**
-     * The calendar id to write to: the user's configured choice if still valid/writable, otherwise
-     * the primary (or first writable) one. Null if none available.
-     */
-    private fun getWritableCalendarId(): Long? {
-        val projection = arrayOf(
-            CalendarContract.Calendars._ID,
-            CalendarContract.Calendars.IS_PRIMARY,
-            CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL
-        )
-        val configured = settingsManager.calendarId
-        var fallback: Long? = null
-        context.contentResolver.query(
-            CalendarContract.Calendars.CONTENT_URI,
-            projection, null, null,
-            "${CalendarContract.Calendars.IS_PRIMARY} DESC"
-        )?.use { cursor ->
-            while (cursor.moveToNext()) {
-                val id = cursor.getLong(0)
-                val accessLevel = cursor.getInt(2)
-                if (accessLevel < CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR) continue
-                if (configured != SettingsManager.CALENDAR_ID_AUTO && id == configured) return id
-                if (fallback == null) fallback = id
-            }
-        }
-        return fallback
     }
 
     private fun hasBackgroundLocation(): Boolean =
