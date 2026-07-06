@@ -2,6 +2,7 @@ package com.rajasudhan.taskmind.data.source.understanding
 
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Suggestion
+import com.rajasudhan.taskmind.data.source.NaturalDate
 import com.rajasudhan.taskmind.data.source.PhoneUtil
 import com.rajasudhan.taskmind.data.source.RejectionLearner
 import com.rajasudhan.taskmind.data.source.SuggestionNotifier
@@ -44,7 +45,7 @@ class UnderstandingPipeline @Inject constructor(
         const val MAX_INPUT_CHARS = 4000
     }
 
-    suspend fun processText(source: String, text: String) {
+    suspend fun processText(source: String, text: String, seedSchedule: Boolean = false) {
         // Cheap pre-filter: skip obvious non-actionable noise (OTPs, promos, opt-outs)
         // before spending battery/LLM cycles on it.
         if (text.isBlank() || ExtractionHeuristics.isLikelyNoise(text)) return
@@ -74,6 +75,14 @@ class UnderstandingPipeline @Inject constructor(
 
         val items = parsedResult?.items ?: return
 
+        // #116: for a user-typed single-item capture, a deterministic on-device parse of the schedule
+        // OVERRIDES the LLM's date/time/recurrence — the model is unreliable at relative-date math
+        // ("next Friday"), and this also fills the schedule when it returns nothing. Gated to one item so
+        // a single parsed date isn't smeared across a multi-task brain-dump.
+        val seeded = if (seedSchedule && items.size == 1) {
+            NaturalDate.parse(text, currentDateTime).takeIf { !it.isEmpty }
+        } else null
+
         // Down-rank items from senders the user keeps rejecting (on-device learning).
         val penalty = rejectionLearner.confidencePenalty(source)
 
@@ -84,19 +93,30 @@ class UnderstandingPipeline @Inject constructor(
         insertMutex.withLock {
             for (item in items) {
                 val scored = if (penalty > 0) item.copy(confidence = (item.confidence - penalty).coerceAtLeast(0.0)) else item
-                if (ExtractionHeuristics.isAcceptable(scored) && !isDuplicate(item)) {
+                // Reconcile the deterministic seed with the LLM's fields into ONE coherent schedule:
+                //  - date: the parsed date wins (deterministic beats the model's shaky relative-date math);
+                //  - time: the parsed time only overrides when it came WITH a parsed date, so a stray bare
+                //    time can't clobber the model's coherent (date,time) pair or strand a past-due slot;
+                //  - recurrence: only seeded onto a schedulable item, so a plain note can't silently repeat.
+                val seededDate = seeded?.dueDate()
+                val effectiveDate = seededDate ?: ExtractionHeuristics.sanitizeDate(item.dueDate)
+                val effectiveTime = if (seededDate != null) seeded?.dueTime() ?: ExtractionHeuristics.sanitizeTime(item.dueTime)
+                    else ExtractionHeuristics.sanitizeTime(item.dueTime) ?: seeded?.dueTime()
+                val effectiveRecurrence = seeded?.recurrence?.takeIf { item.type == "reminder" || item.type == "todo" }
+                    ?: ExtractionHeuristics.sanitizeRecurrence(item.recurrence)
+                if (ExtractionHeuristics.isAcceptable(scored) && !isDuplicate(item, effectiveDate)) {
                     val suggestion = Suggestion(
                         source = source,
                         rawSnippet = text,
                         extractedTitle = item.title,
                         summary = item.notes.trim(),
-                        dueDate = ExtractionHeuristics.sanitizeDate(item.dueDate),
-                        dueTime = ExtractionHeuristics.sanitizeTime(item.dueTime),
+                        dueDate = effectiveDate,
+                        dueTime = effectiveTime,
                         type = item.type,
                         confidence = scored.confidence,
                         status = "pending",
                         location = item.location?.trim()?.ifBlank { null },
-                        recurrence = ExtractionHeuristics.sanitizeRecurrence(item.recurrence),
+                        recurrence = effectiveRecurrence,
                         priority = ExtractionHeuristics.sanitizePriority(item.priority),
                         counterparty = item.counterparty?.trim()?.ifBlank { null }
                     )
@@ -197,12 +217,11 @@ class UnderstandingPipeline @Inject constructor(
         null
     }
 
-    private suspend fun isDuplicate(item: LlmItem): Boolean {
-        // Compare (title, dueDate) against existing pending suggestions and approved notes. Compare on
-        // the SANITIZED date — the same value the suggestion is stored with below — so an item whose
-        // raw date is non-conforming (sanitized to null) still matches its stored twin. Comparing the
-        // raw date here let such an item re-insert on every re-scan (raw "2026-6-1" != stored null).
-        val dueDate = ExtractionHeuristics.sanitizeDate(item.dueDate)
+    private suspend fun isDuplicate(item: LlmItem, dueDate: String?): Boolean {
+        // Compare (title, dueDate) against existing pending suggestions and approved notes on [dueDate] —
+        // the EFFECTIVE date the suggestion is actually stored with (seeded parse if any, else the
+        // sanitized LLM date). Keying on a different value than it's stored under lets an item re-insert
+        // its own twin (the raw-vs-sanitized bug, and — once #116 seeds dates — the LLM-vs-seeded bug).
         val pending = dao.getPendingSuggestions().first().map { it.extractedTitle to it.dueDate }
         val notes = dao.getAllNotes().first().map { it.title to it.dueDate }
         return ExtractionHeuristics.isDuplicate(item.title, dueDate, pending + notes)

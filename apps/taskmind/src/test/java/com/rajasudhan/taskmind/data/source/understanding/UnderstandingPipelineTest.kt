@@ -130,6 +130,33 @@ class UnderstandingPipelineTest {
     }
 
     @Test
+    fun seededDate_overridesTheLlm_andDedupsOnTheStoredValue() = runTest {
+        // #116: the deterministic parse ("tomorrow") overrides the LLM's (wrong) relative date, and the
+        // dedup must key on that SEEDED date — what's actually stored — so a re-capture can't pile up a twin.
+        val tomorrow = java.time.LocalDate.now().plusDays(1).toString()
+        val json = llmResponse(llmItem(title = "Call mom", dueDate = "2000-01-01", confidence = 0.9))
+
+        pipeline(FakeLlmProvider(json)).processText("Manual entry", "call mom tomorrow", seedSchedule = true)
+        pipeline(FakeLlmProvider(json)).processText("Manual entry", "call mom tomorrow", seedSchedule = true)
+
+        val calls = dao.getPendingSuggestions().first().filter { it.extractedTitle == "Call mom" }
+        assertEquals(1, calls.size)                    // deduped on the seeded date, not re-inserted
+        assertEquals(tomorrow, calls.single().dueDate) // the seeded date overrode the LLM's wrong one
+    }
+
+    @Test
+    fun recurrence_isNotSeededOntoANote() = runTest {
+        // #116: a "note" the model classified must not silently gain a recurrence from the parser — that
+        // would later arm a surprise repeating alarm if the user adds a time. Recurrence seeds reminders only.
+        val json = llmResponse(llmItem(title = "Standup ideas", type = "note", confidence = 0.9))
+
+        pipeline(FakeLlmProvider(json)).processText("Manual entry", "standup ideas every friday", seedSchedule = true)
+
+        val note = dao.getPendingSuggestions().first().single { it.extractedTitle == "Standup ideas" }
+        assertNull(note.recurrence)
+    }
+
+    @Test
     fun rejectionPenalty_dropsABorderlineItem() = runTest {
         dao.upsertRejectedPattern(RejectedPattern("sender", "+15551234567", 3, 1L))
         val llm = FakeLlmProvider(llmResponse(llmItem(title = "spammy", confidence = 0.8)))

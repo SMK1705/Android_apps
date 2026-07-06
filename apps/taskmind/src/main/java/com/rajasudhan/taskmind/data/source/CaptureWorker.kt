@@ -38,7 +38,9 @@ class CaptureWorker @AssistedInject constructor(
             } else {
                 inputData.getString(KEY_TEXT)
             }
-            if (!text.isNullOrBlank()) pipeline.processText(source, text)
+            // Seed the deterministic date parser only for TYPED capture (not OCR'd images, whose text is
+            // noisier) — #116.
+            if (!text.isNullOrBlank()) pipeline.processText(source, text, seedSchedule = imagePath == null)
             Result.success()
         } catch (e: Exception) {
             Result.retry()

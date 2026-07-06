@@ -65,6 +65,9 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -89,8 +92,11 @@ import com.rajasudhan.taskmind.ui.theme.ShapeCard
 import com.rajasudhan.taskmind.ui.theme.ShapeField
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.rajasudhan.taskmind.data.source.NaturalDate
+import com.rajasudhan.taskmind.data.source.ParsedSchedule
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
 /** A snooze target: a friendly [label], the concrete [whenText] it resolves to, and the [until] epoch. */
@@ -733,6 +739,20 @@ private fun BoldSnoozeSheet(onDismiss: () -> Unit, onPick: (Long) -> Unit) {
     }
 }
 
+private val PREVIEW_DATE = DateTimeFormatter.ofPattern("EEE, MMM d")
+private val PREVIEW_TIME = DateTimeFormatter.ofPattern("h:mm a")
+
+/** A short human summary of a parsed capture schedule for the preview chip, or null if nothing parsed. */
+private fun schedulePreview(p: ParsedSchedule): String? {
+    if (p.isEmpty) return null
+    val parts = buildList {
+        p.date?.let { add(it.format(PREVIEW_DATE)) }
+        p.time?.let { add(it.format(PREVIEW_TIME)) }
+        p.recurrence?.let { add("repeats $it") }
+    }
+    return parts.joinToString(" · ").ifBlank { null }
+}
+
 /** The handoff's "Quick capture" sheet: type a note or speak it — both run through the pipeline. */
 @Composable
 private fun BoldCaptureSheet(
@@ -770,6 +790,22 @@ private fun BoldCaptureSheet(
         Spacer(Modifier.height(18.dp))
 
         if (mode == 0) {
+            // #116: parse the schedule as you type so the matched phrase is highlighted and the resolved
+            // date/time/recurrence is confirmed instantly — before the on-device model even runs.
+            val parsed = remember(text) { NaturalDate.parse(text, LocalDateTime.now()) }
+            val highlight = remember(parsed) {
+                VisualTransformation { annotated ->
+                    val styled = buildAnnotatedString {
+                        append(annotated)
+                        for (span in parsed.spans) {
+                            val start = span.first.coerceIn(0, annotated.length)
+                            val end = (span.last + 1).coerceIn(start, annotated.length)
+                            if (end > start) addStyle(SpanStyle(color = c.accent, fontWeight = FontWeight.SemiBold), start, end)
+                        }
+                    }
+                    TransformedText(styled, OffsetMapping.Identity)
+                }
+            }
             Box(
                 Modifier.fillMaxWidth().heightIn(min = 110.dp).clip(RoundedCornerShape(14.dp)).background(c.bg2)
                     .border(1.dp, c.line, RoundedCornerShape(14.dp)).padding(14.dp)
@@ -784,8 +820,19 @@ private fun BoldCaptureSheet(
                     value = text, onValueChange = { text = it },
                     textStyle = BoldType.body.copy(fontSize = 14.5.sp, lineHeight = 21.sp, color = c.ink),
                     cursorBrush = SolidColor(c.accent),
+                    visualTransformation = highlight,
                     modifier = Modifier.fillMaxWidth()
                 )
+            }
+            schedulePreview(parsed)?.let { preview ->
+                Spacer(Modifier.height(10.dp))
+                Box(
+                    Modifier.clip(RoundedCornerShape(9.dp)).background(c.accentGlow)
+                        .padding(horizontal = 11.dp, vertical = 7.dp)
+                        .semantics { contentDescription = "Detected schedule: $preview" }
+                ) {
+                    Text(preview, style = BoldType.detailMeta.copy(fontSize = 12.sp), color = c.accent)
+                }
             }
             Spacer(Modifier.height(18.dp))
             val enabled = text.isNotBlank()
