@@ -94,6 +94,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.rajasudhan.taskmind.data.source.NaturalDate
 import com.rajasudhan.taskmind.data.source.ParsedSchedule
+import com.rajasudhan.taskmind.data.source.understanding.EditResult
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -300,6 +301,7 @@ fun InboxScreen(
                                 onApprove = { doApprove(it) },
                                 onReject = { doReject(it) },
                                 onEdit = { viewModel.updateSuggestion(it) },
+                                onFixIt = { s, instruction, cb -> viewModel.editWithInstruction(s, instruction, cb) },
                                 onSnoozeClick = { snoozeFor = suggestion }
                             )
                         }
@@ -882,14 +884,24 @@ private fun BoldSuggestionCard(
     onApprove: (Suggestion) -> Unit,
     onReject: (Suggestion) -> Unit,
     onEdit: (Suggestion) -> Unit,
+    onFixIt: (Suggestion, String, (EditResult) -> Unit) -> Unit,
     onSnoozeClick: () -> Unit
 ) {
     val c = BoldTheme.colors
     var expanded by remember { mutableStateOf(false) }
     var isEditing by remember { mutableStateOf(false) }
-    var editedTitle by remember { mutableStateOf(suggestion.extractedTitle) }
-    var editedDueDate by remember { mutableStateOf(suggestion.dueDate ?: "") }
-    var editedDueTime by remember { mutableStateOf(suggestion.dueTime ?: "") }
+    // Keyed on `suggestion` so an in-place edit (same id, new fields) re-syncs the form — otherwise the
+    // list reuses the card's composition slot and a later manual Save would clobber the persisted edit
+    // with stale values (the card is keyed by id, which doesn't change on an edit).
+    var editedTitle by remember(suggestion) { mutableStateOf(suggestion.extractedTitle) }
+    var editedDueDate by remember(suggestion) { mutableStateOf(suggestion.dueDate ?: "") }
+    var editedDueTime by remember(suggestion) { mutableStateOf(suggestion.dueTime ?: "") }
+    var editedRecurrence by remember(suggestion) { mutableStateOf(suggestion.recurrence) }
+    var editedLocation by remember(suggestion) { mutableStateOf(suggestion.location ?: "") }
+    var fixItText by remember { mutableStateOf("") }
+    var fixItBusy by remember { mutableStateOf(false) }
+    var fixItError by remember { mutableStateOf(false) }
+    var pendingEdit by remember { mutableStateOf<EditResult?>(null) }
 
     val kind = boldKindFor(suggestion.type, suggestion.dueDate != null)
     val preview = suggestion.summary.ifBlank { suggestion.rawSnippet }
@@ -900,11 +912,75 @@ private fun BoldSuggestionCard(
     }
     val place = suggestion.location?.trim()?.ifBlank { null }
 
+    // #115 — diff-style confirm for a natural-language edit: never apply a model's change silently.
+    pendingEdit?.let { result ->
+        AlertDialog(
+            onDismissRequest = { pendingEdit = null },
+            title = { Text("Apply this edit?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    result.changes.forEach { ch ->
+                        Text(
+                            buildAnnotatedString {
+                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("${ch.label}: ") }
+                                append("${ch.from ?: "—"}  →  ${ch.to ?: "—"}")
+                            },
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onEdit(result.updated)
+                    // Keep the manual form fields consistent with the just-applied edit immediately (the
+                    // remember(suggestion) key also re-syncs once the DB re-emits).
+                    editedTitle = result.updated.extractedTitle
+                    editedDueDate = result.updated.dueDate ?: ""
+                    editedDueTime = result.updated.dueTime ?: ""
+                    editedLocation = result.updated.location ?: ""
+                    editedRecurrence = result.updated.recurrence
+                    pendingEdit = null
+                    isEditing = false
+                }) { Text("Apply") }
+            },
+            dismissButton = { TextButton(onClick = { pendingEdit = null }) { Text("Cancel") } }
+        )
+    }
+
     BoldCard(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 15.dp, bottom = 15.dp)) {
             if (isEditing) {
                 Text("From ${suggestion.source}", style = BoldType.noteSrcMeta, color = c.ink3)
                 Spacer(Modifier.height(8.dp))
+                // #115 — natural-language "fix it": type a plain change, confirm the diff, then apply.
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = fixItText, onValueChange = { fixItText = it; fixItError = false },
+                        label = { Text("Fix it — e.g. “Friday 6pm, high priority”") },
+                        singleLine = true, modifier = Modifier.weight(1f)
+                    )
+                    if (fixItBusy) {
+                        CircularProgressIndicator(Modifier.size(24.dp), color = c.accent, strokeWidth = 2.dp)
+                    } else {
+                        Button(enabled = fixItText.isNotBlank(), onClick = {
+                            fixItBusy = true
+                            fixItError = false
+                            onFixIt(suggestion, fixItText.trim()) { result ->
+                                fixItBusy = false
+                                if (result.hasChanges) { pendingEdit = result; fixItText = "" }
+                                else fixItError = true // keep the text so the user can amend and retry
+                            }
+                        }) { Text("Apply") }
+                    }
+                }
+                if (fixItError) {
+                    Text(
+                        "Couldn't apply that — try rephrasing (e.g. “move to Friday”, “high priority”).",
+                        style = BoldType.detailMeta, color = c.skip, modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = editedTitle, onValueChange = { editedTitle = it },
                     label = { Text("Title") }, modifier = Modifier.fillMaxWidth()
@@ -919,13 +995,30 @@ private fun BoldSuggestionCard(
                         label = { Text("Time (HH:MM)") }, modifier = Modifier.weight(1f)
                     )
                 }
-                Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
+                // #115 audit gap #13 — location + recurrence drive physical side effects (geofence,
+                // repeating alarm) at approval but had no review surface; now editable before approval.
+                OutlinedTextField(
+                    value = editedLocation, onValueChange = { editedLocation = it },
+                    label = { Text("Location (place name)") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                )
+                Spacer(Modifier.height(10.dp))
+                Text("REPEAT", style = BoldType.detailMeta.copy(letterSpacing = 0.5.sp), color = c.ink3)
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    listOf("None" to null, "Daily" to "daily", "Weekly" to "weekly", "Monthly" to "monthly").forEach { (label, value) ->
+                        KindPickerChip(label, editedRecurrence == value) { editedRecurrence = value }
+                    }
+                }
+                Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = { isEditing = false }) { Text("Cancel") }
                     Button(onClick = {
                         onEdit(suggestion.copy(
                             extractedTitle = editedTitle,
                             dueDate = editedDueDate.ifBlank { null },
-                            dueTime = editedDueTime.ifBlank { null }
+                            dueTime = editedDueTime.ifBlank { null },
+                            location = editedLocation.trim().ifBlank { null },
+                            recurrence = editedRecurrence
                         ))
                         isEditing = false
                     }) { Text("Save") }

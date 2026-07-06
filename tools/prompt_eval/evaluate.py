@@ -33,6 +33,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 PROMPT_KT = REPO / "apps/taskmind/src/main/java/com/rajasudhan/taskmind/data/source/understanding/SystemPrompt.kt"
+EDIT_PROMPT_KT = REPO / "apps/taskmind/src/main/java/com/rajasudhan/taskmind/data/source/understanding/EditPrompt.kt"
 GOLDEN = HERE / "golden_set.jsonl"
 REPORT_DEFAULT = HERE / "EVAL_REPORT.md"
 MODEL = "gemini-2.5-flash"
@@ -61,7 +62,7 @@ RESPONSE_SCHEMA = {
                     "due_time": {"type": "STRING", "nullable": True},
                     "location": {"type": "STRING", "nullable": True},
                     "recurrence": {"type": "STRING", "nullable": True},
-                    "priority": {"type": "STRING", "enum": ["normal", "high"]},
+                    "priority": {"type": "STRING", "enum": ["low", "normal", "high"]},
                     "counterparty": {"type": "STRING", "nullable": True},
                     "confidence": {"type": "NUMBER"},
                 },
@@ -95,10 +96,36 @@ def load_instruction() -> str:
     return m.group(1)
 
 
+def load_edit_instruction() -> str:
+    """Extract the INSTRUCTION triple-quoted string from EditPrompt.kt (the real NL-edit prompt, #115)."""
+    src = EDIT_PROMPT_KT.read_text(encoding="utf-8")
+    m = re.search(r'INSTRUCTION\s*=\s*"""(.*?)"""', src, re.DOTALL)
+    if not m:
+        sys.exit(f"Could not find INSTRUCTION in {EDIT_PROMPT_KT}")
+    return m.group(1)
+
+
 def datetime_str(now_iso: str) -> str:
     """Render `now` the way UnderstandingPipeline does: '2026-06-09T09:00. Today is a Tuesday.'"""
     dt = datetime.fromisoformat(now_iso)
     return f"{dt.strftime('%Y-%m-%dT%H:%M')}. Today is a {dt.strftime('%A')}."
+
+
+def edit_user_message(current: dict, instruction: str) -> str:
+    """The 'Current item + Instruction' message SuggestionEditor sends for a natural-language edit (#115)."""
+    def f(key, default="null"):
+        return current.get(key) if current.get(key) is not None else default
+    return (
+        "Current item:\n"
+        f"  title: {f('title', '')}\n"
+        f"  type: {f('type', 'note')}\n"
+        f"  due_date: {f('due_date')}\n"
+        f"  due_time: {f('due_time')}\n"
+        f"  location: {f('location')}\n"
+        f"  recurrence: {f('recurrence')}\n"
+        f"  priority: {f('priority', 'normal')}\n"
+        f"\nInstruction: {instruction}"
+    )
 
 
 def call_gemini(key: str, system: str, user: str) -> dict:
@@ -388,10 +415,20 @@ def main() -> int:
     if args.only:
         cases = [c for c in cases if args.only in c["name"]]
 
+    edit_instruction = None  # loaded lazily, only if an edit-mode case appears
     results, passed = [], 0
     for c in cases:
-        system = instruction.replace("{{CURRENT_DATETIME}}", datetime_str(c["now"]))
-        user = f"Source: {c['source']}\n\nText:\n{c['text']}"
+        if c.get("mode") == "edit":
+            # #115 natural-language edit: the EDIT prompt + a "current item + instruction" message. The
+            # cloud backend still pins the extraction schema, so the reply comes back as {"items":[…]} and
+            # is checked exactly like an extraction (matchers assert the changed fields).
+            if edit_instruction is None:
+                edit_instruction = load_edit_instruction()
+            system = edit_instruction.replace("{{CURRENT_DATETIME}}", datetime_str(c["now"]))
+            user = edit_user_message(c.get("current", {}), c["text"])
+        else:
+            system = instruction.replace("{{CURRENT_DATETIME}}", datetime_str(c["now"]))
+            user = f"Source: {c['source']}\n\nText:\n{c['text']}"
         case_ok, last_reason = 0, ""
         for _ in range(runs):
             try:

@@ -10,7 +10,10 @@ import com.rajasudhan.taskmind.data.source.RejectionLearner
 import com.rajasudhan.taskmind.data.source.SuggestionApprover
 import com.rajasudhan.taskmind.data.source.SuggestionNotifier
 import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
+import com.rajasudhan.taskmind.data.source.understanding.EditResult
+import com.rajasudhan.taskmind.data.source.understanding.SuggestionEditor
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
+import kotlinx.coroutines.withContext
 import java.io.File
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +35,7 @@ class InboxViewModel @Inject constructor(
     private val rejectionLearner: RejectionLearner,
     private val voskTranscriber: VoskTranscriber,
     private val pipeline: UnderstandingPipeline,
+    private val suggestionEditor: SuggestionEditor,
     private val notifier: SuggestionNotifier
 ) : ViewModel() {
 
@@ -152,6 +156,18 @@ class InboxViewModel @Inject constructor(
     fun updateSuggestion(suggestion: Suggestion) {
         viewModelScope.launch {
             dao.updateSuggestion(suggestion)
+        }
+    }
+
+    /**
+     * Runs a natural-language "fix it" edit (#115) and hands the diff back via [onResult] WITHOUT
+     * persisting — the card shows the before→after changes for confirmation first. [onResult] runs on the
+     * main thread. An empty change list means the instruction wasn't understood.
+     */
+    fun editWithInstruction(suggestion: Suggestion, instruction: String, onResult: (EditResult) -> Unit) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { suggestionEditor.edit(suggestion, instruction) }
+            onResult(result)
         }
     }
 
