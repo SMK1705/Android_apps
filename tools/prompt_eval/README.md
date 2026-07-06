@@ -69,6 +69,29 @@ Append one JSON object per line to `golden_set.jsonl`:
 Keep assertions loose where the wording is the model's choice (`title_contains`, not an exact
 title) and tight where correctness matters (dates, times, recurrence, the no-item cases).
 
+### Natural-language edit cases (#115)
+
+Add `"mode": "edit"` plus a `"current"` item to test the NL-edit prompt (`EditPrompt.kt`) instead of
+extraction. `text` is the edit instruction; `current` is the item being edited; the reply is checked
+with the same matchers (they assert the patched fields):
+
+```json
+{"name": "edit_friday_6pm_high", "mode": "edit", "source": "Inbox edit",
+ "text": "make it friday 6pm and high priority", "now": "2026-06-09T09:00",
+ "current": {"title": "Pay rent", "type": "reminder", "due_date": "2026-06-01", "priority": "normal"},
+ "expect": [{"due_date": "2026-06-12", "due_time": "18:00", "priority": "high"}]}
+```
+
+`current` keys: `title`, `type`, `due_date`, `due_time`, `location`, `recurrence`, `priority` (any
+omitted default to null / note / normal). The harness sends the same "Current item + Instruction"
+message `SuggestionEditor` does; the cloud reply is schema-pinned to `{"items":[…]}`, so matchers
+score `items[0]`.
+
+Edit-mode measures the **raw LLM patch only** — it does NOT run `NaturalDate`, which in production
+OVERRIDES the model for `due_date`/`due_time`/`recurrence` (deterministic beats the model's relative-date
+math). So assert edit cases on the fields the LLM actually owns (`priority`, `type`, `location`), not on
+model-computed relative dates.
+
 ## Keep in sync
 
 `RESPONSE_SCHEMA` in `evaluate.py` mirrors `CloudLlmProvider.responseSchema()`. If you change the

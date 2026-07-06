@@ -39,12 +39,13 @@ class InboxViewModelTest {
     private val approver = mockk<SuggestionApprover>(relaxed = true)
     private val vosk = mockk<VoskTranscriber>(relaxed = true)
     private val pipeline = mockk<UnderstandingPipeline>(relaxed = true)
+    private val suggestionEditor = mockk<com.rajasudhan.taskmind.data.source.understanding.SuggestionEditor>(relaxed = true)
     private val notifier = mockk<SuggestionNotifier>(relaxed = true)
     private lateinit var vm: InboxViewModel
 
     @Before
     fun setUp() {
-        vm = InboxViewModel(dao, scanner, approver, RejectionLearner(dao), vosk, pipeline, notifier)
+        vm = InboxViewModel(dao, scanner, approver, RejectionLearner(dao), vosk, pipeline, suggestionEditor, notifier)
     }
 
     private suspend fun pending() = dao.getPendingSuggestions().first()

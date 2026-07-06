@@ -98,7 +98,10 @@ class CloudLlmProvider @Inject constructor(
                     .put("due_time", nullableString())
                     .put("location", nullableString())
                     .put("recurrence", nullableString())
-                    .put("priority", JSONObject().put("type", "STRING").put("enum", JSONArray(listOf("normal", "high"))))
+                    // "low" is included so the shared schema also serves the natural-language EDIT path
+                    // (#115), which can lower priority; extraction still only ever emits normal/high (its
+                    // prompt never asks for low).
+                    .put("priority", JSONObject().put("type", "STRING").put("enum", JSONArray(listOf("low", "normal", "high"))))
                     .put("counterparty", nullableString())
                     .put("confidence", JSONObject().put("type", "NUMBER"))
             )
