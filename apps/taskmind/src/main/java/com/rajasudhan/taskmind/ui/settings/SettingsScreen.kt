@@ -408,7 +408,7 @@ fun SettingsScreen(
 
         SettingsSectionCard(accent = Color(0xFF455A64), title = "Test Extraction (debug)") {
             Text(
-                "Paste any message/email text and run it through the on-device pipeline — " +
+                "Paste any message/email text and run it through the understanding pipeline — " +
                     "no SMS needed. Results land in the Inbox.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant

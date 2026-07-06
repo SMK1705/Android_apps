@@ -11,6 +11,7 @@ import com.rajasudhan.taskmind.data.source.SuggestionApprover
 import com.rajasudhan.taskmind.data.source.SuggestionNotifier
 import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
 import com.rajasudhan.taskmind.data.source.understanding.EditResult
+import com.rajasudhan.taskmind.data.source.understanding.RoutingLlmProvider
 import com.rajasudhan.taskmind.data.source.understanding.SuggestionEditor
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
 import kotlinx.coroutines.withContext
@@ -36,8 +37,18 @@ class InboxViewModel @Inject constructor(
     private val voskTranscriber: VoskTranscriber,
     private val pipeline: UnderstandingPipeline,
     private val suggestionEditor: SuggestionEditor,
-    private val notifier: SuggestionNotifier
+    private val notifier: SuggestionNotifier,
+    private val routing: RoutingLlmProvider
 ) : ViewModel() {
+
+    // Whether extraction's data actually stays on-device, so the Inbox + quick-capture label the
+    // engine honestly instead of always claiming "on-device" (#197). Read once here and re-read on
+    // screen resume (via [refreshEngine]) since the setting/model can change while the user is away.
+    private val _onDeviceEngine = MutableStateFlow(routing.isOnDeviceEffective())
+    val onDeviceEngine: StateFlow<Boolean> = _onDeviceEngine
+
+    /** Re-reads the effective engine; called when the Inbox resumes (e.g. back from Settings). */
+    fun refreshEngine() { _onDeviceEngine.value = routing.isOnDeviceEffective() }
 
     // Ticks every 30s so snoozed items auto-resurface shortly after their time passes.
     private val nowTicker = flow {

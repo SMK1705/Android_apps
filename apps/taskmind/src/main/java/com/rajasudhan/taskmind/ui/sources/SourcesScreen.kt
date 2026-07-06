@@ -323,7 +323,7 @@ fun SourcesScreen(
 
             item {
                 Text(
-                    "Each source asks for its permission when enabled. Understanding always runs on-device.",
+                    "Each source asks for its permission when enabled. Understanding runs on-device by default — change the engine in Privacy.",
                     style = BoldType.body.copy(fontSize = 12.sp, lineHeight = 18.sp),
                     color = c.ink3,
                     textAlign = TextAlign.Center,

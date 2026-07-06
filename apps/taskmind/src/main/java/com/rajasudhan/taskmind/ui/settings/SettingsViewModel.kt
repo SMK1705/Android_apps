@@ -196,12 +196,12 @@ class SettingsViewModel @Inject constructor(
         _onDeviceStatus.value = null // force a fresh check after a path change
     }
 
-    /** Runs arbitrary text through the real pipeline (on-device model) — for testing without SMS. */
+    /** Runs arbitrary text through the real routed pipeline (on-device or cloud) — for testing without SMS. */
     fun runTestExtraction(text: String) {
         if (text.isBlank() || _testRunning.value) return
         viewModelScope.launch {
             _testRunning.value = true
-            _testStatus.value = "Running on-device extraction…"
+            _testStatus.value = "Running extraction…"
             val before = dao.getPendingSuggestions().first().size
             understandingPipeline.processText("Manual test", text)
             val created = dao.getPendingSuggestions().first().size - before

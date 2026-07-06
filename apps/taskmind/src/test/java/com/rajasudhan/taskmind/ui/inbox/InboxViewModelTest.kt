@@ -5,17 +5,20 @@ import com.rajasudhan.taskmind.data.source.RejectionLearner
 import com.rajasudhan.taskmind.data.source.SuggestionApprover
 import com.rajasudhan.taskmind.data.source.SuggestionNotifier
 import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
+import com.rajasudhan.taskmind.data.source.understanding.RoutingLlmProvider
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
 import com.rajasudhan.taskmind.testutil.FakeTaskMindDao
 import com.rajasudhan.taskmind.testutil.MainDispatcherRule
 import com.rajasudhan.taskmind.testutil.aSuggestion
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -41,14 +44,27 @@ class InboxViewModelTest {
     private val pipeline = mockk<UnderstandingPipeline>(relaxed = true)
     private val suggestionEditor = mockk<com.rajasudhan.taskmind.data.source.understanding.SuggestionEditor>(relaxed = true)
     private val notifier = mockk<SuggestionNotifier>(relaxed = true)
+    private val routing = mockk<RoutingLlmProvider>(relaxed = true)
     private lateinit var vm: InboxViewModel
 
     @Before
     fun setUp() {
-        vm = InboxViewModel(dao, scanner, approver, RejectionLearner(dao), vosk, pipeline, suggestionEditor, notifier)
+        vm = InboxViewModel(dao, scanner, approver, RejectionLearner(dao), vosk, pipeline, suggestionEditor, notifier, routing)
     }
 
     private suspend fun pending() = dao.getPendingSuggestions().first()
+
+    @Test
+    fun onDeviceEngine_reflectsRouting_andRefreshUpdatesIt() {
+        // #197: the Inbox/quick-capture label derives from the effective route, not a hardcoded value.
+        every { routing.isOnDeviceEffective() } returns false
+        vm.refreshEngine()
+        assertFalse(vm.onDeviceEngine.value) // engine set to cloud -> label must say "cloud"
+
+        every { routing.isOnDeviceEffective() } returns true
+        vm.refreshEngine()
+        assertTrue(vm.onDeviceEngine.value)
+    }
 
     @Test
     fun reject_marksRejected_recordsRejection_andUndoRepends() = runTest {

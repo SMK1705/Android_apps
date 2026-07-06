@@ -23,7 +23,8 @@ class GuideViewModelTest {
         val sm = mockk<SourceManager>()
         every { sm.hasSeenGuide } returns seen
         coEvery { sm.setHasSeenGuide(any()) } answers { seen.value = firstArg<Boolean>() }
-        return GuideViewModel(sm)
+        val routing = mockk<com.rajasudhan.taskmind.data.source.understanding.RoutingLlmProvider>(relaxed = true)
+        return GuideViewModel(sm, routing)
     }
 
     @Test

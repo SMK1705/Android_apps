@@ -50,4 +50,16 @@ class RoutingLlmProvider @Inject constructor(
         }
         return cloud.generateList(systemMessage, userMessage)
     }
+
+    /**
+     * Whether extraction's DATA actually stays on the device, mirroring [generate]'s routing — so the
+     * UI can label the engine honestly (#197) instead of hardcoding "on-device". True only when:
+     *  - on-device is selected, AND
+     *  - either the model is present (so it runs locally), OR there's no cloud key to fall back to
+     *    (so nothing leaves the phone even though extraction can't run).
+     * False whenever work goes to the cloud: cloud is selected, or on-device is selected but the model
+     * is missing and a key IS configured (the runtime fallback in [generate] sends the text to Gemini).
+     */
+    fun isOnDeviceEffective(): Boolean =
+        settingsManager.useOnDeviceLlm && (onDevice.isModelPresent() || settingsManager.llmApiKey.isBlank())
 }

@@ -54,4 +54,38 @@ class RoutingLlmProviderTest {
         assertEquals("[]", router.generateList("sys", "user"))
         coVerify(exactly = 0) { cloud.generateList(any(), any()) }
     }
+
+    // isOnDeviceEffective() — the honest-label predicate (#197): true only when data stays on-device.
+
+    @Test
+    fun isOnDeviceEffective_falseWhenCloudSelected() {
+        every { settings.useOnDeviceLlm } returns false
+        assertEquals(false, router.isOnDeviceEffective())
+    }
+
+    @Test
+    fun isOnDeviceEffective_trueWhenOnDeviceSelectedAndModelPresent() {
+        every { settings.useOnDeviceLlm } returns true
+        every { onDevice.isModelPresent() } returns true
+        every { settings.llmApiKey } returns "key-123"
+        assertEquals(true, router.isOnDeviceEffective())
+    }
+
+    @Test
+    fun isOnDeviceEffective_falseWhenModelMissingButCloudKeySet() {
+        // on-device selected, model not downloaded, key present -> runtime falls back to cloud.
+        every { settings.useOnDeviceLlm } returns true
+        every { onDevice.isModelPresent() } returns false
+        every { settings.llmApiKey } returns "key-123"
+        assertEquals(false, router.isOnDeviceEffective())
+    }
+
+    @Test
+    fun isOnDeviceEffective_trueWhenModelMissingAndNoKey_dataStaysLocal() {
+        // Nothing can run, but nothing leaves the phone either, so "on-device" is still honest.
+        every { settings.useOnDeviceLlm } returns true
+        every { onDevice.isModelPresent() } returns false
+        every { settings.llmApiKey } returns ""
+        assertEquals(true, router.isOnDeviceEffective())
+    }
 }

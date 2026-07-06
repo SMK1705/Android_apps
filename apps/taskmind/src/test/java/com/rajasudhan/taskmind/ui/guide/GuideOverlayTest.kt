@@ -25,7 +25,7 @@ class GuideOverlayTest {
 
     @Test
     fun showsFirstPage() {
-        compose.setContent { TaskMindTheme { GuideOverlay(onDismiss = {}) } }
+        compose.setContent { TaskMindTheme { GuideOverlay(onDismiss = {}, isOnDevice = true) } }
 
         compose.onNodeWithText("Welcome to TaskMind").assertIsDisplayed()
         compose.onNodeWithText("Skip").assertIsDisplayed()
@@ -34,7 +34,7 @@ class GuideOverlayTest {
     @Test
     fun skip_invokesOnDismiss() {
         var dismissed = false
-        compose.setContent { TaskMindTheme { GuideOverlay(onDismiss = { dismissed = true }) } }
+        compose.setContent { TaskMindTheme { GuideOverlay(onDismiss = { dismissed = true }, isOnDevice = true) } }
 
         compose.onNodeWithText("Skip").performClick()
 
@@ -43,11 +43,19 @@ class GuideOverlayTest {
 
     @Test
     fun next_advancesToTheSecondPage() {
-        compose.setContent { TaskMindTheme { GuideOverlay(onDismiss = {}) } }
+        compose.setContent { TaskMindTheme { GuideOverlay(onDismiss = {}, isOnDevice = true) } }
 
         compose.onNodeWithText("Next").performClick()
         compose.waitForIdle()
 
         compose.onNodeWithText("Choose your sources").assertIsDisplayed()
+    }
+
+    @Test
+    fun cloudEngine_welcomePageIsHonestAboutTheCloud() {
+        // #197: with the cloud engine active, the welcome copy must not claim "on-device".
+        compose.setContent { TaskMindTheme { GuideOverlay(onDismiss = {}, isOnDevice = false) } }
+
+        compose.onNodeWithText("cloud engine", substring = true).assertIsDisplayed()
     }
 }
