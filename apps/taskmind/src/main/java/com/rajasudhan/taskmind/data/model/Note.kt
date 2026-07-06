@@ -47,5 +47,9 @@ data class Note(
     // user hasn't completed/snoozed it or turned nag off. Persisted (independent of the recurrence date,
     // which advances the moment a recurring reminder fires) so BootReceiver can resume "nag until done"
     // after a reboot even for a recurring reminder. Off by default.
-    @ColumnInfo(defaultValue = "0") val nagFiring: Boolean = false
+    @ColumnInfo(defaultValue = "0") val nagFiring: Boolean = false,
+    // v14 (MIGRATION_13_14): auto-tags (#123) — 0–2 from the closed taxonomy, comma-separated (see
+    // [Tags]). Copied from the suggestion on approval; drives the Notes tag filter chips. Nullable
+    // (null = untagged), so no @ColumnInfo default.
+    val tags: String? = null
 )

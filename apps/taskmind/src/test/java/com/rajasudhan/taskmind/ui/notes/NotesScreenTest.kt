@@ -6,11 +6,14 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import com.rajasudhan.taskmind.data.source.AlarmScheduler
+import com.rajasudhan.taskmind.data.source.SavedFilterStore
 import com.rajasudhan.taskmind.testutil.FakeTaskMindDao
 import com.rajasudhan.taskmind.testutil.MainDispatcherRule
 import com.rajasudhan.taskmind.testutil.aNote
 import com.rajasudhan.taskmind.ui.theme.TaskMindTheme
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
@@ -40,7 +43,8 @@ class NotesScreenTest {
         dao, mockk<AlarmScheduler>(relaxed = true),
         com.rajasudhan.taskmind.data.source.embedding.SemanticIndex(
             com.rajasudhan.taskmind.data.source.embedding.HashingEmbedder(), dao
-        )
+        ),
+        mockk<SavedFilterStore>(relaxed = true).also { every { it.filters } returns flowOf(emptyList()) }
     )
 
     @Test

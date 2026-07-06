@@ -1,8 +1,10 @@
 package com.rajasudhan.taskmind.ui.notes
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -12,13 +14,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.rajasudhan.taskmind.data.model.Note
+import com.rajasudhan.taskmind.data.model.SavedFilter
+import com.rajasudhan.taskmind.data.model.Tags
 import com.rajasudhan.taskmind.ui.bold.*
 import com.rajasudhan.taskmind.ui.common.SkeletonList
 import com.rajasudhan.taskmind.ui.common.isOverdue
@@ -46,6 +53,7 @@ import com.rajasudhan.taskmind.ui.theme.BoldOnAccent
 import com.rajasudhan.taskmind.ui.theme.BoldTheme
 import com.rajasudhan.taskmind.ui.theme.BoldType
 import com.rajasudhan.taskmind.ui.theme.ShapeCard
+import com.rajasudhan.taskmind.ui.theme.ShapeChip
 import com.rajasudhan.taskmind.ui.theme.ShapeField
 import java.time.LocalDate
 
@@ -63,6 +71,15 @@ fun NotesScreen(
     val counts by viewModel.kindCounts.collectAsState()
     val completedCount by viewModel.completedCount.collectAsState()
     val kindFilter by viewModel.kindFilter.collectAsState()
+    val tagFilter by viewModel.tagFilter.collectAsState()
+    val tagCounts by viewModel.tagCounts.collectAsState()
+    val savedFilters by viewModel.savedFilters.collectAsState()
+
+    // Tags actually present on active notes, in taxonomy order — the filter row only offers real ones.
+    val presentTags = Tags.TAXONOMY.filter { (tagCounts[it] ?: 0) > 0 }
+    val canSaveFilter = kindFilter != null || tagFilter.isNotEmpty()
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<SavedFilter?>(null) }
 
     Column(Modifier.fillMaxSize().background(c.screen)) {
         // Header / search / segment share the spec's 22dp inset; the card list uses 16dp.
@@ -82,10 +99,26 @@ fun NotesScreen(
                 completedCount = completedCount,
                 onSelect = { viewModel.setShowCompleted(it) }
             )
-            // Kind filter applies to the Active list only; the Done view is unfiltered.
+            // Kind + tag + saved filters apply to the Active list only; the Done view is unfiltered.
             if (!showCompleted) {
                 Spacer(Modifier.height(12.dp))
                 NotesKindFilter(kind = kindFilter, counts = counts, onSelect = viewModel::setKindFilter)
+                if (presentTags.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    NotesTagFilter(presentTags, tagFilter, tagCounts, viewModel::toggleTag)
+                }
+                if (savedFilters.isNotEmpty() || canSaveFilter) {
+                    Spacer(Modifier.height(8.dp))
+                    SavedFilterRow(
+                        saved = savedFilters,
+                        activeKind = kindFilter,
+                        activeTags = tagFilter,
+                        canSave = canSaveFilter,
+                        onApply = viewModel::applySavedFilter,
+                        onRequestDelete = { pendingDelete = it },
+                        onSaveClick = { showSaveDialog = true }
+                    )
+                }
             }
             Spacer(Modifier.height(14.dp))
         }
@@ -109,6 +142,20 @@ fun NotesScreen(
                     )
                 }
             }
+        }
+
+        if (showSaveDialog) {
+            SaveFilterDialog(
+                onSave = { name -> viewModel.saveCurrentFilter(name); showSaveDialog = false },
+                onDismiss = { showSaveDialog = false }
+            )
+        }
+        pendingDelete?.let { filter ->
+            ConfirmDeleteFilterDialog(
+                name = filter.name,
+                onConfirm = { viewModel.deleteSavedFilter(filter.name); pendingDelete = null },
+                onDismiss = { pendingDelete = null }
+            )
         }
     }
 }
@@ -174,6 +221,130 @@ private fun NotesKindFilter(kind: String?, counts: Map<String, Int>, onSelect: (
         BoldFilterChip("Reminders", kind == "reminder", { onSelect("reminder") }, count = counts["reminder"] ?: 0)
         BoldFilterChip("Notes", kind == "note", { onSelect("note") }, count = counts["note"] ?: 0)
     }
+}
+
+/** Auto-tag chips (#123): multi-select, AND-ed with the kind filter, OR within the selection. */
+@Composable
+private fun NotesTagFilter(
+    tags: List<String>,
+    selected: Set<String>,
+    counts: Map<String, Int>,
+    onToggle: (String) -> Unit
+) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        tags.forEach { tag ->
+            BoldFilterChip(tag, tag in selected, { onToggle(tag) }, count = counts[tag] ?: 0)
+        }
+    }
+}
+
+/** Pinned saved-filter chips + a "Save" affordance. Tap a chip to apply it; long-press to remove it. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SavedFilterRow(
+    saved: List<SavedFilter>,
+    activeKind: String?,
+    activeTags: Set<String>,
+    canSave: Boolean,
+    onApply: (SavedFilter) -> Unit,
+    onRequestDelete: (SavedFilter) -> Unit,
+    onSaveClick: () -> Unit
+) {
+    val c = BoldTheme.colors
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        saved.forEach { filter ->
+            // Highlight the pinned chip when the live selection exactly matches it.
+            val isActive = filter.kind == activeKind && filter.tags.toSet() == activeTags
+            val fg = if (isActive) BoldOnAccent else c.ink2
+            Row(
+                Modifier.clip(ShapeChip).background(if (isActive) c.accent else c.surface2)
+                    .combinedClickable(
+                        onClick = { onApply(filter) },
+                        onLongClick = { onRequestDelete(filter) },
+                        onLongClickLabel = "Remove filter"
+                    )
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                    .semantics { role = Role.Button },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(filter.name, style = BoldType.filterChip, color = fg)
+            }
+        }
+        if (canSave) {
+            Row(
+                Modifier.clip(ShapeChip).border(1.dp, c.line2, ShapeChip)
+                    .clickable(onClickLabel = "Save current filter", role = Role.Button, onClick = onSaveClick)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, tint = c.ink2, modifier = Modifier.size(14.dp))
+                Text("Save", style = BoldType.filterChip, color = c.ink2)
+            }
+        }
+    }
+}
+
+/** Names and pins the current kind+tags selection as a smart filter. */
+@Composable
+private fun SaveFilterDialog(onSave: (String) -> Unit, onDismiss: () -> Unit) {
+    val c = BoldTheme.colors
+    var name by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = { if (name.isNotBlank()) onSave(name) }, enabled = name.isNotBlank()) {
+                Text("Save", color = if (name.isNotBlank()) c.accent else c.ink3)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = c.muted) } },
+        title = { Text("Save filter", style = BoldType.emptyTitle.copy(fontSize = 18.sp), color = c.ink) },
+        text = {
+            Column {
+                Text("Pin the current filter as a chip.", style = BoldType.body.copy(fontSize = 13.sp), color = c.muted)
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier.fillMaxWidth().height(44.dp).clip(ShapeField).background(c.surface)
+                        .border(1.dp, c.line, ShapeField).padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                        if (name.isEmpty()) Text("Filter name", style = BoldType.searchInput.copy(fontSize = 14.5.sp), color = c.ink3)
+                        BasicTextField(
+                            value = name,
+                            onValueChange = { name = it.take(24) },
+                            singleLine = true,
+                            textStyle = BoldType.searchInput.copy(fontSize = 14.5.sp, color = c.ink),
+                            cursorBrush = SolidColor(c.accent),
+                            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Filter name" }
+                        )
+                    }
+                }
+            }
+        },
+        containerColor = c.surface
+    )
+}
+
+/** Confirms removing a pinned saved filter. */
+@Composable
+private fun ConfirmDeleteFilterDialog(name: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val c = BoldTheme.colors
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Remove", color = c.skip) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = c.muted) } },
+        title = { Text("Remove filter", style = BoldType.emptyTitle.copy(fontSize = 18.sp), color = c.ink) },
+        text = { Text("Remove the saved filter “$name”?", style = BoldType.body.copy(fontSize = 14.sp), color = c.muted) },
+        containerColor = c.surface
+    )
 }
 
 @Composable

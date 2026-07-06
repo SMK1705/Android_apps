@@ -1,13 +1,17 @@
 package com.rajasudhan.taskmind.ui.notes
 
+import com.rajasudhan.taskmind.data.model.SavedFilter
 import com.rajasudhan.taskmind.data.source.AlarmScheduler
+import com.rajasudhan.taskmind.data.source.SavedFilterStore
 import com.rajasudhan.taskmind.testutil.FakeTaskMindDao
 import com.rajasudhan.taskmind.testutil.MainDispatcherRule
 import com.rajasudhan.taskmind.testutil.aNote
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -25,13 +29,18 @@ class NotesViewModelTest {
     private val dao = FakeTaskMindDao()
     private lateinit var vm: NotesViewModel
 
+    private val savedFilterStore = mockk<SavedFilterStore>(relaxed = true).also {
+        every { it.filters } returns flowOf(emptyList())
+    }
+
     @Before
     fun setUp() {
         vm = NotesViewModel(
             dao, mockk<AlarmScheduler>(relaxed = true),
             com.rajasudhan.taskmind.data.source.embedding.SemanticIndex(
                 com.rajasudhan.taskmind.data.source.embedding.HashingEmbedder(), dao
-            )
+            ),
+            savedFilterStore
         )
     }
 
@@ -110,5 +119,61 @@ class NotesViewModelTest {
         val milk = dao.getNotesList().first { it.title == "Buy milk" }
         vm.setCompleted(milk, true)
         assertTrue(dao.getNoteByIdNow(milk.id)!!.completed)
+    }
+
+    private suspend fun seedTagged() {
+        dao.insertNote(aNote(title = "Pay rent", type = "todo", tags = "Money", createdDate = 10))
+        dao.insertNote(aNote(title = "Buy milk", type = "todo", tags = "Shopping", createdDate = 20))
+        dao.insertNote(aNote(title = "Ship invoice", type = "todo", tags = "Money,Work", createdDate = 30))
+        dao.insertNote(aNote(title = "Journal", type = "note", createdDate = 40)) // untagged
+    }
+
+    @Test
+    fun tagFilter_keepsOnlyNotesCarryingAnySelectedTag() = runTest {
+        seedTagged()
+        vm.toggleTag("Money")
+        assertEquals(setOf("Pay rent", "Ship invoice"), vm.notes.filterNotNull().first().map { it.title }.toSet())
+    }
+
+    @Test
+    fun tagFilter_isAndedWithKind_andOredWithinTheSelection() = runTest {
+        seedTagged()
+        // "Work" OR "Shopping" among todos → milk (Shopping) + invoice (Work); rent (Money only) drops.
+        vm.toggleTag("Work")
+        vm.toggleTag("Shopping")
+        assertEquals(setOf("Buy milk", "Ship invoice"), vm.notes.filterNotNull().first().map { it.title }.toSet())
+    }
+
+    @Test
+    fun toggleTag_isReversible() = runTest {
+        seedTagged()
+        vm.toggleTag("Money")
+        vm.toggleTag("Money") // toggled back off → no tag constraint
+        assertEquals(4, vm.notes.filterNotNull().first().size)
+    }
+
+    @Test
+    fun tagCounts_reflectActiveNotesByTag() = runTest {
+        seedTagged()
+        val counts = vm.tagCounts.first { it.isNotEmpty() }
+        assertEquals(2, counts["Money"]) // rent + invoice
+        assertEquals(1, counts["Shopping"])
+        assertEquals(1, counts["Work"])
+    }
+
+    @Test
+    fun applySavedFilter_restoresKindAndTags() = runTest {
+        seedTagged()
+        vm.applySavedFilter(SavedFilter(name = "Money todos", kind = "todo", tags = listOf("Money")))
+        assertEquals("todo", vm.kindFilter.first())
+        assertEquals(setOf("Money"), vm.tagFilter.first())
+        assertEquals(setOf("Pay rent", "Ship invoice"), vm.notes.filterNotNull().first().map { it.title }.toSet())
+    }
+
+    @Test
+    fun canSaveCurrentFilter_trueOnlyWhenSomethingIsSelected() = runTest {
+        assertFalse(vm.canSaveCurrentFilter())
+        vm.toggleTag("Money")
+        assertTrue(vm.canSaveCurrentFilter())
     }
 }

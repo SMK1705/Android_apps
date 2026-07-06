@@ -1,5 +1,6 @@
 package com.rajasudhan.taskmind.data.source.understanding
 
+import com.rajasudhan.taskmind.data.model.Tags
 import com.rajasudhan.taskmind.data.source.EgressLogger
 import com.rajasudhan.taskmind.data.source.SettingsManager
 import kotlinx.coroutines.Dispatchers
@@ -98,6 +99,16 @@ class CloudLlmProvider @Inject constructor(
                     .put("due_time", nullableString())
                     .put("location", nullableString())
                     .put("recurrence", nullableString())
+                    // Auto-tags (#123): a bounded array of tags, each pinned to the closed taxonomy so
+                    // the model can't invent a category. Optional (not in `required`) — an item may have
+                    // no tag; the model returns an empty array and sanitizeTags maps that to null.
+                    .put(
+                        "tags",
+                        JSONObject().put("type", "ARRAY").put(
+                            "items",
+                            JSONObject().put("type", "STRING").put("enum", JSONArray(Tags.TAXONOMY))
+                        )
+                    )
                     // "low" is included so the shared schema also serves the natural-language EDIT path
                     // (#115), which can lower priority; extraction still only ever emits normal/high (its
                     // prompt never asks for low).
@@ -106,7 +117,7 @@ class CloudLlmProvider @Inject constructor(
                     .put("confidence", JSONObject().put("type", "NUMBER"))
             )
             .put("required", JSONArray(listOf("type", "title", "notes", "confidence")))
-            .put("propertyOrdering", JSONArray(listOf("type", "title", "notes", "due_date", "due_time", "location", "recurrence", "priority", "counterparty", "confidence")))
+            .put("propertyOrdering", JSONArray(listOf("type", "title", "notes", "due_date", "due_time", "location", "recurrence", "tags", "priority", "counterparty", "confidence")))
         return JSONObject()
             .put("type", "OBJECT")
             .put("properties", JSONObject().put("items", JSONObject().put("type", "ARRAY").put("items", itemSchema)))

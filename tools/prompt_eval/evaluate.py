@@ -62,12 +62,13 @@ RESPONSE_SCHEMA = {
                     "due_time": {"type": "STRING", "nullable": True},
                     "location": {"type": "STRING", "nullable": True},
                     "recurrence": {"type": "STRING", "nullable": True},
+                    "tags": {"type": "ARRAY", "items": {"type": "STRING", "enum": ["Money", "Health", "Family", "Work", "Shopping", "Travel", "Home"]}},
                     "priority": {"type": "STRING", "enum": ["low", "normal", "high"]},
                     "counterparty": {"type": "STRING", "nullable": True},
                     "confidence": {"type": "NUMBER"},
                 },
                 "required": ["type", "title", "notes", "confidence"],
-                "propertyOrdering": ["type", "title", "notes", "due_date", "due_time", "location", "recurrence", "priority", "counterparty", "confidence"],
+                "propertyOrdering": ["type", "title", "notes", "due_date", "due_time", "location", "recurrence", "tags", "priority", "counterparty", "confidence"],
             },
         }
     },
@@ -182,6 +183,12 @@ def matches(item: dict, m: dict) -> bool:
         return False
     if "counterparty_contains" in m and not contains("counterparty", m["counterparty_contains"]):
         return False
+    if "tags_contains" in m:  # any tag on the item contains the needle (case-insensitive)
+        tags = item.get("tags") or []
+        if not any(m["tags_contains"].lower() in str(t).lower() for t in tags):
+            return False
+    if "tags" in m and (item.get("tags") or []) != m["tags"]:  # exact array match
+        return False
     if "min_confidence" in m and float(item.get("confidence") or 0) < m["min_confidence"]:
         return False
     return True
@@ -274,6 +281,12 @@ def field_scores(expect, items: list) -> dict:
     elif "location_contains" in primary:
         need = primary["location_contains"].lower()
         out["location"] = (1 if match is not None and need in str(match.get("location") or "").lower() else 0, 1)
+    if "tags" in primary:
+        out["tags"] = (1 if match is not None and (match.get("tags") or []) == primary["tags"] else 0, 1)
+    elif "tags_contains" in primary:
+        need = primary["tags_contains"].lower()
+        got = (match.get("tags") if match else None) or []
+        out["tags"] = (1 if match is not None and any(need in str(t).lower() for t in got) else 0, 1)
     return out
 
 
@@ -365,7 +378,7 @@ def render_report(results: list, passed: int, ncases: int, runs: int) -> str:
     w("")
     w("| field | correct / total | accuracy |")
     w("|---|---|---|")
-    for f in ("due_date", "due_time", "recurrence", "location"):
+    for f in ("due_date", "due_time", "recurrence", "location", "tags"):
         if f in fagg:
             cor, app = fagg[f]
             w(f"| {f} | {cor}/{app} | {pct(cor, app)} |")

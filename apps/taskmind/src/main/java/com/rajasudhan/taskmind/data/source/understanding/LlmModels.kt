@@ -20,6 +20,10 @@ data class LlmItem(
     val location: String? = null,
     // "daily" | "weekly" | "monthly" for a repeating reminder ("every Monday"), else null.
     val recurrence: String? = null,
+    // 0–2 topic tags from the closed taxonomy (Money/Health/Family/Work/Shopping/Travel/Home), #123.
+    // Nullable + defaulted so on-device models that omit it still parse (like recurrence/location);
+    // ExtractionHeuristics.sanitizeTags clamps stray values to the taxonomy downstream.
+    val tags: List<String>? = null,
     // "high" only on explicit urgency cues; otherwise "normal". Defaulted so on-device models that
     // omit it fall back to "normal" (never "low" — extraction only distinguishes normal vs high).
     val priority: String = "normal",
