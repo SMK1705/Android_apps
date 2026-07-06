@@ -219,7 +219,12 @@ class TaskMindNotificationListener : NotificationListenerService() {
                 // No number in the notification; the Call button resolves the name via Contacts.
                 understandingPipeline.addCallback(displayName = parsed.missedCaller, number = null)
             } else {
-                understandingPipeline.processText("Notification from ${parsed.title!!}", parsed.text!!)
+                // Normalise a group summary's rotating "(N messages): <sender>" title to the stable
+                // group name (#199), so the source — and the rejection-learning key derived from it —
+                // is the same across the group's notifications instead of a fresh one each time. The
+                // raw title is still used above for person/waiting-on resolution, which wants the sender.
+                val source = "Notification from ${NotificationText.conversationTitle(parsed.title!!)}"
+                understandingPipeline.processText(source, parsed.text!!)
             }
             // Record the token (after successful handling) so an unchanged re-post or a later sweep
             // won't reprocess it. A throw above skips this — the exception handler logs it — so it's
