@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -50,6 +51,40 @@ class UnderstandingPipelineTest {
 
     private fun pipeline(llm: FakeLlmProvider) =
         UnderstandingPipeline(llm, moshi, dao, notifier, RejectionLearner(dao), SemanticIndex(HashingEmbedder(), dao))
+
+    // ---- captureFromAgent (#127, AppFunctions): structured, LLM-free, lands in the Inbox ----
+
+    @Test
+    fun captureFromAgent_landsAsAPendingSuggestion_andNotifies() = runTest {
+        val created = pipeline(FakeLlmProvider("")).captureFromAgent(
+            title = "Call the dentist", dueDate = "2026-07-10", dueTime = "09:00", type = "reminder", source = "Gemini"
+        )
+
+        assertTrue(created)
+        val pending = dao.getPendingSuggestions().first().single()
+        assertEquals("Call the dentist", pending.extractedTitle)
+        assertEquals("2026-07-10", pending.dueDate)
+        assertEquals("09:00", pending.dueTime)
+        assertEquals("reminder", pending.type)
+        assertEquals("Gemini", pending.source)
+        assertEquals("pending", pending.status)
+        coVerify { notifier.notifyPending() }
+    }
+
+    @Test
+    fun captureFromAgent_dedupesAgainstAnExistingItem() = runTest {
+        dao.insertNote(aNote(title = "Pay rent", dueDate = "2026-07-01"))
+
+        val created = pipeline(FakeLlmProvider("")).captureFromAgent(title = "Pay rent", dueDate = "2026-07-01")
+
+        assertFalse(created)
+        assertTrue(dao.getPendingSuggestions().first().isEmpty())
+    }
+
+    @Test
+    fun captureFromAgent_rejectsABlankTitle() = runTest {
+        assertFalse(pipeline(FakeLlmProvider("")).captureFromAgent(title = "   "))
+    }
 
     @Test
     fun noiseInput_isSkippedBeforeTheModelRuns() = runTest {

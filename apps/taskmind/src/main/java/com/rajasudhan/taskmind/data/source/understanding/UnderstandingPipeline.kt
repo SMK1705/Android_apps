@@ -206,6 +206,53 @@ class UnderstandingPipeline @Inject constructor(
         notifier.notifyPending()
     }
 
+    /**
+     * Structured capture from an on-device agent (#127, Android AppFunctions). Gemini's "remind me to
+     * X" lands here as a PENDING [Suggestion] — deterministically, no LLM, since the agent already gave
+     * us the fields — so the user's Inbox curation / approval / notification flow is identical to any
+     * other capture (an agent-created item is never silently committed to a Note). Deduped by title+date
+     * like every other insert. Returns true if a suggestion was created.
+     */
+    suspend fun captureFromAgent(
+        title: String,
+        notes: String = "",
+        dueDate: String? = null,
+        dueTime: String? = null,
+        type: String = "todo",
+        source: String = "Assistant",
+    ): Boolean {
+        val cleanTitle = title.trim()
+        if (cleanTitle.isBlank()) return false
+        val date = ExtractionHeuristics.sanitizeDate(dueDate)
+        // A time only rides along with a valid date, mirroring the extraction reconciliation.
+        val time = if (date != null) ExtractionHeuristics.sanitizeTime(dueTime) else null
+        val kind = type.trim().lowercase().takeIf { it in setOf("todo", "reminder", "note", "waiting_on") } ?: "todo"
+
+        var inserted = false
+        insertMutex.withLock {
+            val pending = dao.getPendingSuggestions().first().map { it.extractedTitle to it.dueDate }
+            val existing = dao.getAllNotes().first().map { it.title to it.dueDate }
+            if (!ExtractionHeuristics.isDuplicate(cleanTitle, date, pending + existing)) {
+                dao.insertSuggestion(
+                    Suggestion(
+                        source = source,
+                        rawSnippet = "Created via $source",
+                        extractedTitle = cleanTitle,
+                        summary = notes.trim(),
+                        dueDate = date,
+                        dueTime = time,
+                        type = kind,
+                        confidence = 0.9,
+                        status = "pending",
+                    )
+                )
+                inserted = true
+            }
+        }
+        if (inserted) notifier.notifyPending()
+        return inserted
+    }
+
     private fun tryParse(json: String): LlmResponse? {
         val cleanedJson = ExtractionHeuristics.stripJsonFences(json)
         return try {
