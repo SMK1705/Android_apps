@@ -27,6 +27,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -74,12 +75,14 @@ fun NotesScreen(
     val tagFilter by viewModel.tagFilter.collectAsState()
     val tagCounts by viewModel.tagCounts.collectAsState()
     val savedFilters by viewModel.savedFilters.collectAsState()
+    val archivedCount by viewModel.archivedCount.collectAsState()
 
     // Tags actually present on active notes, in taxonomy order — the filter row only offers real ones.
     val presentTags = Tags.TAXONOMY.filter { (tagCounts[it] ?: 0) > 0 }
     val canSaveFilter = kindFilter != null || tagFilter.isNotEmpty()
     var showSaveDialog by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<SavedFilter?>(null) }
+    var showBankruptcyDialog by remember { mutableStateOf(false) } // #125 batch-archive confirm
 
     Column(Modifier.fillMaxSize().background(c.screen)) {
         // Header / search / segment share the spec's 22dp inset; the card list uses 16dp.
@@ -102,7 +105,7 @@ fun NotesScreen(
             // Kind + tag + saved filters apply to the Active list only; the Done view is unfiltered.
             if (!showCompleted) {
                 Spacer(Modifier.height(12.dp))
-                NotesKindFilter(kind = kindFilter, counts = counts, onSelect = viewModel::setKindFilter)
+                NotesKindFilter(kind = kindFilter, counts = counts, archivedCount = archivedCount, onSelect = viewModel::setKindFilter)
                 if (presentTags.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
                     NotesTagFilter(presentTags, tagFilter, tagCounts, viewModel::toggleTag)
@@ -127,19 +130,40 @@ fun NotesScreen(
         when {
             current == null -> SkeletonList(modifier = Modifier.weight(1f))
             current.isEmpty() -> NotesEmpty(Modifier.weight(1f), query, showCompleted)
-            else -> LazyColumn(
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 96.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(current, key = { it.id }) { note ->
-                    BoldNoteCard(
-                        modifier = Modifier.animateItem(),
-                        note = note,
-                        onClick = { onNoteClick(note.id) },
-                        onToggleComplete = { viewModel.setCompleted(note, !note.completed) },
-                        onReschedule = { viewModel.reschedule(note, it) }
-                    )
+            else -> {
+                val now = System.currentTimeMillis()
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 96.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // #125: the Fading shelf offers one-tap bankruptcy; the Archived shelf offers restore.
+                    if (kindFilter == "fading") {
+                        item {
+                            LifecycleBanner(
+                                "${current.size} task${if (current.size == 1) "" else "s"} untouched for weeks",
+                                "Archive all", c.skip
+                            ) { showBankruptcyDialog = true }
+                        }
+                    } else if (kindFilter == "archived") {
+                        item {
+                            LifecycleBanner("${current.size} archived · kept, not deleted", "Restore all", c.accent) {
+                                viewModel.restoreAllArchived()
+                            }
+                        }
+                    }
+                    items(current, key = { it.id }) { note ->
+                        // Stale to-dos render faded in every list; archived items are always faded.
+                        val faded = kindFilter == "archived" ||
+                            TaskFade.isFading(note.type, note.dueDate, note.completed, note.archived, note.createdDate, now)
+                        BoldNoteCard(
+                            modifier = Modifier.animateItem().then(if (faded) Modifier.alpha(0.5f) else Modifier),
+                            note = note,
+                            onClick = { onNoteClick(note.id) },
+                            onToggleComplete = { if (kindFilter != "archived") viewModel.setCompleted(note, !note.completed) },
+                            onReschedule = { viewModel.reschedule(note, it) }
+                        )
+                    }
                 }
             }
         }
@@ -155,6 +179,26 @@ fun NotesScreen(
                 name = filter.name,
                 onConfirm = { viewModel.deleteSavedFilter(filter.name); pendingDelete = null },
                 onDismiss = { pendingDelete = null }
+            )
+        }
+        if (showBankruptcyDialog) {
+            val fadingCount = counts["fading"] ?: 0
+            AlertDialog(
+                onDismissRequest = { showBankruptcyDialog = false },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.declareBankruptcy(); showBankruptcyDialog = false }) {
+                        Text("Archive $fadingCount", color = c.skip)
+                    }
+                },
+                dismissButton = { TextButton(onClick = { showBankruptcyDialog = false }) { Text("Cancel", color = c.muted) } },
+                title = { Text("Archive stale tasks", style = BoldType.emptyTitle.copy(fontSize = 18.sp), color = c.ink) },
+                text = {
+                    Text(
+                        "Move $fadingCount undated task${if (fadingCount == 1) "" else "s"} you haven't touched in weeks to the Archived shelf. They're kept — never deleted — and you can restore them anytime.",
+                        style = BoldType.body.copy(fontSize = 14.sp), color = c.muted
+                    )
+                },
+                containerColor = c.surface
             )
         }
     }
@@ -200,7 +244,7 @@ private fun NotesSegment(showCompleted: Boolean, activeCount: Int, completedCoun
 
 /** All / Tasks / Reminders / Notes chips that filter the Active list by kind (design's filter row). */
 @Composable
-private fun NotesKindFilter(kind: String?, counts: Map<String, Int>, onSelect: (String?) -> Unit) {
+private fun NotesKindFilter(kind: String?, counts: Map<String, Int>, archivedCount: Int, onSelect: (String?) -> Unit) {
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -220,6 +264,13 @@ private fun NotesKindFilter(kind: String?, counts: Map<String, Int>, onSelect: (
         }
         BoldFilterChip("Reminders", kind == "reminder", { onSelect("reminder") }, count = counts["reminder"] ?: 0)
         BoldFilterChip("Notes", kind == "note", { onSelect("note") }, count = counts["note"] ?: 0)
+        // Task Fade (#125): stale undated to-dos, and the recoverable Archived shelf — only shown when non-empty.
+        if ((counts["fading"] ?: 0) > 0) {
+            BoldFilterChip("Fading", kind == "fading", { onSelect("fading") }, count = counts["fading"] ?: 0)
+        }
+        if (archivedCount > 0) {
+            BoldFilterChip("Archived", kind == "archived", { onSelect("archived") }, count = archivedCount)
+        }
     }
 }
 
@@ -331,6 +382,27 @@ private fun SaveFilterDialog(onSave: (String) -> Unit, onDismiss: () -> Unit) {
         },
         containerColor = c.surface
     )
+}
+
+/** Row banner atop the Fading / Archived shelves (#125): a one-line status + a single tinted action. */
+@Composable
+private fun LifecycleBanner(text: String, action: String, accent: Color, onAction: () -> Unit) {
+    val c = BoldTheme.colors
+    Row(
+        Modifier.fillMaxWidth().clip(ShapeCard).background(c.surface).border(1.dp, c.line, ShapeCard)
+            .padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(text, style = BoldType.detailMeta.copy(fontSize = 12.sp), color = c.muted, modifier = Modifier.weight(1f))
+        Box(
+            Modifier.clip(RoundedCornerShape(8.dp)).background(accent.copy(alpha = 0.15f))
+                .clickable(onClick = onAction, onClickLabel = action, role = Role.Button)
+                .padding(horizontal = 12.dp, vertical = 7.dp)
+        ) {
+            Text(action, style = BoldType.detailMeta.copy(fontSize = 11.5.sp), color = accent)
+        }
+    }
 }
 
 /** Confirms removing a pinned saved filter. */

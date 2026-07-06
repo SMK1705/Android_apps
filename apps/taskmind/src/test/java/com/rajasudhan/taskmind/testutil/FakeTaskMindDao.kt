@@ -48,10 +48,17 @@ class FakeTaskMindDao : TaskMindDao {
         notes.map { it.sortedByDescending { n -> n.createdDate } }
 
     override fun getActiveNotes(): Flow<List<Note>> =
-        notes.map { list -> list.filter { !it.completed }.sortedByDescending { it.createdDate } }
+        notes.map { list -> list.filter { !it.completed && !it.archived }.sortedByDescending { it.createdDate } }
 
     override fun getCompletedNotes(): Flow<List<Note>> =
         notes.map { list -> list.filter { it.completed }.sortedByDescending { it.completedDate ?: 0L } }
+
+    override fun getArchivedNotes(): Flow<List<Note>> =
+        notes.map { list -> list.filter { it.archived }.sortedByDescending { it.createdDate } }
+
+    override suspend fun updateNoteArchived(id: Int, archived: Boolean) {
+        notes.update { list -> list.map { if (it.id == id) it.copy(archived = archived) else it } }
+    }
 
     override fun searchNotes(q: String): Flow<List<Note>> {
         val term = q.trim('%')
@@ -137,16 +144,16 @@ class FakeTaskMindDao : TaskMindDao {
     override suspend fun getNotesList(): List<Note> = notes.value.sortedByDescending { it.createdDate }
 
     override suspend fun getReminderNotes(): List<Note> =
-        notes.value.filter { !it.completed && it.type == "reminder" && it.dueDate != null && it.dueTime != null }
+        notes.value.filter { !it.completed && !it.archived && it.type == "reminder" && it.dueDate != null && it.dueTime != null }
 
     override suspend fun getActiveWaitingOn(): List<Note> =
-        notes.value.filter { !it.completed && it.type == "waiting_on" && it.counterparty != null }
+        notes.value.filter { !it.completed && !it.archived && it.type == "waiting_on" && it.counterparty != null }
 
     override suspend fun getWaitingOnReminders(): List<Note> =
-        notes.value.filter { !it.completed && it.type == "waiting_on" && it.dueDate != null && it.dueTime != null }
+        notes.value.filter { !it.completed && !it.archived && it.type == "waiting_on" && it.dueDate != null && it.dueTime != null }
 
     override suspend fun getActivePersonNotes(): List<Note> =
-        notes.value.filter { !it.completed && it.counterparty != null && it.type != "waiting_on" }
+        notes.value.filter { !it.completed && !it.archived && it.counterparty != null && it.type != "waiting_on" }
 
     override suspend fun deleteNotesOlderThan(cutoff: Long) {
         notes.update { list -> list.filter { it.createdDate >= cutoff } }

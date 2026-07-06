@@ -11,7 +11,7 @@ import com.rajasudhan.taskmind.data.model.Suggestion
 
 @Database(
     entities = [Note::class, Suggestion::class, RejectedPattern::class, NoteEmbedding::class],
-    version = 15,
+    version = 16,
     exportSchema = true
 )
 abstract class TaskMindDatabase : RoomDatabase() {
@@ -172,6 +172,17 @@ abstract class TaskMindDatabase : RoomDatabase() {
         val MIGRATION_14_15 = object : Migration(14, 15) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE suggestions ADD COLUMN possibleDuplicateOf TEXT")
+            }
+        }
+
+        /**
+         * v16 adds an `archived` flag to notes — Task Fade / bankruptcy (#125): a stale item the user
+         * batch-archived instead of finishing or deleting it. Existing rows default off (NOT NULL
+         * DEFAULT 0, mirroring the entity); nothing is archived across an upgrade.
+         */
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE notes ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

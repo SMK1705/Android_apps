@@ -31,11 +31,19 @@ interface TaskMindDao {
     @Query("SELECT * FROM notes ORDER BY createdDate DESC")
     fun getAllNotes(): Flow<List<Note>>
 
-    @Query("SELECT * FROM notes WHERE completed = 0 ORDER BY createdDate DESC")
+    // Excludes archived (#125): a batch-archived stale item leaves the active list but is never deleted.
+    @Query("SELECT * FROM notes WHERE completed = 0 AND archived = 0 ORDER BY createdDate DESC")
     fun getActiveNotes(): Flow<List<Note>>
 
     @Query("SELECT * FROM notes WHERE completed = 1 ORDER BY completedDate DESC")
     fun getCompletedNotes(): Flow<List<Note>>
+
+    /** Archived (bankruptcy'd) items (#125) — for the Archived view + restore. Never auto-deleted. */
+    @Query("SELECT * FROM notes WHERE archived = 1 ORDER BY createdDate DESC")
+    fun getArchivedNotes(): Flow<List<Note>>
+
+    @Query("UPDATE notes SET archived = :archived WHERE id = :id")
+    suspend fun updateNoteArchived(id: Int, archived: Boolean)
 
     /** Free-text search across title/summary/body. Caller passes a wildcarded term, e.g. "%milk%". */
     @Query("SELECT * FROM notes WHERE title LIKE :q OR summary LIKE :q OR body LIKE :q ORDER BY createdDate DESC")
@@ -133,15 +141,18 @@ interface TaskMindDao {
      * them. The `type` filter matters: a plain timed to-do has a date+time but never had an alarm, so
      * re-arming it would fabricate a reminder the user never set.
      */
-    @Query("SELECT * FROM notes WHERE completed = 0 AND type = 'reminder' AND dueDate IS NOT NULL AND dueTime IS NOT NULL")
+    // archived = 0 (#125): archived items are off ALL active surfaces — including alarm re-arm. Today
+    // only undated todos can be archived (so this can't yet match one), but excluding it here keeps the
+    // "archived never resurfaces" invariant structural, not accidental, if the archive scope ever widens.
+    @Query("SELECT * FROM notes WHERE completed = 0 AND archived = 0 AND type = 'reminder' AND dueDate IS NOT NULL AND dueTime IS NOT NULL")
     suspend fun getReminderNotes(): List<Note>
 
     /** Open "waiting on <someone>" items — used to auto-resolve one when that counterparty gets in touch. */
-    @Query("SELECT * FROM notes WHERE completed = 0 AND type = 'waiting_on' AND counterparty IS NOT NULL")
+    @Query("SELECT * FROM notes WHERE completed = 0 AND archived = 0 AND type = 'waiting_on' AND counterparty IS NOT NULL")
     suspend fun getActiveWaitingOn(): List<Note>
 
     /** Dated waiting-on follow-up nudges — re-armed after a reboot alongside the reminder alarms. */
-    @Query("SELECT * FROM notes WHERE completed = 0 AND type = 'waiting_on' AND dueDate IS NOT NULL AND dueTime IS NOT NULL")
+    @Query("SELECT * FROM notes WHERE completed = 0 AND archived = 0 AND type = 'waiting_on' AND dueDate IS NOT NULL AND dueTime IS NOT NULL")
     suspend fun getWaitingOnReminders(): List<Note>
 
     /**
@@ -149,7 +160,7 @@ interface TaskMindDao {
      * (those auto-resolve on contact instead). Used to surface "you have something with X" the moment
      * X gets in touch.
      */
-    @Query("SELECT * FROM notes WHERE completed = 0 AND counterparty IS NOT NULL AND type != 'waiting_on'")
+    @Query("SELECT * FROM notes WHERE completed = 0 AND archived = 0 AND counterparty IS NOT NULL AND type != 'waiting_on'")
     suspend fun getActivePersonNotes(): List<Note>
 
     /** Retention: drop notes created before [cutoff] (epoch millis). */

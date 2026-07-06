@@ -20,6 +20,7 @@ import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_1
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_12_13
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_13_14
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_14_15
+import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_15_16
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -95,14 +96,14 @@ class MigrationTest {
     }
 
     @Test
-    fun migrate1To15_preservesData_andRoomValidatesSchema() = runTest {
+    fun migrate1To16_preservesData_andRoomValidatesSchema() = runTest {
         createV1Database()
 
         val db = Room.databaseBuilder(context, TaskMindDatabase::class.java, testDb)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
             .allowMainThreadQueries()
             .build()
-        // Opening runs the 1→15 chain and validates the resulting schema against the current entities.
+        // Opening runs the 1→16 chain and validates the resulting schema against the current entities.
         db.openHelper.writableDatabase
 
         val dao = db.taskMindDao()
@@ -120,6 +121,7 @@ class MigrationTest {
         assertNull(notes[0].recurrenceAnchorDay) // added in v12, nullable (the note isn't monthly)
         assertFalse(notes[0].nagFiring)      // added in v13 with DEFAULT 0
         assertNull(notes[0].tags)            // added in v14, nullable
+        assertFalse(notes[0].archived)       // added in v16 with DEFAULT 0
 
         val sug = dao.getSuggestionById(1)
         assertNotNull(sug)

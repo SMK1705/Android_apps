@@ -51,5 +51,9 @@ data class Note(
     // v14 (MIGRATION_13_14): auto-tags (#123) — 0–2 from the closed taxonomy, comma-separated (see
     // [Tags]). Copied from the suggestion on approval; drives the Notes tag filter chips. Nullable
     // (null = untagged), so no @ColumnInfo default.
-    val tags: String? = null
+    val tags: String? = null,
+    // v16 (MIGRATION_15_16): Task Fade / bankruptcy (#125) — the user batch-archived this stale item
+    // instead of finishing or deleting it. Hidden from the active list but never deleted (recoverable
+    // from the Archived view). Off by default (NOT NULL DEFAULT 0, mirroring the migration).
+    @ColumnInfo(defaultValue = "0") val archived: Boolean = false
 )
