@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.DarkMode
@@ -222,6 +223,7 @@ fun BoldPillButton(
 enum class BoldTab(val route: String, val label: String, val icon: ImageVector) {
     INBOX("inbox", "Inbox", Icons.Outlined.Inbox),
     NOTES("notes", "Notes", Icons.Outlined.Layers),
+    ASK("ask", "Ask", Icons.Outlined.AutoAwesome),
     SOURCES("sources", "Sources", Icons.Outlined.Tune),
     PRIVACY("settings", "Privacy", Icons.Outlined.Shield),
 }

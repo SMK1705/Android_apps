@@ -51,6 +51,23 @@ class RoutingLlmProvider @Inject constructor(
         return cloud.generateList(systemMessage, userMessage)
     }
 
+    override suspend fun generateIntent(systemMessage: String, userMessage: String): String {
+        if (settingsManager.useOnDeviceLlm) {
+            return try {
+                onDevice.generateIntent(systemMessage, userMessage)
+            } catch (e: Exception) {
+                // On-device unavailable — fall back to cloud intent classification only if a key is set;
+                // otherwise a safe empty "query" intent, which Ask handles by falling through to search.
+                if (settingsManager.llmApiKey.isNotBlank()) {
+                    cloud.generateIntent(systemMessage, userMessage)
+                } else {
+                    "{\"action\": \"query\"}"
+                }
+            }
+        }
+        return cloud.generateIntent(systemMessage, userMessage)
+    }
+
     /**
      * Whether extraction's DATA actually stays on the device, mirroring [generate]'s routing — so the
      * UI can label the engine honestly (#197) instead of hardcoding "on-device". True only when:
