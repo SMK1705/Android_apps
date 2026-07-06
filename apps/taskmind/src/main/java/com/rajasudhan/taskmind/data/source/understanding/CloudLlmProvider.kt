@@ -31,6 +31,13 @@ class CloudLlmProvider @Inject constructor(
         callGemini(systemMessage, userMessage, stringArraySchema(), "Cloud LLM task breakdown", EMPTY_ARRAY)
 
     /**
+     * Ask TaskMind intent classification (#128): the reply is pinned to a flat intent object (a closed
+     * `action` plus optional slots) so it never comes back wrapped in the extraction `{items:[…]}` shape.
+     */
+    override suspend fun generateIntent(systemMessage: String, userMessage: String): String =
+        callGemini(systemMessage, userMessage, intentSchema(), "Cloud LLM ask intent", EMPTY_INTENT)
+
+    /**
      * Posts a Gemini generateContent request whose output is pinned to [schema], returning the
      * model's raw JSON text. [purpose] is what gets written to the egress ledger; [fallback] is
      * returned (without any network call) on a blank key, and (after a call) on a non-2xx response
@@ -128,6 +135,30 @@ class CloudLlmProvider @Inject constructor(
     private fun stringArraySchema(): JSONObject =
         JSONObject().put("type", "ARRAY").put("items", JSONObject().put("type", "STRING"))
 
+    /**
+     * Structured-output schema for an Ask TaskMind intent (#128): a flat object whose `action` is a
+     * closed enum; the slots are nullable strings (canonicalised app-side by [AskQuery]). Only `action`
+     * is required, so a bare `{"action":"query"}` is a valid, minimal reply.
+     */
+    private fun intentSchema(): JSONObject {
+        fun nullableString() = JSONObject().put("type", "STRING").put("nullable", true)
+        return JSONObject()
+            .put("type", "OBJECT")
+            .put(
+                "properties",
+                JSONObject()
+                    .put("action", JSONObject().put("type", "STRING").put("enum", JSONArray(listOf("query", "create"))))
+                    .put("type", nullableString())
+                    .put("tag", nullableString())
+                    .put("window", nullableString())
+                    .put("status", nullableString())
+                    .put("keyword", nullableString())
+                    .put("text", nullableString())
+            )
+            .put("required", JSONArray(listOf("action")))
+            .put("propertyOrdering", JSONArray(listOf("action", "type", "tag", "window", "status", "keyword", "text")))
+    }
+
     private fun sendForJson(request: Request, fallback: String): String =
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) return@use fallback
@@ -153,5 +184,6 @@ class CloudLlmProvider @Inject constructor(
         // Empty results shaped to match each call's schema, so the caller's parser never chokes.
         private const val EMPTY_ITEMS = "{\"items\": []}"
         private const val EMPTY_ARRAY = "[]"
+        private const val EMPTY_INTENT = "{\"action\": \"query\"}"
     }
 }

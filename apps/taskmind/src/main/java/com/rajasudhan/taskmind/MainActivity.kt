@@ -431,6 +431,13 @@ fun TaskMindAppContent(
                     onBack = { navController.popBackStack() }
                 )
             }
+            composable("ask") {
+                com.rajasudhan.taskmind.ui.ask.AskScreen(
+                    isDark = isDark,
+                    onToggleTheme = onToggleTheme,
+                    onNoteClick = { id -> navController.navigate("notes/$id") { launchSingleTop = true } }
+                )
+            }
             composable("sources") {
                 com.rajasudhan.taskmind.ui.sources.SourcesScreen(isDark = isDark, onToggleTheme = onToggleTheme)
             }

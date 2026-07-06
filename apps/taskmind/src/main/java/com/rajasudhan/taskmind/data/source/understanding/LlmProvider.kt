@@ -15,4 +15,14 @@ interface LlmProvider {
      */
     suspend fun generateList(systemMessage: String, userMessage: String): String =
         generate(systemMessage, userMessage)
+
+    /**
+     * Classify an "Ask TaskMind" utterance into a small constrained intent JSON (#128). The default
+     * delegates to [generate] — right for the on-device model, which can't enforce a schema, so a
+     * free-form call with a "return this JSON" prompt is the best it can do. The cloud and routing
+     * providers override this to pin a flat intent schema (so it can't come back as the extraction
+     * shape) and to route with fallback.
+     */
+    suspend fun generateIntent(systemMessage: String, userMessage: String): String =
+        generate(systemMessage, userMessage)
 }
