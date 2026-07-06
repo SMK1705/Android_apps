@@ -29,6 +29,7 @@ class AlarmReceiverTest {
     private lateinit var db: TaskMindDatabase
     private lateinit var dao: TaskMindDao
     private val alarms = mockk<AlarmScheduler>(relaxed = true)
+    private val calendarMirror = mockk<CalendarMirror>(relaxed = true)
 
     @Before
     fun setUp() {
@@ -44,6 +45,7 @@ class AlarmReceiverTest {
         val r = AlarmReceiver()
         r.dao = dao
         r.alarmScheduler = alarms
+        r.calendarMirror = calendarMirror
         return r
     }
 
@@ -66,6 +68,19 @@ class AlarmReceiverTest {
 
         verify { alarms.schedule(id, "Rent", any(), "09:00", "weekly") }
         assertNotEquals("2026-06-01", dao.getNoteByIdNow(id)!!.dueDate)
+    }
+
+    @Test
+    fun recurringReminder_movesItsMirroredCalendarEvent() = runTest {
+        val id = dao.insertNote(
+            aNote(type = "reminder", title = "Rent", dueDate = "2026-06-01", dueTime = "09:00", recurrence = "weekly", calendarEventId = 8L)
+        ).toInt()
+
+        // 06-01,06-08,06-15(09:00<=noon) advances to 06-22.
+        receiver().handle(context, id, "Rent", "weekly", "2026-06-01", "09:00", LocalDateTime.of(2026, 6, 20, 12, 0))
+
+        // The single mirrored event tracks the next occurrence, so it advances with the note (#119).
+        verify { calendarMirror.update(8L, "Rent", "2026-06-22", "09:00") }
     }
 
     @Test

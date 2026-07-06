@@ -93,6 +93,10 @@ class FakeTaskMindDao : TaskMindDao {
         notes.update { list -> list.map { if (it.id == id) it.copy(repeatFromCompletion = fromCompletion) else it } }
     }
 
+    override suspend fun updateNoteCalendarEventId(id: Int, calendarEventId: Long?) {
+        notes.update { list -> list.map { if (it.id == id) it.copy(calendarEventId = calendarEventId) else it } }
+    }
+
     override suspend fun updateNotePriority(id: Int, priority: String) {
         notes.update { list -> list.map { if (it.id == id) it.copy(priority = priority) else it } }
     }

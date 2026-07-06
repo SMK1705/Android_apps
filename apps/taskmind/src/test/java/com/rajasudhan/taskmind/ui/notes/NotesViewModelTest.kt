@@ -8,6 +8,7 @@ import com.rajasudhan.taskmind.testutil.MainDispatcherRule
 import com.rajasudhan.taskmind.testutil.aNote
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -27,6 +29,7 @@ class NotesViewModelTest {
     val mainRule = MainDispatcherRule()
 
     private val dao = FakeTaskMindDao()
+    private val calendarMirror = mockk<com.rajasudhan.taskmind.data.source.CalendarMirror>(relaxed = true)
     private lateinit var vm: NotesViewModel
 
     private val savedFilterStore = mockk<SavedFilterStore>(relaxed = true).also {
@@ -41,7 +44,8 @@ class NotesViewModelTest {
                 com.rajasudhan.taskmind.data.source.embedding.HashingEmbedder(), dao
             ),
             savedFilterStore,
-            com.rajasudhan.taskmind.data.source.CompletionRecurrence(dao, mockk(relaxed = true))
+            com.rajasudhan.taskmind.data.source.CompletionRecurrence(dao, mockk(relaxed = true), calendarMirror),
+            calendarMirror
         )
     }
 
@@ -50,6 +54,25 @@ class NotesViewModelTest {
         dao.insertNote(aNote(title = "Standup", type = "reminder", dueDate = "2026-07-01", dueTime = "09:00", createdDate = 20))
         dao.insertNote(aNote(title = "Journal", type = "note", createdDate = 30))
         dao.insertNote(aNote(title = "Done thing", type = "todo", completed = true, completedDate = 40, createdDate = 5))
+    }
+
+    @Test
+    fun reschedule_movesTheMirroredCalendarEvent() = runTest {
+        val id = dao.insertNote(aNote(type = "reminder", title = "Rent", dueDate = "2026-07-01", dueTime = "09:00", calendarEventId = 5L)).toInt()
+
+        vm.reschedule(dao.getNoteByIdNow(id)!!, "2026-07-05")
+
+        verify { calendarMirror.update(5L, "Rent", "2026-07-05", "09:00") }
+    }
+
+    @Test
+    fun completing_deletesTheMirroredCalendarEvent() = runTest {
+        val id = dao.insertNote(aNote(type = "todo", title = "Pay", dueDate = "2026-07-01", calendarEventId = 7L)).toInt()
+
+        vm.setCompleted(dao.getNoteByIdNow(id)!!, true)
+
+        verify { calendarMirror.delete(7L) }
+        assertNull(dao.getNoteByIdNow(id)!!.calendarEventId)
     }
 
     @Test

@@ -9,6 +9,8 @@ import com.rajasudhan.taskmind.data.model.RejectedPattern
 import com.rajasudhan.taskmind.data.model.Suggestion
 import com.rajasudhan.taskmind.testutil.aSuggestion
 import com.rajasudhan.taskmind.ui.notes.Checklist
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.first
@@ -16,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -32,7 +35,7 @@ class SuggestionApproverTest {
 
     private lateinit var db: TaskMindDatabase
     private lateinit var dao: TaskMindDao
-    private val settings = mockk<SettingsManager>(relaxed = true)
+    private val calendarMirror = mockk<CalendarMirror>(relaxed = true)
     private val alarms = mockk<AlarmScheduler>(relaxed = true)
     private val geocoder = mockk<PlaceGeocoder>(relaxed = true)
     private val geofence = mockk<GeofenceManager>(relaxed = true)
@@ -46,7 +49,7 @@ class SuggestionApproverTest {
         ).allowMainThreadQueries().build()
         dao = db.taskMindDao()
         approver = SuggestionApprover(
-            dao, settings, alarms, geocoder, geofence, RejectionLearner(dao),
+            dao, calendarMirror, alarms, geocoder, geofence, RejectionLearner(dao),
             com.rajasudhan.taskmind.data.source.embedding.SemanticIndex(
                 com.rajasudhan.taskmind.data.source.embedding.HashingEmbedder(), dao
             ),
@@ -117,6 +120,30 @@ class SuggestionApproverTest {
         val noteId = approver.approve(s)
 
         assertEquals("Money,Home", dao.getNoteByIdNow(noteId.toInt())!!.tags)
+    }
+
+    @Test
+    fun approveReminder_mirrorsToCalendar_andPersistsTheEventId() = runTest {
+        // The mirror returns an event id; the approver must store it on the note so later edits can
+        // update/delete the same event (#119).
+        coEvery { calendarMirror.insert(any(), any(), any(), any(), any()) } returns 777L
+        val s = insertPending(aSuggestion(extractedTitle = "Standup", type = "reminder", dueDate = "2026-07-01", dueTime = "09:00"))
+
+        val noteId = approver.approve(s)
+
+        coVerify { calendarMirror.insert("Standup", any(), "2026-07-01", "09:00", any()) }
+        assertEquals(777L, dao.getNoteByIdNow(noteId.toInt())!!.calendarEventId)
+    }
+
+    @Test
+    fun approveReminder_whenCalendarOff_leavesNoEventId() = runTest {
+        // The mirror self-gates on the Calendar source toggle and returns null; nothing is persisted.
+        coEvery { calendarMirror.insert(any(), any(), any(), any(), any()) } returns null
+        val s = insertPending(aSuggestion(extractedTitle = "Standup", type = "reminder", dueDate = "2026-07-01", dueTime = "09:00"))
+
+        val noteId = approver.approve(s)
+
+        assertNull(dao.getNoteByIdNow(noteId.toInt())!!.calendarEventId)
     }
 
     @Test

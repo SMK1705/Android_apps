@@ -69,6 +69,10 @@ interface TaskMindDao {
     @Query("UPDATE notes SET repeatFromCompletion = :fromCompletion WHERE id = :id")
     suspend fun updateNoteRepeatFromCompletion(id: Int, fromCompletion: Boolean)
 
+    /** The mirrored calendar event id (#119) — set on approval, cleared to null when the event is deleted. */
+    @Query("UPDATE notes SET calendarEventId = :calendarEventId WHERE id = :id")
+    suspend fun updateNoteCalendarEventId(id: Int, calendarEventId: Long?)
+
     @Query("UPDATE notes SET priority = :priority WHERE id = :id")
     suspend fun updateNotePriority(id: Int, priority: String)
 

@@ -21,6 +21,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
     @Inject lateinit var dao: TaskMindDao
     @Inject lateinit var alarmScheduler: AlarmScheduler
+    @Inject lateinit var calendarMirror: CalendarMirror
 
     override fun onReceive(context: Context, intent: Intent) {
         val title = intent.getStringExtra("title") ?: "TaskMind Reminder"
@@ -80,6 +81,9 @@ class AlarmReceiver : BroadcastReceiver() {
             val next = RecurrenceUtil.firstFutureOccurrence(firstNext, dueTime, recurrence, now, anchor)
                 ?: firstNext
             dao.updateNoteDueDate(noteId, next)
+            // A recurring reminder is mirrored as a single event tracking its next occurrence — move it
+            // forward with the note so the calendar doesn't fall a period behind on each fire (#119).
+            note?.calendarEventId?.let { calendarMirror.update(it, title, next, dueTime) }
             alarmScheduler.schedule(noteId, title, next, dueTime, recurrence)
         }
 

@@ -45,7 +45,8 @@ class NotesScreenTest {
             com.rajasudhan.taskmind.data.source.embedding.HashingEmbedder(), dao
         ),
         mockk<SavedFilterStore>(relaxed = true).also { every { it.filters } returns flowOf(emptyList()) },
-        com.rajasudhan.taskmind.data.source.CompletionRecurrence(dao, mockk(relaxed = true))
+        com.rajasudhan.taskmind.data.source.CompletionRecurrence(dao, mockk(relaxed = true), mockk(relaxed = true)),
+        mockk<com.rajasudhan.taskmind.data.source.CalendarMirror>(relaxed = true)
     )
 
     @Test

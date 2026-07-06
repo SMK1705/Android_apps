@@ -11,7 +11,7 @@ import com.rajasudhan.taskmind.data.model.Suggestion
 
 @Database(
     entities = [Note::class, Suggestion::class, RejectedPattern::class, NoteEmbedding::class],
-    version = 17,
+    version = 18,
     exportSchema = true
 )
 abstract class TaskMindDatabase : RoomDatabase() {
@@ -196,6 +196,17 @@ abstract class TaskMindDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE notes ADD COLUMN repeatFromCompletion INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE suggestions ADD COLUMN repeatFromCompletion INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v18 adds a nullable `calendarEventId` column to notes — the device-calendar event a note
+         * mirrors (#119), so the one-way mirror can update/delete it as the note changes instead of being
+         * write-once. Nullable (null = nothing mirrored), so no DEFAULT.
+         */
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE notes ADD COLUMN calendarEventId INTEGER")
             }
         }
     }

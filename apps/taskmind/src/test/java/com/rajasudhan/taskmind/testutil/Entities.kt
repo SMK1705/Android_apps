@@ -34,6 +34,7 @@ fun aNote(
     tags: String? = null,
     archived: Boolean = false,
     repeatFromCompletion: Boolean = false,
+    calendarEventId: Long? = null,
 ) = Note(
     id = id, title = title, summary = summary, body = body, dueDate = dueDate, dueTime = dueTime,
     source = source, createdDate = createdDate, type = type, completed = completed,
@@ -41,7 +42,7 @@ fun aNote(
     locationLat = locationLat, locationLng = locationLng, locationRadius = locationRadius,
     locationLabel = locationLabel, priority = priority, nag = nag, counterparty = counterparty,
     pendingConfirmSince = pendingConfirmSince, recurrenceAnchorDay = recurrenceAnchorDay, nagFiring = nagFiring,
-    tags = tags, archived = archived, repeatFromCompletion = repeatFromCompletion,
+    tags = tags, archived = archived, repeatFromCompletion = repeatFromCompletion, calendarEventId = calendarEventId,
 )
 
 fun aSuggestion(

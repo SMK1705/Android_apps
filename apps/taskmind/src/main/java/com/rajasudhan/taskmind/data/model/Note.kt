@@ -61,5 +61,9 @@ data class Note(
     // or late never stacks a pile of overdue copies (Todoist's "every!"). Only meaningful alongside
     // [recurrence]. Off by default (NOT NULL DEFAULT 0, mirroring the migration) — existing repeats stay
     // date-based.
-    @ColumnInfo(defaultValue = "0") val repeatFromCompletion: Boolean = false
+    @ColumnInfo(defaultValue = "0") val repeatFromCompletion: Boolean = false,
+    // v18 (MIGRATION_17_18): the id of the device-calendar event this note mirrors (#119), so the mirror
+    // can be UPDATEd on reschedule/rename and DELETEd on complete/delete instead of drifting stale after
+    // the first triage. Null when nothing is mirrored (calendar source off, no permission, or undated).
+    val calendarEventId: Long? = null
 )
