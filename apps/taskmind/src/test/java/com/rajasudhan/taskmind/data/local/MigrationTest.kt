@@ -21,6 +21,7 @@ import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_1
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_13_14
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_14_15
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_15_16
+import com.rajasudhan.taskmind.data.local.TaskMindDatabase.Companion.MIGRATION_16_17
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -96,14 +97,14 @@ class MigrationTest {
     }
 
     @Test
-    fun migrate1To16_preservesData_andRoomValidatesSchema() = runTest {
+    fun migrate1To17_preservesData_andRoomValidatesSchema() = runTest {
         createV1Database()
 
         val db = Room.databaseBuilder(context, TaskMindDatabase::class.java, testDb)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
             .allowMainThreadQueries()
             .build()
-        // Opening runs the 1→16 chain and validates the resulting schema against the current entities.
+        // Opening runs the 1→17 chain and validates the resulting schema against the current entities.
         db.openHelper.writableDatabase
 
         val dao = db.taskMindDao()
@@ -122,6 +123,7 @@ class MigrationTest {
         assertFalse(notes[0].nagFiring)      // added in v13 with DEFAULT 0
         assertNull(notes[0].tags)            // added in v14, nullable
         assertFalse(notes[0].archived)       // added in v16 with DEFAULT 0
+        assertFalse(notes[0].repeatFromCompletion) // added in v17 with DEFAULT 0
 
         val sug = dao.getSuggestionById(1)
         assertNotNull(sug)
@@ -134,6 +136,7 @@ class MigrationTest {
         assertNull(sug.counterparty)         // added in v9, nullable
         assertNull(sug.tags)                 // added in v14, nullable
         assertNull(sug.possibleDuplicateOf)  // added in v15, nullable
+        assertFalse(sug.repeatFromCompletion) // added in v17 with DEFAULT 0
 
         // v10 added the note_embeddings table — it must exist and be queryable (empty at this point).
         assertEquals(0, dao.getAllEmbeddings().size)

@@ -33,6 +33,7 @@ fun aNote(
     nagFiring: Boolean = false,
     tags: String? = null,
     archived: Boolean = false,
+    repeatFromCompletion: Boolean = false,
 ) = Note(
     id = id, title = title, summary = summary, body = body, dueDate = dueDate, dueTime = dueTime,
     source = source, createdDate = createdDate, type = type, completed = completed,
@@ -40,7 +41,7 @@ fun aNote(
     locationLat = locationLat, locationLng = locationLng, locationRadius = locationRadius,
     locationLabel = locationLabel, priority = priority, nag = nag, counterparty = counterparty,
     pendingConfirmSince = pendingConfirmSince, recurrenceAnchorDay = recurrenceAnchorDay, nagFiring = nagFiring,
-    tags = tags, archived = archived,
+    tags = tags, archived = archived, repeatFromCompletion = repeatFromCompletion,
 )
 
 fun aSuggestion(
@@ -61,9 +62,11 @@ fun aSuggestion(
     counterparty: String? = null,
     tags: String? = null,
     possibleDuplicateOf: String? = null,
+    repeatFromCompletion: Boolean = false,
 ) = Suggestion(
     id = id, source = source, rawSnippet = rawSnippet, extractedTitle = extractedTitle,
     summary = summary, dueDate = dueDate, dueTime = dueTime, type = type, confidence = confidence,
     status = status, snoozedUntil = snoozedUntil, location = location, recurrence = recurrence,
     priority = priority, counterparty = counterparty, tags = tags, possibleDuplicateOf = possibleDuplicateOf,
+    repeatFromCompletion = repeatFromCompletion,
 )

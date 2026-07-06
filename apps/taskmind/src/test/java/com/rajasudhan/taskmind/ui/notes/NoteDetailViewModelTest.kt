@@ -42,7 +42,7 @@ class NoteDetailViewModelTest {
     /** Insert [note], build a VM bound to its id, and wait for the note flow to load. */
     private suspend fun vmFor(note: Note): Pair<NoteDetailViewModel, Int> {
         val id = dao.insertNote(note).toInt()
-        val vm = NoteDetailViewModel(dao, alarms, geofence, onDeviceLlm, llm, settingsManager, placeGeocoder, SavedStateHandle(mapOf("noteId" to id)))
+        val vm = NoteDetailViewModel(dao, alarms, geofence, onDeviceLlm, llm, settingsManager, placeGeocoder, com.rajasudhan.taskmind.data.source.CompletionRecurrence(dao, alarms), SavedStateHandle(mapOf("noteId" to id)))
         vm.note.filterNotNull().first()
         return vm to id
     }

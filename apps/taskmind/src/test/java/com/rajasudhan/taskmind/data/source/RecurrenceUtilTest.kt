@@ -122,6 +122,29 @@ class RecurrenceUtilTest {
         assertNull(RecurrenceUtil.firstFutureOccurrence("not-a-date", "09:00", "daily", now))
     }
 
+    // ---------------- nextFromCompletion (#124: completion-based recurrence) ----------------
+
+    @Test
+    fun nextFromCompletion_advancesFromWhenItWasFinished_notTheDueDate() {
+        // Finished today (noon) → the next daily/weekly slot is measured from the completion day.
+        assertEquals("2026-06-16", RecurrenceUtil.nextFromCompletion("2026-06-15", "09:00", "daily", now))
+        assertEquals("2026-06-22", RecurrenceUtil.nextFromCompletion("2026-06-15", "09:00", "weekly", now))
+        assertEquals("2026-07-15", RecurrenceUtil.nextFromCompletion("2026-06-15", "09:00", "monthly", now, anchorDay = 15))
+    }
+
+    @Test
+    fun nextFromCompletion_stillSkipsToAFutureSlot_whenCompletionIsOld() {
+        // A stale completion date (monthly, anchor 31, finished end of May) rolls to the first slot after
+        // now (mid-June): June has 30 days → the 30th.
+        assertEquals("2026-06-30", RecurrenceUtil.nextFromCompletion("2026-05-31", "09:00", "monthly", now, anchorDay = 31))
+    }
+
+    @Test
+    fun nextFromCompletion_nullForNonRepeating() {
+        assertNull(RecurrenceUtil.nextFromCompletion("2026-06-15", "09:00", "none", now))
+        assertNull(RecurrenceUtil.nextFromCompletion("2026-06-15", "09:00", null, now))
+    }
+
     // ---------------- parseTime (shared tolerant parser used to arm alarms/calendar) ----------------
 
     @Test

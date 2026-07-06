@@ -4,8 +4,11 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rajasudhan.taskmind.data.local.TaskMindDao
+import com.rajasudhan.taskmind.data.model.RejectedPattern
 import com.rajasudhan.taskmind.data.model.Suggestion
 import com.rajasudhan.taskmind.data.source.RecentDataScanner
+import com.rajasudhan.taskmind.data.source.RecurrenceDetectorWorker
+import com.rajasudhan.taskmind.data.source.RecurrencePattern
 import com.rajasudhan.taskmind.data.source.RejectionLearner
 import com.rajasudhan.taskmind.data.source.SuggestionApprover
 import com.rajasudhan.taskmind.data.source.SuggestionNotifier
@@ -116,7 +119,17 @@ class InboxViewModel @Inject constructor(
     fun rejectSuggestion(suggestion: Suggestion) {
         viewModelScope.launch {
             dao.updateSuggestion(suggestion.copy(status = "rejected"))
-            rejectionLearner.recordRejection(suggestion)
+            if (suggestion.source == RecurrenceDetectorWorker.RECURRENCE_SOURCE) {
+                // A dismissed auto-recurrence offer (#124): there's no "sender" to down-rank — just
+                // remember the pattern so the detector won't keep re-offering it on every run.
+                val key = RecurrencePattern.key(suggestion.extractedTitle)
+                val prior = dao.rejectedPatternFor(RecurrenceDetectorWorker.REJECTED_KIND, key)?.count ?: 0
+                dao.upsertRejectedPattern(
+                    RejectedPattern(RecurrenceDetectorWorker.REJECTED_KIND, key, prior + 1, System.currentTimeMillis())
+                )
+            } else {
+                rejectionLearner.recordRejection(suggestion)
+            }
             lastUndo = { dao.updateSuggestion(suggestion.copy(status = "pending", snoozedUntil = null)) }
         }
     }

@@ -70,7 +70,11 @@ class AlarmReceiver : BroadcastReceiver() {
         // least one period past the date that just fired, then keep skipping forward until the slot is
         // actually in the future — otherwise a late delivery (device was asleep/off) would compute a
         // slot already in the past, which the scheduler drops, silently breaking the recurrence forever.
-        if (noteId >= 0 && !recurrence.isNullOrBlank() && dueDate != null) {
+        //
+        // Completion-based repeats (#124) are the exception: they must NOT advance on fire — the point is
+        // that they stay due until the user finishes, at which moment [CompletionRecurrence] reschedules
+        // them from the completion time. (Nag, below, still re-rings until done.)
+        if (noteId >= 0 && !recurrence.isNullOrBlank() && dueDate != null && note?.repeatFromCompletion != true) {
             val anchor = note?.recurrenceAnchorDay
             val firstNext = RecurrenceUtil.next(dueDate, recurrence, anchor) ?: return
             val next = RecurrenceUtil.firstFutureOccurrence(firstNext, dueTime, recurrence, now, anchor)

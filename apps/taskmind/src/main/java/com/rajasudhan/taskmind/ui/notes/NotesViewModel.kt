@@ -7,6 +7,7 @@ import com.rajasudhan.taskmind.data.model.Note
 import com.rajasudhan.taskmind.data.model.SavedFilter
 import com.rajasudhan.taskmind.data.model.Tags
 import com.rajasudhan.taskmind.data.source.AlarmScheduler
+import com.rajasudhan.taskmind.data.source.CompletionRecurrence
 import com.rajasudhan.taskmind.data.source.RecurrenceUtil
 import com.rajasudhan.taskmind.data.source.SavedFilterStore
 import com.rajasudhan.taskmind.data.source.embedding.SemanticIndex
@@ -32,7 +33,8 @@ class NotesViewModel @Inject constructor(
     private val dao: TaskMindDao,
     private val alarmScheduler: AlarmScheduler,
     private val semanticIndex: SemanticIndex,
-    private val savedFilterStore: SavedFilterStore
+    private val savedFilterStore: SavedFilterStore,
+    private val completionRecurrence: CompletionRecurrence
 ) : ViewModel() {
 
     init {
@@ -210,7 +212,11 @@ class NotesViewModel @Inject constructor(
 
     fun setCompleted(note: Note, completed: Boolean) {
         viewModelScope.launch {
-            dao.setNoteCompleted(note.id, completed, if (completed) System.currentTimeMillis() else null)
+            val at = if (completed) System.currentTimeMillis() else null
+            dao.setNoteCompleted(note.id, completed, at)
+            // Completion-based recurrence (#124): completing rolls the item forward to its next
+            // occurrence, computed from now — so finishing early or late never stacks overdue copies.
+            if (at != null) completionRecurrence.rollForwardIfCompletionBased(note, at)
         }
     }
 

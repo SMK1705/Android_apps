@@ -34,5 +34,9 @@ data class Suggestion(
     // v15 (MIGRATION_14_15): safe semantic dedup (#145) — the title of an existing note/suggestion this
     // capture is likely a re-capture of, surfaced as a dismissable "possible duplicate" flag in the
     // Inbox. Never used to DROP a capture (similarity is unreliable); nullable (null = not flagged).
-    val possibleDuplicateOf: String? = null
+    val possibleDuplicateOf: String? = null,
+    // v17 (MIGRATION_16_17): completion-based recurrence (#124) — carried from a typed "every!" marker or
+    // an auto-detected pattern, so approving creates a Note that reschedules from completion. Copied onto
+    // Note.repeatFromCompletion on approval. Off by default (NOT NULL DEFAULT 0, mirroring the migration).
+    @ColumnInfo(defaultValue = "0") val repeatFromCompletion: Boolean = false
 )

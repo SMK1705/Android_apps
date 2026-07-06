@@ -12,6 +12,9 @@ data class ParsedSchedule(
     val date: LocalDate? = null,
     val time: LocalTime? = null,
     val recurrence: String? = null, // "daily" | "weekly" | "monthly"
+    // #124: a "!" on the repeat phrase ("daily!", "every! week") — reschedule from when the task is
+    // finished, not its due date. Only ever set alongside [recurrence].
+    val repeatFromCompletion: Boolean = false,
     val spans: List<IntRange> = emptyList(),
 ) {
     val isEmpty: Boolean get() = date == null && time == null && recurrence == null
@@ -52,8 +55,10 @@ object NaturalDate {
     private val MO = MONTHS.keys.joinToString("|")
     private val I = setOf(RegexOption.IGNORE_CASE)
 
-    // Recurrence: "every day/week/month", "daily/weekly/monthly", "every <weekday>".
-    private val RE_RECURRENCE = Regex("""\b(daily|weekly|monthly|every\s+(day|week|month|$WD))\b""", I)
+    // Recurrence: "every day/week/month", "daily/weekly/monthly", "every <weekday>". A "!" on the phrase
+    // ("daily!", "every! week") marks it completion-based (#124): reschedule from finish. The trailing
+    // (?:!|\b) keeps the word boundary for the plain form while also accepting the bang.
+    private val RE_RECURRENCE = Regex("""\b(daily|weekly|monthly|every!?\s+(day|week|month|$WD))(?:!|\b)""", I)
     // Relative offsets. Hours/minutes also pin the time.
     private val RE_IN_N = Regex("""\bin\s+(\d{1,3})\s+(day|days|week|weeks|month|months|hour|hours|hr|hrs|minute|minutes|min|mins)\b""", I)
     private val RE_NAMED_DAY = Regex("""\b(today|tonight|tomorrow|tmrw|next\s+week|next\s+month)\b""", I)
@@ -79,6 +84,7 @@ object NaturalDate {
         var date: LocalDate? = null
         var time: LocalTime? = null
         var recurrence: String? = null
+        var repeatFromCompletion = false
 
         RE_RECURRENCE.find(text)?.let { m ->
             val whole = m.groupValues[1].lowercase()       // "daily"|"weekly"|"monthly"|"every …"
@@ -91,6 +97,8 @@ object NaturalDate {
                 whole == "monthly" || unit == "month" -> "monthly"
                 else -> "weekly"
             }
+            // A "!" anywhere in the matched phrase ("daily!", "every! week") = reschedule from finish (#124).
+            repeatFromCompletion = m.value.contains('!')
             if (unit in WEEKDAYS && date == null) date = nextWeekday(today, WEEKDAYS.getValue(unit), next = false)
             spans += m.range
         }
@@ -113,7 +121,7 @@ object NaturalDate {
         time = time ?: matchTime(text, spans)
         if (date == null && RE_TONIGHT.containsMatchIn(text)) date = today // "tonight" pins today
 
-        return ParsedSchedule(date, time, recurrence, spans.distinct().sortedBy { it.first })
+        return ParsedSchedule(date, time, recurrence, repeatFromCompletion, spans.distinct().sortedBy { it.first })
     }
 
     private fun matchDate(text: String, today: LocalDate, spans: MutableList<IntRange>): LocalDate? {

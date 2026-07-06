@@ -24,6 +24,7 @@ class ReminderActionReceiver : BroadcastReceiver() {
     @Inject lateinit var dao: TaskMindDao
     @Inject lateinit var alarmScheduler: AlarmScheduler
     @Inject lateinit var geofenceManager: GeofenceManager
+    @Inject lateinit var completionRecurrence: CompletionRecurrence
 
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
@@ -49,9 +50,15 @@ class ReminderActionReceiver : BroadcastReceiver() {
     internal suspend fun handle(context: Context, action: String, noteId: Int, title: String) {
         when (action) {
             ACTION_DONE -> {
-                dao.setNoteCompleted(noteId, true, System.currentTimeMillis())
-                alarmScheduler.cancel(noteId)
-                geofenceManager.remove(noteId)
+                val note = dao.getNoteByIdNow(noteId)
+                val at = System.currentTimeMillis()
+                dao.setNoteCompleted(noteId, true, at)
+                // Completion-based recurrence (#124): roll forward from completion rather than tearing
+                // the alarm down; a one-shot / date-based repeat still gets cancelled as before.
+                if (!completionRecurrence.rollForwardIfCompletionBased(note, at)) {
+                    alarmScheduler.cancel(noteId)
+                    geofenceManager.remove(noteId)
+                }
             }
             ACTION_SNOOZE -> snooze(dao.getNoteByIdNow(noteId), LocalDateTime.now().plusMinutes(SNOOZE_MINUTES))
             // "Tomorrow" = tomorrow morning at 09:00 — the deal-with-it-in-the-morning snooze.

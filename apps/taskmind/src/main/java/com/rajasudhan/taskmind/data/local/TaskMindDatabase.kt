@@ -11,7 +11,7 @@ import com.rajasudhan.taskmind.data.model.Suggestion
 
 @Database(
     entities = [Note::class, Suggestion::class, RejectedPattern::class, NoteEmbedding::class],
-    version = 16,
+    version = 17,
     exportSchema = true
 )
 abstract class TaskMindDatabase : RoomDatabase() {
@@ -183,6 +183,19 @@ abstract class TaskMindDatabase : RoomDatabase() {
         val MIGRATION_15_16 = object : Migration(15, 16) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE notes ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v17 adds a `repeatFromCompletion` flag to both notes and suggestions — completion-based
+         * recurrence (#124): a repeating reminder whose next occurrence is scheduled from when it's
+         * COMPLETED, not from its due date. Existing rows default off (NOT NULL DEFAULT 0, mirroring the
+         * entities), so every current repeat stays date-based across the upgrade.
+         */
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE notes ADD COLUMN repeatFromCompletion INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE suggestions ADD COLUMN repeatFromCompletion INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

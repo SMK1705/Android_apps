@@ -117,6 +117,10 @@ class UnderstandingPipeline @Inject constructor(
                     else ExtractionHeuristics.sanitizeTime(item.dueTime) ?: seeded?.dueTime()
                 val effectiveRecurrence = seeded?.recurrence?.takeIf { item.type == "reminder" || item.type == "todo" }
                     ?: ExtractionHeuristics.sanitizeRecurrence(item.recurrence)
+                // Completion-based (#124) rides on the deterministic parse's "!" marker only, and only
+                // when a repeat actually stuck onto a schedulable item — never inferred from the LLM.
+                val effectiveRepeatFromCompletion = seeded?.repeatFromCompletion == true &&
+                    effectiveRecurrence != null && (item.type == "reminder" || item.type == "todo")
                 if (ExtractionHeuristics.isAcceptable(scored) && !isDuplicate(item, effectiveDate)) {
                     val suggestion = Suggestion(
                         source = source,
@@ -136,7 +140,8 @@ class UnderstandingPipeline @Inject constructor(
                         // Safe dedup (#145): a NEAR-duplicate is kept but flagged for review, never dropped.
                         // Cheap under the lock with the hashing embedder (microseconds); if a slow neural
                         // embedder is ever wired, compute this OUTSIDE insertMutex to keep the lock short.
-                        possibleDuplicateOf = possibleDuplicateOf(item, effectiveDate)
+                        possibleDuplicateOf = possibleDuplicateOf(item, effectiveDate),
+                        repeatFromCompletion = effectiveRepeatFromCompletion
                     )
                     dao.insertSuggestion(suggestion)
                     insertedAny = true

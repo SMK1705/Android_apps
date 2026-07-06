@@ -44,7 +44,8 @@ class NotesScreenTest {
         com.rajasudhan.taskmind.data.source.embedding.SemanticIndex(
             com.rajasudhan.taskmind.data.source.embedding.HashingEmbedder(), dao
         ),
-        mockk<SavedFilterStore>(relaxed = true).also { every { it.filters } returns flowOf(emptyList()) }
+        mockk<SavedFilterStore>(relaxed = true).also { every { it.filters } returns flowOf(emptyList()) },
+        com.rajasudhan.taskmind.data.source.CompletionRecurrence(dao, mockk(relaxed = true))
     )
 
     @Test

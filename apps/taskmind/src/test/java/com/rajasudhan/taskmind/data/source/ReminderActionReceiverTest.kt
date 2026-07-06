@@ -44,6 +44,7 @@ class ReminderActionReceiverTest {
         r.dao = dao
         r.alarmScheduler = alarms
         r.geofenceManager = geofences
+        r.completionRecurrence = CompletionRecurrence(dao, alarms)
         return r
     }
 
