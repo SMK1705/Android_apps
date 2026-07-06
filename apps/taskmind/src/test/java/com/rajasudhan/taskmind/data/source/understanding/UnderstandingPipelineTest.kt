@@ -7,7 +7,10 @@ import com.rajasudhan.taskmind.data.local.TaskMindDatabase
 import com.rajasudhan.taskmind.data.model.RejectedPattern
 import com.rajasudhan.taskmind.data.source.RejectionLearner
 import com.rajasudhan.taskmind.data.source.SuggestionNotifier
+import com.rajasudhan.taskmind.data.source.embedding.HashingEmbedder
+import com.rajasudhan.taskmind.data.source.embedding.SemanticIndex
 import com.rajasudhan.taskmind.testutil.FakeLlmProvider
+import com.rajasudhan.taskmind.testutil.aNote
 import com.rajasudhan.taskmind.testutil.llmItem
 import com.rajasudhan.taskmind.testutil.llmResponse
 import com.squareup.moshi.Moshi
@@ -46,7 +49,7 @@ class UnderstandingPipelineTest {
     fun tearDown() = db.close()
 
     private fun pipeline(llm: FakeLlmProvider) =
-        UnderstandingPipeline(llm, moshi, dao, notifier, RejectionLearner(dao))
+        UnderstandingPipeline(llm, moshi, dao, notifier, RejectionLearner(dao), SemanticIndex(HashingEmbedder(), dao))
 
     @Test
     fun noiseInput_isSkippedBeforeTheModelRuns() = runTest {
@@ -263,6 +266,34 @@ class UnderstandingPipelineTest {
 
         assertEquals(2, llm.calls)
         assertEquals(listOf("Retried task"), dao.getPendingSuggestions().first().map { it.extractedTitle })
+    }
+
+    @Test
+    fun nearDuplicateOfAnExistingNote_isKeptAndFlagged_neverDropped() = runTest {
+        // #145: seed an approved note + its embedding, then re-capture a lexically-near variant. It
+        // must be KEPT (similarity never drops a capture) and flagged as a possible duplicate.
+        val noteId = dao.insertNote(aNote(title = "Pay rent", type = "todo")).toInt()
+        SemanticIndex(HashingEmbedder(), dao).index(noteId, "Pay rent", "")
+
+        pipeline(FakeLlmProvider(llmResponse(llmItem(title = "Pay the rent", confidence = 0.9))))
+            .processText("SMS from +10000000000", "pay the rent")
+
+        val s = dao.getPendingSuggestions().first().single { it.extractedTitle == "Pay the rent" }
+        assertEquals("Pay rent", s.possibleDuplicateOf)
+    }
+
+    @Test
+    fun distinctItemSimilarToANote_isNotFlagged() = runTest {
+        // #145: "Call Bob" is semantically near "Call Alice" but a genuinely different task — the
+        // lexical guard must stop it being flagged (the whole reason similarity can't auto-drop).
+        val noteId = dao.insertNote(aNote(title = "Call Alice", type = "todo")).toInt()
+        SemanticIndex(HashingEmbedder(), dao).index(noteId, "Call Alice", "")
+
+        pipeline(FakeLlmProvider(llmResponse(llmItem(title = "Call Bob", confidence = 0.9))))
+            .processText("SMS from +10000000000", "call bob")
+
+        val s = dao.getPendingSuggestions().first().single { it.extractedTitle == "Call Bob" }
+        assertNull(s.possibleDuplicateOf)
     }
 
     @Test

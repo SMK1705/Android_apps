@@ -7,6 +7,7 @@ import com.rajasudhan.taskmind.data.source.ParsedSchedule
 import com.rajasudhan.taskmind.data.source.PhoneUtil
 import com.rajasudhan.taskmind.data.source.RejectionLearner
 import com.rajasudhan.taskmind.data.source.SuggestionNotifier
+import com.rajasudhan.taskmind.data.source.embedding.SemanticIndex
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.flow.first
 import org.json.JSONObject
@@ -31,7 +32,8 @@ class UnderstandingPipeline @Inject constructor(
     private val moshi: Moshi,
     private val dao: TaskMindDao,
     private val notifier: SuggestionNotifier,
-    private val rejectionLearner: RejectionLearner
+    private val rejectionLearner: RejectionLearner,
+    private val semanticIndex: SemanticIndex
 ) {
     // Serializes every check-then-insert (the isDuplicate → insertSuggestion region) so two paths
     // handling the same item at once can't both pass the dedup and insert twins. This is real: the
@@ -130,7 +132,11 @@ class UnderstandingPipeline @Inject constructor(
                         recurrence = effectiveRecurrence,
                         priority = ExtractionHeuristics.sanitizePriority(item.priority),
                         counterparty = item.counterparty?.trim()?.ifBlank { null },
-                        tags = ExtractionHeuristics.sanitizeTags(item.tags)
+                        tags = ExtractionHeuristics.sanitizeTags(item.tags),
+                        // Safe dedup (#145): a NEAR-duplicate is kept but flagged for review, never dropped.
+                        // Cheap under the lock with the hashing embedder (microseconds); if a slow neural
+                        // embedder is ever wired, compute this OUTSIDE insertMutex to keep the lock short.
+                        possibleDuplicateOf = possibleDuplicateOf(item, effectiveDate)
                     )
                     dao.insertSuggestion(suggestion)
                     insertedAny = true
@@ -252,5 +258,30 @@ class UnderstandingPipeline @Inject constructor(
         val pending = dao.getPendingSuggestions().first().map { it.extractedTitle to it.dueDate }
         val notes = dao.getAllNotes().first().map { it.title to it.dueDate }
         return ExtractionHeuristics.isDuplicate(item.title, dueDate, pending + notes)
+    }
+
+    /**
+     * Safe semantic dedup (#145): the title of an existing NOTE or pending SUGGESTION this capture is
+     * likely a re-capture of, or null. NEVER drops the capture — it only produces the in-Inbox
+     * "possible duplicate" flag. Semantic similarity finds candidates ([SemanticIndex]); the strict
+     * lexical guard ([NearDuplicate]) confirms them, so a genuinely different-but-similar item ("Call
+     * Bob" vs "Call Alice") is never flagged. Only runs on items that already cleared the exact
+     * (title, date) dedup above — so a true re-scan is dropped and only a *variant* is ever flagged.
+     */
+    private suspend fun possibleDuplicateOf(item: LlmItem, dueDate: String?): String? {
+        val candidate = semanticIndex.textFor(item.title, item.notes)
+        // (a) Against approved notes: semantic pre-filter, then the lexical guard confirms.
+        val scored = semanticIndex.scores(candidate, SemanticIndex.SEARCH_FLOOR)
+        if (scored.isNotEmpty()) {
+            dao.getAllNotes().first()
+                .filter { it.id in scored && !it.completed }
+                .firstOrNull { NearDuplicate.isLikelyDuplicate(candidate, dueDate, semanticIndex.textFor(it.title, it.summary), it.dueDate) }
+                ?.let { return it.title }
+        }
+        // (b) Against other pending suggestions (not embedded) — a pure lexical check catches two
+        //     channels capturing the same thing before either is approved.
+        return dao.getPendingSuggestions().first()
+            .firstOrNull { NearDuplicate.isLikelyDuplicate(candidate, dueDate, semanticIndex.textFor(it.extractedTitle, it.summary), it.dueDate) }
+            ?.extractedTitle
     }
 }

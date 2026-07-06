@@ -59,9 +59,10 @@ fun aSuggestion(
     priority: String = "normal",
     counterparty: String? = null,
     tags: String? = null,
+    possibleDuplicateOf: String? = null,
 ) = Suggestion(
     id = id, source = source, rawSnippet = rawSnippet, extractedTitle = extractedTitle,
     summary = summary, dueDate = dueDate, dueTime = dueTime, type = type, confidence = confidence,
     status = status, snoozedUntil = snoozedUntil, location = location, recurrence = recurrence,
-    priority = priority, counterparty = counterparty, tags = tags,
+    priority = priority, counterparty = counterparty, tags = tags, possibleDuplicateOf = possibleDuplicateOf,
 )

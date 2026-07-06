@@ -11,7 +11,7 @@ import com.rajasudhan.taskmind.data.model.Suggestion
 
 @Database(
     entities = [Note::class, Suggestion::class, RejectedPattern::class, NoteEmbedding::class],
-    version = 14,
+    version = 15,
     exportSchema = true
 )
 abstract class TaskMindDatabase : RoomDatabase() {
@@ -161,6 +161,17 @@ abstract class TaskMindDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE notes ADD COLUMN tags TEXT")
                 db.execSQL("ALTER TABLE suggestions ADD COLUMN tags TEXT")
+            }
+        }
+
+        /**
+         * v15 adds a nullable `possibleDuplicateOf` column to suggestions — the title of an existing
+         * item a capture is likely a re-capture of, for the non-destructive "possible duplicate" flag
+         * (#145). Suggestions only; notes never carry it. Nullable (null = not flagged), so no DEFAULT.
+         */
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE suggestions ADD COLUMN possibleDuplicateOf TEXT")
             }
         }
     }
