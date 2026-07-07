@@ -2,6 +2,7 @@ package com.rajasudhan.taskmind
 
 import android.app.Application
 import android.content.Context
+import androidx.appfunctions.service.AppFunctionConfiguration
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.Constraints
@@ -15,16 +16,22 @@ import com.rajasudhan.taskmind.data.source.RecurrenceDetectorScheduler
 import com.rajasudhan.taskmind.data.source.SettingsManager
 import com.rajasudhan.taskmind.data.source.TaskMindForegroundService
 import com.rajasudhan.taskmind.data.source.WeeklyWinsScheduler
+import com.rajasudhan.taskmind.data.source.appfunctions.AgentFunctions
 import com.rajasudhan.taskmind.ui.capture.CaptureShortcuts
 import dagger.hilt.android.HiltAndroidApp
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 @HiltAndroidApp
-class TaskMindApp : Application(), Configuration.Provider {
+class TaskMindApp : Application(), Configuration.Provider, AppFunctionConfiguration.Provider {
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
+
+    // The Hilt-provided AppFunctions binding (#209). Handed to the framework below so the system agent
+    // (Gemini) can invoke createTask / getItemsDueToday / snoozeItem against the real, injected data layer.
+    @Inject
+    lateinit var agentFunctions: AgentFunctions
 
     @Inject
     lateinit var settingsManager: SettingsManager
@@ -44,6 +51,13 @@ class TaskMindApp : Application(), Configuration.Provider {
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
+            .build()
+
+    // Lets the AppFunctions framework instantiate the Hilt-managed [AgentFunctions] (which has injected
+    // dependencies) rather than needing a no-arg constructor (#209).
+    override val appFunctionConfiguration: AppFunctionConfiguration
+        get() = AppFunctionConfiguration.Builder()
+            .addEnclosingClassFactory(AgentFunctions::class.java) { agentFunctions }
             .build()
 
     override fun onCreate() {
