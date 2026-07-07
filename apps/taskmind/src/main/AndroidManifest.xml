@@ -160,6 +160,22 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/quick_add_widget_info" />
         </receiver>
+
+        <!-- Remove WorkManager's default on-startup initializer so it initialises on demand from
+             TaskMindApp's Configuration.Provider, which installs the HiltWorkerFactory. Without this
+             the androidx.startup initializer (merged from work-runtime) wins and WorkManager uses the
+             DEFAULT factory — every @HiltWorker then fails to instantiate (NoSuchMethodException on the
+             Context/WorkerParameters constructor), so the background scan and all periodic jobs die. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
     </application>
 
 </manifest>
