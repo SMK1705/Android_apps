@@ -21,14 +21,18 @@ class ModelDownloader @Inject constructor(
 
     /**
      * Streams [url] into [dest] (via a `.part` temp so a half-download never looks complete),
-     * reporting 0..100 progress. Returns null on success, or the failure.
+     * reporting 0..100 progress. Returns null on success, or the failure. [token] adds a
+     * `Authorization: Bearer` header for gated hosts (e.g. a Hugging Face access token for a
+     * license-gated Gemma model); omit it for public files (Vosk, Tesseract, whisper.cpp).
      */
-    suspend fun download(url: String, dest: File, onProgress: (Int) -> Unit): Throwable? =
+    suspend fun download(url: String, dest: File, token: String? = null, onProgress: (Int) -> Unit): Throwable? =
         withContext(Dispatchers.IO) {
             runCatching {
                 dest.parentFile?.mkdirs()
                 val tmp = File(dest.parentFile, dest.name + ".part")
-                val request = Request.Builder().url(url).build()
+                val request = Request.Builder().url(url)
+                    .apply { if (!token.isNullOrBlank()) header("Authorization", "Bearer ${token.trim()}") }
+                    .build()
                 // Fetching a model reaches out to a remote host, so it IS egress — record it (metadata
                 // only, never content) to keep the Privacy ledger honest. Without this the "No data has
                 // left this device" guarantee is silently false every time a model is downloaded.

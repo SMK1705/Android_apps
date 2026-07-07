@@ -201,8 +201,99 @@ class SettingsViewModel @Inject constructor(
         _whisperSecondPass.value = enabled
     }
 
-    /** Re-check whether the Whisper model is present (after an adb push). */
+    /** Re-check whether the Whisper model is present (after a download or adb push). */
     fun refreshWhisperModel() { _whisperModelPresent.value = whisperTranscriber.isModelPresent() }
+
+    // ---- Whisper model download (#241): one-tap, public ggml — no adb push needed ----
+    private val _whisperStatus = MutableStateFlow<String?>(null)
+    val whisperStatus: StateFlow<String?> = _whisperStatus
+
+    /** Download + install the multilingual base ggml model, then re-check presence. */
+    fun downloadWhisperModel() {
+        viewModelScope.launch {
+            _whisperStatus.value = "Downloading model… 0%"
+            val err = modelDownloader.download(
+                "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin",
+                File(whisperTranscriber.modelPath()),
+            ) { pct -> _whisperStatus.value = "Downloading model… $pct%" }
+            refreshWhisperModel()
+            _whisperStatus.value = when {
+                err != null -> "Download failed: ${err.message ?: err::class.java.simpleName}"
+                _whisperModelPresent.value -> "✓ Whisper model installed (~57 MB)."
+                else -> "Install failed."
+            }
+        }
+    }
+
+    /** Delete the Whisper model to reclaim space. */
+    fun removeWhisperModel() {
+        val f = File(whisperTranscriber.modelPath())
+        val freedMb = if (f.exists()) f.length() / (1024 * 1024) else 0L
+        f.delete()
+        refreshWhisperModel()
+        _whisperStatus.value = if (freedMb > 0) "Removed — freed ~$freedMb MB." else "No model to remove."
+    }
+
+    // ---- On-device LLM model download (#241): license-gated Gemma, so open the license page + one HF token ----
+    /** A downloadable on-device LLM model: a Hugging Face license page + the gated file URL. */
+    data class LlmModelOption(
+        val label: String,
+        val sizeLabel: String,
+        val url: String,
+        val licenseUrl: String,
+        val fileName: String,
+    )
+
+    val llmModelOptions = listOf(
+        LlmModelOption(
+            label = "Gemma 3 · 1B · int4",
+            sizeLabel = "~550 MB",
+            url = "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/" +
+                "Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task",
+            licenseUrl = "https://huggingface.co/litert-community/Gemma3-1B-IT",
+            fileName = "model.task",
+        ),
+    )
+
+    private val _llmModelPresent = MutableStateFlow(onDeviceLlm.isModelPresent())
+    val llmModelPresent: StateFlow<Boolean> = _llmModelPresent
+
+    private val _llmStatus = MutableStateFlow<String?>(null)
+    val llmStatus: StateFlow<String?> = _llmStatus
+
+    // Session-only — a secret we don't persist. Needed only to fetch a license-gated model.
+    private val _hfToken = MutableStateFlow("")
+    val hfToken: StateFlow<String> = _hfToken
+    fun updateHfToken(t: String) { _hfToken.value = t }
+
+    /** Download the chosen Gemma model into the on-device LLM's model path (Bearer-auth for the gated host). */
+    fun downloadLlmModel(option: LlmModelOption) {
+        viewModelScope.launch {
+            _llmStatus.value = "Downloading ${option.label}… 0%"
+            val dest = File(context.filesDir, option.fileName)
+            val err = modelDownloader.download(option.url, dest, _hfToken.value.trim().ifBlank { null }) { pct ->
+                _llmStatus.value = "Downloading ${option.label}… $pct%"
+            }
+            _llmModelPresent.value = onDeviceLlm.isModelPresent()
+            _llmStatus.value = when {
+                err != null -> "Download failed: ${err.message ?: err::class.java.simpleName}. " +
+                    "If it's a 401/403, accept the license on the opened page and paste a Hugging Face token."
+                _llmModelPresent.value -> "✓ Installed ${option.label}. Tap “Check on-device model” to load it."
+                else -> "Install failed."
+            }
+        }
+    }
+
+    /** Delete the on-device LLM model(s) to reclaim space (they're large). */
+    fun removeLlmModel() {
+        var freedMb = 0L
+        listOf("model.task", "model.litertlm").forEach {
+            val f = File(context.filesDir, it)
+            if (f.exists()) { freedMb += f.length() / (1024 * 1024); f.delete() }
+        }
+        _llmModelPresent.value = onDeviceLlm.isModelPresent()
+        _llmStatus.value = if (freedMb > 0) "Removed — freed ~$freedMb MB." else "No model to remove."
+    }
 
     fun updateUseOnDeviceLlm(useOnDevice: Boolean) {
         settingsManager.useOnDeviceLlm = useOnDevice

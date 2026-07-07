@@ -66,6 +66,11 @@ fun SettingsScreen(
     val ocrModelPath = viewModel.ocrModelPath
     val useOnDeviceLlm by viewModel.useOnDeviceLlm.collectAsState()
     val onDeviceEngine by viewModel.onDeviceEngine.collectAsState()
+    val whisperStatus by viewModel.whisperStatus.collectAsState()
+    val llmModelPresent by viewModel.llmModelPresent.collectAsState()
+    val llmStatus by viewModel.llmStatus.collectAsState()
+    val hfToken by viewModel.hfToken.collectAsState()
+    val settingsContext = LocalContext.current
     val eventDurationMinutes by viewModel.eventDurationMinutes.collectAsState()
     val calendarId by viewModel.calendarId.collectAsState()
     val calendars by viewModel.calendars.collectAsState()
@@ -239,11 +244,51 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                     Text(
-                        "Push a Gemma .task model (e.g. gemma3-4b-it-int4.task). Default location:\n" +
-                            viewModel.defaultModelPath,
+                        "Download a Gemma model below (it's licence-gated — tap Licence to accept, then paste a " +
+                            "Hugging Face token once), or push your own .task to:\n" + viewModel.defaultModelPath,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    viewModel.llmModelOptions.forEach { option ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                "${option.label} · ${option.sizeLabel}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(onClick = {
+                                settingsContext.startActivity(
+                                    android.content.Intent(
+                                        android.content.Intent.ACTION_VIEW, android.net.Uri.parse(option.licenseUrl)
+                                    )
+                                )
+                            }) { Text("Licence") }
+                            Button(
+                                onClick = { viewModel.downloadLlmModel(option) },
+                                enabled = llmStatus?.startsWith("Downloading") != true
+                            ) { Text("Download") }
+                        }
+                    }
+                    OutlinedTextField(
+                        value = hfToken,
+                        onValueChange = { viewModel.updateHfToken(it) },
+                        label = { Text("Hugging Face token (gated models)") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (llmModelPresent) {
+                        OutlinedButton(onClick = { viewModel.removeLlmModel() }) {
+                            Text("Remove model from device")
+                        }
+                    }
+                    llmStatus?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
                 OutlinedButton(onClick = { viewModel.checkOnDeviceModel() }) {
                     Text(if (isNano) "Check Gemini Nano" else "Check on-device model")
@@ -296,9 +341,9 @@ fun SettingsScreen(
                 Column(Modifier.weight(1f)) {
                     Text("Whisper second pass", style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        "A more accurate re-transcription for accents and Hindi/Tamil/English code-switching. " +
-                            (if (whisperModelPresent) "Model present. " else "Push a ggml model to ${viewModel.whisperModelPath}. ") +
-                            "On-device Whisper inference ships in an upcoming update.",
+                        "A more accurate re-transcription for accents and Hindi/Tamil/English code-switching, " +
+                            "running on-device (#207). " +
+                            (if (whisperModelPresent) "Model installed." else "No model yet — tap Download (~57 MB)."),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -307,6 +352,18 @@ fun SettingsScreen(
                     checked = whisperSecondPass,
                     onCheckedChange = { viewModel.setWhisperSecondPass(it) }
                 )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { viewModel.downloadWhisperModel() },
+                    enabled = whisperStatus?.startsWith("Downloading") != true
+                ) { Text("Download Whisper (~57 MB)") }
+                if (whisperModelPresent) {
+                    OutlinedButton(onClick = { viewModel.removeWhisperModel() }) { Text("Remove") }
+                }
+            }
+            whisperStatus?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
