@@ -56,6 +56,7 @@ workRuntime = "2.9.0"
 mlkitText = "16.0.0"
 mediapipeGenai = "0.10.35"
 mlkitGenaiPrompt = "1.0.0-beta2"
+appfunctions = "1.0.0-alpha09"
 voskAndroid = "0.3.75"
 tesseract4android = "4.9.0"
 reorderable = "2.4.3"
@@ -133,6 +134,9 @@ androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx"
 mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitText" }
 mediapipe-tasks-genai = { group = "com.google.mediapipe", name = "tasks-genai", version.ref = "mediapipeGenai" }
 mlkit-genai-prompt = { group = "com.google.mlkit", name = "genai-prompt", version.ref = "mlkitGenaiPrompt" }
+appfunctions = { group = "androidx.appfunctions", name = "appfunctions", version.ref = "appfunctions" }
+appfunctions-service = { group = "androidx.appfunctions", name = "appfunctions-service", version.ref = "appfunctions" }
+appfunctions-compiler = { group = "androidx.appfunctions", name = "appfunctions-compiler", version.ref = "appfunctions" }
 vosk-android = { group = "com.alphacephei", name = "vosk-android", version.ref = "voskAndroid" }
 tesseract4android = { group = "com.github.adaptech-cz.Tesseract4Android", name = "tesseract4android", version.ref = "tesseract4android" }
 reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.ref = "reorderable" }

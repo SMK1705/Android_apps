@@ -33,8 +33,9 @@ class TaskMindAppFunctions @Inject constructor(
     suspend fun createTask(request: CreateTaskRequest): AppFunctionResult {
         if (request.title.isBlank()) return AppFunctionResult(false, "A task needs a title.")
         val created = pipeline.captureFromAgent(
-            title = request.title, notes = request.notes,
-            dueDate = request.dueDate, dueTime = request.dueTime, type = request.type, source = SOURCE,
+            title = request.title, notes = request.notes.orEmpty(),
+            dueDate = request.dueDate, dueTime = request.dueTime,
+            type = request.type ?: "todo", source = SOURCE,
         )
         return if (created) AppFunctionResult(true, "Added “${request.title.trim()}” to your Inbox to review.")
         else AppFunctionResult(false, "You already have that — nothing added.")

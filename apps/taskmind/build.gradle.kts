@@ -79,6 +79,8 @@ android {
 // test reconstructs v1 directly and lets Room validate the full chain.
 ksp {
     arg("room.schemaLocation", "${projectDir}/schemas")
+    // Aggregate this (single) module's @AppFunction schema at build time (#209).
+    arg("appfunctions:aggregateAppFunctions", "true")
 }
 
 // Keep the forked unit-test JVM bounded (Robolectric loads a full Android runtime) and headless so
@@ -140,6 +142,10 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.mediapipe.tasks.genai)
     implementation(libs.mlkit.genai.prompt)
+    // Android AppFunctions (#209): expose createTask/getItemsDueToday/snoozeItem to the system agent (Gemini).
+    implementation(libs.appfunctions)
+    implementation(libs.appfunctions.service)
+    ksp(libs.appfunctions.compiler)
     implementation(libs.vosk.android)
     implementation(libs.tesseract4android)
     implementation(libs.reorderable)
