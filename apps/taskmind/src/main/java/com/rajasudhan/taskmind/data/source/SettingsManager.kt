@@ -19,6 +19,7 @@ class SettingsManager @Inject constructor(
         private const val KEY_EVENT_DURATION_MINUTES = "event_duration_minutes"
         private const val KEY_CALENDAR_ID = "calendar_id"
         private const val KEY_ON_DEVICE_MODEL_PATH = "on_device_model_path"
+        private const val KEY_ON_DEVICE_ENGINE = "on_device_engine"
         private const val KEY_GMAIL_ACCOUNT = "gmail_account" // legacy single account (migrated below)
         private const val KEY_GMAIL_ACCOUNTS = "gmail_accounts"
         private const val KEY_RETENTION_DAYS = "retention_days"
@@ -72,6 +73,16 @@ class SettingsManager @Inject constructor(
     var onDeviceModelPath: String
         get() = encryptedPrefs.getString(KEY_ON_DEVICE_MODEL_PATH, "") ?: ""
         set(value) = encryptedPrefs.edit().putString(KEY_ON_DEVICE_MODEL_PATH, value).apply()
+
+    /**
+     * Which on-device inference engine to run — an [OnDeviceEngineOption] id: "mediapipe" (default, the
+     * working Gemma engine) or "litertlm" (the Gemma 3n / LiteRT-LM migration target, #212). LiteRT-LM is
+     * a seam only until its runtime is linked on-device, so selecting it currently falls back to MediaPipe.
+     * Stored as the raw id so this class needn't depend on the understanding package.
+     */
+    var onDeviceEngine: String
+        get() = encryptedPrefs.getString(KEY_ON_DEVICE_ENGINE, "mediapipe") ?: "mediapipe"
+        set(value) = encryptedPrefs.edit().putString(KEY_ON_DEVICE_ENGINE, value).apply()
 
     /**
      * All connected Gmail account addresses. Reads the multi-account set, seeding it once from the
