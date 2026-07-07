@@ -41,17 +41,19 @@ jobs:
       - name: Assemble debug APK
         run: ./gradlew :apps:taskmind:assembleDebug --stacktrace
 
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: taskmind-debug-apk
-          path: apps/taskmind/build/outputs/apk/debug/taskmind-debug.apk
-          if-no-files-found: error
+      # NB: CI deliberately does NOT upload the debug APK as an artifact. The APK is distributed by the
+      # separate "Publish debug APK" workflow (release-apk.yml), which attaches it to the rolling
+      # "debug-latest" GitHub Release (release storage, not the Actions artifact quota). Uploading the
+      # ~100 MB APK artifact on every push AND pull_request churned ~28 GB and blew the Actions artifact
+      # storage quota, which then failed this job even though the build + tests passed. CI's job is to
+      # build + test; the assemble step above is the packaging check.
 
       - name: Upload test report on failure
         if: failure()
+        continue-on-error: true   # a report-upload hiccup (e.g. storage quota) must never fail the build
         uses: actions/upload-artifact@v4
         with:
           name: unit-test-report
           path: apps/taskmind/build/reports/tests/
+          retention-days: 7        # keep it short so debugging reports don't accumulate
           if-no-files-found: ignore
