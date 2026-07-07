@@ -18,6 +18,8 @@ val mapsApiKey: String = Properties().apply {
 android {
     namespace = "com.rajasudhan.taskmind"
     compileSdk = 37
+    // Native whisper.cpp second pass (#207) — the app's only native module.
+    ndkVersion = "27.0.12077973"
 
     defaultConfig {
         applicationId = "com.rajasudhan.taskmind"
@@ -30,6 +32,17 @@ android {
 
         // Injected into the manifest's com.google.android.geo.API_KEY meta-data.
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
+
+        // Build whisper.cpp only for arm64-v8a for now: it's the real device target and a full whisper.cpp
+        // compile per ABI is slow; armeabi-v7a/x86_64 can be added for a wider release.
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-std=c++17"
+            }
+        }
     }
 
     signingConfigs {
@@ -64,6 +77,12 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true // exposes VERSION_NAME/VERSION_CODE so the Settings footer never goes stale
+    }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
     testOptions {
         unitTests {
