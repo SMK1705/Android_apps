@@ -71,7 +71,10 @@ object NaturalDate {
     private val RE_NUMERIC = Regex("""\b(\d{1,2})/(\d{1,2})/(\d{2,4})\b""")
     private val RE_TONIGHT = Regex("""\btonight\b""", I)
     // Times.
-    private val RE_MERIDIEM = Regex("""\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b""", I)
+    // Accept the periarded forms too ("3 p.m.", "9 a.m.") — speech-to-text (e.g. wrist capture, #216) emits
+    // "p.m.", which the old `(am|pm)` missed, so "3:00 p.m." fell through to RE_24H and stamped 03:00 (#235).
+    // Group 3 is the "a"/"p" indicator; the trailing (?![a-z]) keeps "meet 3 amber" from reading as 3am.
+    private val RE_MERIDIEM = Regex("""\b(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m\.?(?![a-z])""", I)
     private val RE_24H = Regex("""\b(\d{1,2}):(\d{2})\b""")
     // "at N" is a time only when it's NOT followed by a word — "at 3 people"/"stay at 5 star" are counts,
     // not 3pm/5pm. (am/pm and HH:mm are already handled above.)
@@ -167,7 +170,7 @@ object NaturalDate {
         RE_MERIDIEM.find(text)?.let { m ->
             val h = m.groupValues[1].toInt()
             val min = m.groupValues[2].toIntOrNull() ?: 0
-            val pm = m.groupValues[3].lowercase() == "pm"
+            val pm = m.groupValues[3].equals("p", ignoreCase = true)
             if (h in 1..12 && min in 0..59) {
                 spans += m.range
                 val hour = when { h == 12 && !pm -> 0; h == 12 && pm -> 12; pm -> h + 12; else -> h }
