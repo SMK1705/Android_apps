@@ -10,7 +10,10 @@ enum class OnDeviceEngineOption(val id: String) {
     MEDIAPIPE("mediapipe"),
 
     /** LiteRT-LM (Gemma 3n) — the migration target; a seam only until its runtime is linked on-device. */
-    LITE_RT_LM("litertlm");
+    LITE_RT_LM("litertlm"),
+
+    /** System Gemini Nano via the ML Kit GenAI Prompt API (#214) — zero download on supported devices. */
+    NANO("nano");
 
     companion object {
         /** Parse a stored id back to an option, defaulting to [MEDIAPIPE] for anything unknown/blank. */

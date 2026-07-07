@@ -19,12 +19,14 @@ import javax.inject.Singleton
 class OnDeviceLlmProvider @Inject constructor(
     private val mediaPipe: MediaPipeEngine,
     private val liteRtLm: LiteRtLmEngine,
+    private val nano: NanoEngine,
     private val settingsManager: SettingsManager,
 ) : LlmProvider {
 
     /** The user-selected on-device engine, defaulting to MediaPipe for anything unknown/unset. */
     private fun selected(): OnDeviceEngine =
         when (OnDeviceEngineOption.fromId(settingsManager.onDeviceEngine)) {
+            OnDeviceEngineOption.NANO -> nano
             OnDeviceEngineOption.LITE_RT_LM -> liteRtLm
             OnDeviceEngineOption.MEDIAPIPE -> mediaPipe
         }
@@ -58,6 +60,17 @@ class OnDeviceLlmProvider @Inject constructor(
         // The selected engine can't load → report MediaPipe's status (the fallback that actually runs).
         return if (engine !== mediaPipe) mediaPipe.tryLoad() else err
     }
+
+    /** The engine the user has selected (before any fallback) — for the Settings "check" + honest label. */
+    fun selectedEngineOption(): OnDeviceEngineOption =
+        OnDeviceEngineOption.fromId(settingsManager.onDeviceEngine)
+
+    /**
+     * The selected engine's OWN load status, with NO MediaPipe fallback — so the Settings "check on-device
+     * model" action reports the truth about the engine the user picked (e.g. whether Gemini Nano is
+     * actually available on this device), not the fallback that would run instead.
+     */
+    suspend fun checkSelectedEngine(): Throwable? = selected().tryLoad()
 
     /** MediaPipe owns the model-path UX (Settings → "Check on-device model"). */
     fun modelFile(): File = mediaPipe.modelFile()

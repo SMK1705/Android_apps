@@ -204,6 +204,7 @@ class SettingsManager @Inject constructor(
             .remove(KEY_EVENT_DURATION_MINUTES)
             .remove(KEY_CALENDAR_ID)
             .remove(KEY_ON_DEVICE_MODEL_PATH)
+            .remove(KEY_ON_DEVICE_ENGINE)
             .remove(KEY_GMAIL_ACCOUNT)
             .remove(KEY_GMAIL_ACCOUNTS)
             .remove(KEY_RETENTION_DAYS)
