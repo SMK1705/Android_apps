@@ -69,6 +69,33 @@ class RoutingLlmProvider @Inject constructor(
     }
 
     /**
+     * Whether any effective engine can read an image/audio input (#211). Mirrors [generateFromMedia]'s
+     * routing so callers (the screenshot/audio scan) can gate on it. False in Phase 0 — no engine reports
+     * [supportsVision] yet — so the scan paths keep using OCR / transcription.
+     */
+    override fun supportsVision(): Boolean = route() != VisionRoute.NONE
+
+    /**
+     * Routes a multimodal extraction to the first effective vision engine, or null when none can see
+     * (Phase 0: always null → the caller falls back to OCR / transcribe). The engine preference mirrors
+     * [generate]: on-device first when selected, else the cloud fallback when a key is set; cloud when
+     * cloud is the chosen backend.
+     */
+    override suspend fun generateFromMedia(systemMessage: String, userMessage: String, media: MediaInput): String? =
+        when (route()) {
+            VisionRoute.ON_DEVICE -> onDevice.generateFromMedia(systemMessage, userMessage, media)
+            VisionRoute.CLOUD -> cloud.generateFromMedia(systemMessage, userMessage, media)
+            VisionRoute.NONE -> null
+        }
+
+    private fun route(): VisionRoute = visionRoute(
+        useOnDevice = settingsManager.useOnDeviceLlm,
+        onDeviceVision = onDevice.supportsVision(),
+        cloudVision = cloud.supportsVision(),
+        hasCloudKey = settingsManager.llmApiKey.isNotBlank(),
+    )
+
+    /**
      * Whether extraction's DATA actually stays on the device, mirroring [generate]'s routing — so the
      * UI can label the engine honestly (#197) instead of hardcoding "on-device". True only when:
      *  - on-device is selected, AND
@@ -79,4 +106,30 @@ class RoutingLlmProvider @Inject constructor(
      */
     fun isOnDeviceEffective(): Boolean =
         settingsManager.useOnDeviceLlm && (onDevice.isModelPresent() || settingsManager.llmApiKey.isBlank())
+}
+
+/** Which engine (if any) should handle a multimodal extraction. */
+enum class VisionRoute { ON_DEVICE, CLOUD, NONE }
+
+/**
+ * The pure vision-routing decision (#211), extracted so it's unit-testable without the providers. Mirrors
+ * the text [RoutingLlmProvider.generate] policy:
+ *  - on-device selected → the on-device engine if it can see, else the cloud **only** when it can see and
+ *    a key is configured (the same key-gated fallback the text path uses), else nobody;
+ *  - cloud selected → the cloud engine if it can see, else nobody.
+ *
+ * In Phase 0 both `onDeviceVision` and `cloudVision` are false (no engine overrides `supportsVision`), so
+ * this always returns [VisionRoute.NONE] and the feature ships dark.
+ */
+internal fun visionRoute(
+    useOnDevice: Boolean,
+    onDeviceVision: Boolean,
+    cloudVision: Boolean,
+    hasCloudKey: Boolean,
+): VisionRoute = when {
+    useOnDevice && onDeviceVision -> VisionRoute.ON_DEVICE
+    useOnDevice && cloudVision && hasCloudKey -> VisionRoute.CLOUD
+    useOnDevice -> VisionRoute.NONE
+    cloudVision -> VisionRoute.CLOUD
+    else -> VisionRoute.NONE
 }

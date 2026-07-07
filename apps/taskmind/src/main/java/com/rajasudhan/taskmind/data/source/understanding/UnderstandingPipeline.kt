@@ -96,6 +96,57 @@ class UnderstandingPipeline @Inject constructor(
         // brain-dump; the synthesized fallback item is itself a single item already built from the parse.
         val seeded = parsed?.takeIf { items.size == 1 }
 
+        if (insertItems(source, rawSnippet = text, items = items, seeded = seeded)) {
+            // Surface a single, self-updating review notification (top item + Approve/Reject actions).
+            notifier.notifyPending()
+        }
+    }
+
+    /**
+     * Multimodal extraction seam (#211, Gemma 3n migration Phase 0): send an image/audio clip straight
+     * to a vision-capable engine, bypassing OCR / transcription, and ingest the result exactly like
+     * [processText]. Returns **true** when a vision engine actually ran (so the caller must NOT also
+     * OCR/transcribe), **false** when none can see — the caller then falls back to today's path.
+     *
+     * Ships dark: until an engine reports [LlmProvider.supportsVision], this returns false immediately
+     * and nothing changes. No deterministic date-seed here — there's no user-typed text to parse.
+     */
+    suspend fun processMedia(source: String, media: MediaInput): Boolean {
+        if (!llmProvider.supportsVision()) return false
+        val currentDateTime = LocalDateTime.now()
+        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
+        val dayOfWeek = currentDateTime.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
+        val dateTimeStr = "${currentDateTime.format(formatter)}. Today is a $dayOfWeek."
+        val systemInstruction = SystemPrompt.INSTRUCTION.replace("{{CURRENT_DATETIME}}", dateTimeStr)
+        val userMessage = "Source: $source\n\n(the attached ${media.mimeType} media)"
+
+        val jsonResult = llmProvider.generateFromMedia(systemInstruction, userMessage, media) ?: return false
+        // A vision engine ran; ingest whatever it found (possibly nothing) and, either way, report the
+        // media handled so the caller doesn't double-process it through OCR / transcription. rawSnippet is
+        // blank: a directly-read image/audio has no intermediate transcript (unlike OCR/Vosk text), so the
+        // Inbox note body and the bounce-back fall back to the extracted title rather than echoing the
+        // source label back as "content".
+        val items = tryParse(jsonResult)?.items ?: emptyList()
+        if (items.isNotEmpty() && insertItems(source, rawSnippet = "", items = items, seeded = null)) {
+            notifier.notifyPending()
+        }
+        return true
+    }
+
+    /** Whether an effective engine can read image/audio input (#211) — the scan paths gate on this. */
+    fun supportsMediaCapture(): Boolean = llmProvider.supportsVision()
+
+    /**
+     * Scores, dedups, and inserts extracted [items] as pending suggestions under the insert lock,
+     * reconciling each with the deterministic [seeded] schedule (if any). Shared by [processText] and
+     * the multimodal [processMedia] path. Returns whether at least one suggestion was inserted.
+     */
+    private suspend fun insertItems(
+        source: String,
+        rawSnippet: String,
+        items: List<LlmItem>,
+        seeded: ParsedSchedule?,
+    ): Boolean {
         // Down-rank items from senders the user keeps rejecting (on-device learning).
         val penalty = rejectionLearner.confidencePenalty(source)
 
@@ -124,7 +175,7 @@ class UnderstandingPipeline @Inject constructor(
                 if (ExtractionHeuristics.isAcceptable(scored) && !isDuplicate(item, effectiveDate)) {
                     val suggestion = Suggestion(
                         source = source,
-                        rawSnippet = text,
+                        rawSnippet = rawSnippet,
                         extractedTitle = item.title,
                         summary = item.notes.trim(),
                         dueDate = effectiveDate,
@@ -148,11 +199,7 @@ class UnderstandingPipeline @Inject constructor(
                 }
             }
         }
-
-        // Surface a single, self-updating review notification (top item + Approve/Reject actions).
-        if (insertedAny) {
-            notifier.notifyPending()
-        }
+        return insertedAny
     }
 
     /**

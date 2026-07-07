@@ -10,6 +10,7 @@ import com.rajasudhan.taskmind.data.source.email.GmailAuth
 import com.rajasudhan.taskmind.data.source.email.GmailCollector
 import com.rajasudhan.taskmind.data.source.ocr.OcrEngine
 import com.rajasudhan.taskmind.data.source.transcription.Transcriber
+import com.rajasudhan.taskmind.data.source.understanding.MediaInput
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -199,8 +200,10 @@ class RecentDataScanner @Inject constructor(
      * since [since]; already-transcribed ids are skipped. Skips silently if no Vosk model is present.
      */
     private suspend fun scanAudio(since: Long) {
-        if (!transcriber.isModelPresent()) {
-            android.util.Log.w("RecentDataScanner", "Audio enabled but no Vosk model present; skipping")
+        // A vision/audio engine (Phase 0 seam, #211) OR the Vosk model must be available; today only
+        // Vosk is, so this is unchanged.
+        if (!pipeline.supportsMediaCapture() && !transcriber.isModelPresent()) {
+            android.util.Log.w("RecentDataScanner", "Audio enabled but no vision engine / Vosk model present; skipping")
             return
         }
         val processed = sourceManager.processedAudioIds.first()
@@ -229,16 +232,20 @@ class RecentDataScanner @Inject constructor(
                 if (id.toString() in processed) continue
                 val name = cursor.getString(nameCol) ?: "recording"
                 val uri = ContentUris.withAppendedId(collection, id)
-                val result = runCatching { transcriber.transcribe(uri) }.getOrNull()
-                val transcript = result?.text
+                val source = "Recording: $name"
                 sourceManager.addProcessedAudioId(id.toString())
-                android.util.Log.i(
-                    "RecentDataScanner",
-                    "Transcribed $name -> ${transcript?.length ?: 0} chars" +
-                        if (result?.secondPassUsed == true) " (Whisper 2nd pass)" else ""
-                )
-                if (!transcript.isNullOrBlank()) {
-                    pipeline.processText("Recording: $name", transcript)
+                // #211: hand the audio to a vision/audio engine first (dark today → false), else transcribe.
+                if (!pipeline.processMedia(source, MediaInput(uri, "audio/*")) && transcriber.isModelPresent()) {
+                    val result = runCatching { transcriber.transcribe(uri) }.getOrNull()
+                    val transcript = result?.text
+                    android.util.Log.i(
+                        "RecentDataScanner",
+                        "Transcribed $name -> ${transcript?.length ?: 0} chars" +
+                            if (result?.secondPassUsed == true) " (Whisper 2nd pass)" else ""
+                    )
+                    if (!transcript.isNullOrBlank()) {
+                        pipeline.processText(source, transcript)
+                    }
                 }
             }
         }
@@ -250,8 +257,10 @@ class RecentDataScanner @Inject constructor(
      * silently if no OCR model is present.
      */
     private suspend fun scanImages(since: Long) {
-        if (!ocrEngine.isModelPresent()) {
-            android.util.Log.w("RecentDataScanner", "Images enabled but no OCR model present; skipping")
+        // A vision engine (Phase 0 seam, #211) OR the OCR model must be available; today only OCR is,
+        // so this is unchanged. When a vision engine lands, this lets a vision-only device still scan.
+        if (!pipeline.supportsMediaCapture() && !ocrEngine.isModelPresent()) {
+            android.util.Log.w("RecentDataScanner", "Images enabled but no vision engine / OCR model present; skipping")
             return
         }
         val processed = sourceManager.processedImageIds.first()
@@ -271,11 +280,15 @@ class RecentDataScanner @Inject constructor(
                 if (id.toString() in processed) continue
                 val name = cursor.getString(nameCol) ?: "screenshot"
                 val uri = ContentUris.withAppendedId(collection, id)
-                val text = runCatching { ocrEngine.recognize(uri) }.getOrNull()
+                val source = "Screenshot: $name"
                 sourceManager.addProcessedImageId(id.toString())
-                android.util.Log.i("RecentDataScanner", "OCR'd $name -> ${text?.length ?: 0} chars")
-                if (!text.isNullOrBlank()) {
-                    pipeline.processText("Screenshot: $name", text)
+                // #211: hand the image to a vision engine first (dark today → false), else OCR as before.
+                if (!pipeline.processMedia(source, MediaInput(uri, "image/*")) && ocrEngine.isModelPresent()) {
+                    val text = runCatching { ocrEngine.recognize(uri) }.getOrNull()
+                    android.util.Log.i("RecentDataScanner", "OCR'd $name -> ${text?.length ?: 0} chars")
+                    if (!text.isNullOrBlank()) {
+                        pipeline.processText(source, text)
+                    }
                 }
             }
         }
