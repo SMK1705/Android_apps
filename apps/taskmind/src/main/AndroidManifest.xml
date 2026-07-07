@@ -57,6 +57,11 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Registers the <share-target> (Direct Share). The launcher long-press shortcuts
+                 themselves are published dynamically by CaptureShortcuts. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <service

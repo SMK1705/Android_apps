@@ -15,6 +15,7 @@ import com.rajasudhan.taskmind.data.source.RecurrenceDetectorScheduler
 import com.rajasudhan.taskmind.data.source.SettingsManager
 import com.rajasudhan.taskmind.data.source.TaskMindForegroundService
 import com.rajasudhan.taskmind.data.source.WeeklyWinsScheduler
+import com.rajasudhan.taskmind.ui.capture.CaptureShortcuts
 import dagger.hilt.android.HiltAndroidApp
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -50,6 +51,9 @@ class TaskMindApp : Application(), Configuration.Provider {
         // Create the notification channel eagerly so a reminder alarm that fires after a reboot (before
         // the foreground service has ever run this process) still has a channel to post to.
         TaskMindForegroundService.ensureNotificationChannel(this)
+        // Publish the launcher long-press capture shortcuts (Type / Speak / Inbox) so they exist from
+        // first launch; SuggestionNotifier re-stamps the Inbox count as the pending set changes.
+        CaptureShortcuts.refresh(this, 0)
         // Keep the existing schedule on launch; only an explicit settings change replaces it.
         scheduleScan(this, settingsManager.scanFrequencyMinutes.toLong(), replace = false)
         // Re-arm the brief/recap from the saved preference, KEEPing any already-scheduled job (replace =

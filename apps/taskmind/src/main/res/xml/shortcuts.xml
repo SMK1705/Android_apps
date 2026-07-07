@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The launcher long-press shortcuts (Type / Speak / Inbox) are published dynamically in code
+  (CaptureShortcuts) so the Inbox one can carry a live pending count. This file declares only the
+  Direct Share target: sharing text or an image from another app offers TaskMind in the share sheet's
+  Direct Share row, ranked via the long-lived Type shortcut that carries the matching category. The
+  share is handled by ShareTargetActivity (which also keeps its manifest ACTION_SEND intent-filters).
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <share-target android:targetClass="com.rajasudhan.taskmind.ui.capture.ShareTargetActivity">
+        <data android:mimeType="text/plain" />
+        <data android:mimeType="image/*" />
+        <category android:name="com.rajasudhan.taskmind.category.SHARE_TARGET" />
+    </share-target>
+</shortcuts>

@@ -6,5 +6,7 @@
     android:targetCellHeight="1"
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/quick_add_widget"
+    android:previewLayout="@layout/quick_add_widget"
+    android:description="@string/tile_label"
     android:resizeMode="horizontal"
-    android:widgetCategory="home_screen" />
+    android:widgetCategory="home_screen|keyguard" />
