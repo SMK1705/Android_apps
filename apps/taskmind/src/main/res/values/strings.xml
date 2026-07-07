@@ -2,4 +2,11 @@
     <string name="app_name">TaskMind</string>
     <string name="widget_add">+ Add</string>
     <string name="tile_label">Add to TaskMind</string>
+
+    <!-- Launcher long-press shortcuts (published dynamically by CaptureShortcuts). -->
+    <string name="shortcut_type_short">Type</string>
+    <string name="shortcut_type_long">Type a note</string>
+    <string name="shortcut_speak_short">Speak</string>
+    <string name="shortcut_speak_long">Speak a note</string>
+    <string name="shortcut_inbox_long">Open Inbox</string>
 </resources>

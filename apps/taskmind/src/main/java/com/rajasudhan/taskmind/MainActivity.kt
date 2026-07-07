@@ -63,6 +63,11 @@ class MainActivity : AppCompatActivity() {
     // so the navigation naturally waits out the app lock: it only runs once the nav graph composes.
     private val pendingOpenNoteId = kotlinx.coroutines.flow.MutableStateFlow(-1)
 
+    // The Inbox launcher shortcut asks to land on the Inbox tab. Held as state (like the note id above)
+    // so it also works via onNewIntent — when the app is already open on another tab — and waits out the
+    // app lock. A cold launch already starts on "inbox", so this only matters for an already-live app.
+    private val pendingOpenInbox = kotlinx.coroutines.flow.MutableStateFlow(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -71,6 +76,7 @@ class MainActivity : AppCompatActivity() {
         // yank the user back to an already-dismissed note on every recreation.
         if (savedInstanceState == null) {
             pendingOpenNoteId.value = intent?.getIntExtra(EXTRA_OPEN_NOTE_ID, -1) ?: -1
+            pendingOpenInbox.value = intent?.getBooleanExtra(EXTRA_OPEN_INBOX, false) ?: false
         }
 
         setContent {
@@ -168,6 +174,7 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     // The manual-lock action only makes sense when the lock is on AND enforceable.
                     val openNoteId by pendingOpenNoteId.collectAsState()
+                    val openInbox by pendingOpenInbox.collectAsState()
                     TaskMindAppContent(
                         onLock = if (lockEnabled && canLock) ({ isAuthenticated = false }) else null,
                         isDark = darkTheme,
@@ -182,6 +189,11 @@ class MainActivity : AppCompatActivity() {
                             // Also strip the extra from the sticky intent (kept by setIntent), so a
                             // same-process recreation can't re-read it.
                             intent?.removeExtra(EXTRA_OPEN_NOTE_ID)
+                        },
+                        openInbox = openInbox,
+                        onInboxOpened = {
+                            pendingOpenInbox.value = false
+                            intent?.removeExtra(EXTRA_OPEN_INBOX)
                         }
                     )
                 }
@@ -193,11 +205,14 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         pendingOpenNoteId.value = intent.getIntExtra(EXTRA_OPEN_NOTE_ID, -1)
+        pendingOpenInbox.value = intent.getBooleanExtra(EXTRA_OPEN_INBOX, false)
     }
 
     companion object {
         /** Int extra: a note id to navigate to on open — set by reminder/geofence notification taps. */
         const val EXTRA_OPEN_NOTE_ID = "open_note_id"
+        /** Boolean extra: jump to the Inbox tab on open — set by the Inbox launcher shortcut. */
+        const val EXTRA_OPEN_INBOX = "open_inbox"
     }
 
     /** True only when the device has a biometric or device credential enrolled to authenticate against. */
@@ -320,6 +335,8 @@ fun TaskMindAppContent(
     onToggleTheme: () -> Unit = {},
     openNoteId: Int = -1,
     onNoteOpened: () -> Unit = {},
+    openInbox: Boolean = false,
+    onInboxOpened: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -331,6 +348,19 @@ fun TaskMindAppContent(
         if (openNoteId >= 0) {
             navController.navigate("notes/$openNoteId") { launchSingleTop = true }
             onNoteOpened()
+        }
+    }
+
+    // Inbox launcher shortcut: select the Inbox tab. Harmless on a cold launch (Inbox is the start
+    // destination); it matters when the app is already open on another tab.
+    LaunchedEffect(openInbox) {
+        if (openInbox) {
+            navController.navigate("inbox") {
+                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+            onInboxOpened()
         }
     }
 

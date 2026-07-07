@@ -1,6 +1,7 @@
 package com.rajasudhan.taskmind.ui.inbox
 
 import android.Manifest
+import android.content.ClipboardManager
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.CleaningServices
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Directions
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LightMode
@@ -83,6 +85,7 @@ import com.rajasudhan.taskmind.data.model.Suggestion
 import com.rajasudhan.taskmind.data.source.resolveCallNumber
 import com.rajasudhan.taskmind.data.source.transcription.AudioRecorder
 import com.rajasudhan.taskmind.ui.bold.*
+import com.rajasudhan.taskmind.ui.capture.ClipboardCapture
 import com.rajasudhan.taskmind.ui.common.SkeletonList
 import com.rajasudhan.taskmind.ui.common.dialNumber
 import com.rajasudhan.taskmind.ui.common.dueChipLabel
@@ -794,6 +797,16 @@ private fun BoldCaptureSheet(
     val c = BoldTheme.colors
     var mode by remember { mutableStateOf(0) } // 0 = type, 1 = speak
     var text by remember { mutableStateOf("") }
+    // "Use copied text" affordance: decide whether to offer a paste from the clipboard's MIME
+    // description alone (no content read → no system "pasted from clipboard" toast on open); the actual
+    // text is only read when the chip is tapped, the moment a paste is expected.
+    val context = LocalContext.current
+    val clipboard = remember(context) { context.getSystemService(ClipboardManager::class.java) }
+    val hasClipText = remember(clipboard) {
+        val desc = clipboard?.primaryClipDescription
+        val mimes = desc?.let { d -> Array(d.mimeTypeCount) { d.getMimeType(it) } }
+        ClipboardCapture.hasPasteableText(mimes)
+    }
     BoldBottomSheet(
         title = "Quick capture",
         onDismiss = onDismiss,
@@ -818,6 +831,27 @@ private fun BoldCaptureSheet(
         Spacer(Modifier.height(18.dp))
 
         if (mode == 0) {
+            // Offer the clipboard as a one-tap fill when the field is still empty (#122). Reading the
+            // content here is user-initiated, so the paste toast — if any — is expected.
+            if (text.isEmpty() && hasClipText) {
+                Row(
+                    Modifier.clip(RoundedCornerShape(9.dp)).background(c.bg2)
+                        .border(1.dp, c.line, RoundedCornerShape(9.dp))
+                        .clickable {
+                            ClipboardCapture.captureText(
+                                clipboard?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)
+                            )?.let { text = it }
+                        }
+                        .padding(horizontal = 11.dp, vertical = 8.dp)
+                        .semantics { role = Role.Button; contentDescription = "Use copied text" },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    Icon(Icons.Outlined.ContentPaste, contentDescription = null, tint = c.accent, modifier = Modifier.size(15.dp))
+                    Text("Use copied text", style = BoldType.detailMeta.copy(fontSize = 12.sp), color = c.accent)
+                }
+                Spacer(Modifier.height(12.dp))
+            }
             // #116: parse the schedule as you type so the matched phrase is highlighted and the resolved
             // date/time/recurrence is confirmed instantly — before the on-device model even runs.
             val parsed = remember(text) { NaturalDate.parse(text, LocalDateTime.now()) }

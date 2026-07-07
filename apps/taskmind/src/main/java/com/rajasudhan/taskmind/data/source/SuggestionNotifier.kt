@@ -14,6 +14,7 @@ import com.rajasudhan.taskmind.MainActivity
 import com.rajasudhan.taskmind.R
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Suggestion
+import com.rajasudhan.taskmind.ui.capture.CaptureShortcuts
 import com.rajasudhan.taskmind.ui.capture.QuickAddWidget
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -107,6 +108,7 @@ class SuggestionNotifier @Inject constructor(
             .addAction(captureAction())
         manager?.notify(NOTIFICATION_ID, builder.build())
         QuickAddWidget.refresh(context)
+        CaptureShortcuts.refresh(context, count)
     }
 
     /** A PendingIntent that launches [intent] (dialer / Maps) straight from the notification action. */
@@ -161,6 +163,7 @@ class SuggestionNotifier @Inject constructor(
     fun cancel() {
         manager?.cancel(NOTIFICATION_ID)
         QuickAddWidget.refresh(context)
+        CaptureShortcuts.refresh(context, 0)
     }
 
     private fun ensureBounceBackChannel() {
