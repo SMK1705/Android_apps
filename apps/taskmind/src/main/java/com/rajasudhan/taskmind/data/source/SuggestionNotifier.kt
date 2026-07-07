@@ -9,6 +9,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.app.RemoteInput
 import com.rajasudhan.taskmind.MainActivity
 import com.rajasudhan.taskmind.R
 import com.rajasudhan.taskmind.data.local.TaskMindDao
@@ -40,6 +41,8 @@ class SuggestionNotifier @Inject constructor(
         private const val CALL_RC_BASE = 1_000_000
         private const val DIRECTIONS_RC_BASE = 2_000_000
         private const val RESURFACE_RC_BASE = 6_000_000
+        // The wrist voice-capture action (#130) isn't tied to a suggestion, so one fixed request code.
+        private const val CAPTURE_RC = 7_500_000
         private const val BOUNCE_TAP_RC_BASE = 9_500_000
     }
 
@@ -98,6 +101,10 @@ class SuggestionNotifier @Inject constructor(
         builder
             .addAction(android.R.drawable.ic_menu_send, "Approve", action(NotificationActionReceiver.ACTION_APPROVE, top.id))
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Reject", action(NotificationActionReceiver.ACTION_REJECT, top.id))
+            // Wrist-friendly triage (#130): Snooze the item, and a voice action to speak a brand-new one.
+            // These bridge to Wear automatically; RemoteInput opens dictation on the watch.
+            .addAction(android.R.drawable.ic_menu_recent_history, "Snooze", action(NotificationActionReceiver.ACTION_SNOOZE, top.id))
+            .addAction(captureAction())
         manager?.notify(NOTIFICATION_ID, builder.build())
         QuickAddWidget.refresh(context)
     }
@@ -120,11 +127,35 @@ class SuggestionNotifier @Inject constructor(
             this.action = action
             putExtra(NotificationActionReceiver.EXTRA_ID, id)
         }
-        // Distinct request code per (action, id) so Approve and Reject don't share a PendingIntent.
-        val rc = id * 2 + if (action == NotificationActionReceiver.ACTION_APPROVE) 0 else 1
+        // Distinct request code per (action, id) so Approve / Reject / Snooze never share a PendingIntent.
+        val slot = when (action) {
+            NotificationActionReceiver.ACTION_APPROVE -> 0
+            NotificationActionReceiver.ACTION_REJECT -> 1
+            else -> 2 // snooze
+        }
         return PendingIntent.getBroadcast(
-            context, rc, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            context, id * 4 + slot, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+    }
+
+    /**
+     * The voice-capture action (#130): it carries a [RemoteInput], so on the wrist tapping it opens
+     * dictation, and the spoken text is broadcast to [NotificationActionReceiver] as a brand-new capture.
+     * The PendingIntent must be MUTABLE — an immutable one can't receive the RemoteInput results.
+     */
+    private fun captureAction(): NotificationCompat.Action {
+        val remoteInput = RemoteInput.Builder(NotificationActionReceiver.KEY_VOICE_REPLY)
+            .setLabel("Speak a task")
+            .build()
+        val intent = Intent(context, NotificationActionReceiver::class.java)
+            .setAction(NotificationActionReceiver.ACTION_CAPTURE)
+        val pi = PendingIntent.getBroadcast(
+            context, CAPTURE_RC, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        )
+        return NotificationCompat.Action.Builder(android.R.drawable.ic_btn_speak_now, "Add", pi)
+            .addRemoteInput(remoteInput)
+            .setAllowGeneratedReplies(false)
+            .build()
     }
 
     fun cancel() {
