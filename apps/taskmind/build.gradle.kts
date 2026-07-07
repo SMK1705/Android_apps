@@ -129,6 +129,9 @@ dependencies {
     implementation(libs.play.services.location)
     implementation(libs.play.services.auth)
     implementation(libs.play.services.maps)
+    // Phone <-> watch Data Layer (#216): receive wrist captures, publish the next-due tile data.
+    implementation(libs.play.services.wearable)
+    implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.maps.compose)
     implementation(libs.retrofit)
     implementation(libs.androidx.biometric)
