@@ -35,10 +35,14 @@ class TaskMindForegroundService : Service() {
     lateinit var smsObserver: SmsObserver
 
     @Inject
+    lateinit var calendarObserver: CalendarObserver
+
+    @Inject
     lateinit var scanner: RecentDataScanner
 
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var smsObserverStarted = false
+    private var calendarObserverStarted = false
 
     // Live MediaStore watchers: new recordings transcribe / new screenshots OCR instantly, instead
     // of waiting for the 30-min periodic scan. Each scan skips already-processed ids.
@@ -131,6 +135,7 @@ class TaskMindForegroundService : Service() {
         isRunning = true
         ensureNotificationChannel(this)
         observeSmsSource()
+        observeCalendarSource()
         observeMediaSource(
             enabledFlow = { sourceManager.isAudioEnabled },
             uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
@@ -183,6 +188,21 @@ class TaskMindForegroundService : Service() {
         }
     }
 
+    /** Reacts to the Calendar toggle live: the back-sync observer (#205) runs only while Calendar is on. */
+    private fun observeCalendarSource() {
+        serviceScope.launch {
+            sourceManager.isCalendarEnabled.collectLatest { enabled ->
+                if (enabled && !calendarObserverStarted) {
+                    calendarObserver.start()
+                    calendarObserverStarted = true
+                } else if (!enabled && calendarObserverStarted) {
+                    calendarObserver.stop()
+                    calendarObserverStarted = false
+                }
+            }
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
@@ -204,6 +224,7 @@ class TaskMindForegroundService : Service() {
         super.onDestroy()
         isRunning = false
         if (smsObserverStarted) smsObserver.stop()
+        if (calendarObserverStarted) calendarObserver.stop()
         if (audioWatching) contentResolver.unregisterContentObserver(audioObserver)
         if (imageWatching) contentResolver.unregisterContentObserver(imageObserver)
         serviceScope.cancel()
