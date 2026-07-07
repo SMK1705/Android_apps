@@ -82,6 +82,14 @@ class NaturalDateTest {
     @Test fun am() = assertEquals(LocalTime.of(9, 0), parse("standup 9am").time)
     @Test fun twelvePm_isNoon() = assertEquals(LocalTime.of(12, 0), parse("lunch 12pm").time)
     @Test fun twelveAm_isMidnight() = assertEquals(LocalTime.of(0, 0), parse("cutoff 12am").time)
+    // Periarded meridiem (#235): speech-to-text emits "p.m."/"a.m." — must not fall through to a bare
+    // 24-hour read (which stamped "3:00 p.m." as 03:00). This is the exact wrist-capture repro.
+    @Test fun pmWithPeriods() = assertEquals(LocalTime.of(15, 0), parse("call the dentist tomorrow at 3:00 p.m.").time)
+    @Test fun pmWithPeriods_noMinutes() = assertEquals(LocalTime.of(15, 0), parse("call 3 p.m.").time)
+    @Test fun amWithPeriods() = assertEquals(LocalTime.of(9, 0), parse("standup 9 a.m.").time)
+    @Test fun twelvePmWithPeriods_isNoon() = assertEquals(LocalTime.of(12, 0), parse("lunch 12 p.m.").time)
+    // The trailing (?![a-z]) guard: a number followed by an "am"/"pm"-prefixed word is not a time.
+    @Test fun numberBeforeAmWord_isNotATime() = assertNull(parse("order 5 ampoules").time)
     @Test fun twentyFourHour() = assertEquals(LocalTime.of(17, 0), parse("depart 17:00").time)
     @Test fun namedNoon() = assertEquals(LocalTime.NOON, parse("meet at noon").time)
     @Test fun namedMorning() = assertEquals(LocalTime.of(9, 0), parse("run in the morning").time)
