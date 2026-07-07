@@ -17,6 +17,7 @@ import com.rajasudhan.taskmind.data.source.SettingsManager
 import com.rajasudhan.taskmind.data.source.TaskMindForegroundService
 import com.rajasudhan.taskmind.data.source.WeeklyWinsScheduler
 import com.rajasudhan.taskmind.data.source.appfunctions.AgentFunctions
+import com.rajasudhan.taskmind.data.source.wear.WearSyncScheduler
 import com.rajasudhan.taskmind.ui.capture.CaptureShortcuts
 import dagger.hilt.android.HiltAndroidApp
 import java.util.concurrent.TimeUnit
@@ -47,6 +48,9 @@ class TaskMindApp : Application(), Configuration.Provider, AppFunctionConfigurat
 
     @Inject
     lateinit var recurrenceDetectorScheduler: RecurrenceDetectorScheduler
+
+    @Inject
+    lateinit var wearSyncScheduler: WearSyncScheduler
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -85,6 +89,8 @@ class TaskMindApp : Application(), Configuration.Provider, AppFunctionConfigurat
         // Mine captured history a few times a week for a habit that keeps repeating, and offer to make it
         // recurring (#124). KEEPs any existing schedule so a deferred run isn't reset on launch.
         recurrenceDetectorScheduler.schedule()
+        // Keep the paired watch's next-due tile fresh (#216). KEEPs any existing schedule on launch.
+        wearSyncScheduler.schedule()
     }
 
     companion object {

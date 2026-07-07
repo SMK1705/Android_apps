@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">TaskMind</string>
+    <string name="tile_label">Next due</string>
+</resources>
