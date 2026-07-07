@@ -35,6 +35,10 @@ keystore.properties
 *.task
 *.litertlm
 
+# ---- JVM crash artifacts (the Gradle test fork native-OOMs on a low-RAM host; never versioned) ----
+hs_err_pid*.log
+replay_pid*.log
+
 # ---- Claude Code local config ----
 .claude/
 
