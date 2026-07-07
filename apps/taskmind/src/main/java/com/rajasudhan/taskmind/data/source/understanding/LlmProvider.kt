@@ -25,4 +25,19 @@ interface LlmProvider {
      */
     suspend fun generateIntent(systemMessage: String, userMessage: String): String =
         generate(systemMessage, userMessage)
+
+    /**
+     * Whether this provider can read an image/audio input directly (#211, Gemma 3n migration Phase 0).
+     * Default **false** → text-only, so every existing provider and caller is untouched. Only a vision-
+     * capable engine (a later phase) overrides this to true.
+     */
+    fun supportsVision(): Boolean = false
+
+    /**
+     * Multimodal extraction: run the model over [media] (an image/audio clip) with a text instruction,
+     * returning the same extraction-JSON contract as [generate]. Returns **null** when this provider
+     * can't see — the caller then falls back to the OCR / transcribe → [generate] path. The default is
+     * a no-op null so text-only providers need no change; only a vision engine overrides it.
+     */
+    suspend fun generateFromMedia(systemMessage: String, userMessage: String, media: MediaInput): String? = null
 }

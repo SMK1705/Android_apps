@@ -1,14 +1,24 @@
 package com.rajasudhan.taskmind.testutil
 
 import com.rajasudhan.taskmind.data.source.understanding.LlmProvider
+import com.rajasudhan.taskmind.data.source.understanding.MediaInput
 
 /**
  * A [LlmProvider] that returns canned model output. Pass one response (reused for every call) or
  * several (consumed in order; the last one sticks) to exercise the pipeline's retry path.
+ *
+ * For the multimodal seam (#211): set [vision] true to report [supportsVision], and [mediaResponse]
+ * to the JSON a vision engine would return from [generateFromMedia] (null = the engine declined).
  */
-class FakeLlmProvider(vararg responses: String) : LlmProvider {
+class FakeLlmProvider(
+    vararg responses: String,
+    private val vision: Boolean = false,
+    private val mediaResponse: String? = null,
+) : LlmProvider {
     private val responses: List<String> = responses.toList().ifEmpty { listOf("""{"items":[]}""") }
     var calls = 0
+        private set
+    var mediaCalls = 0
         private set
     val userMessages = mutableListOf<String>()
 
@@ -17,6 +27,13 @@ class FakeLlmProvider(vararg responses: String) : LlmProvider {
         val idx = calls.coerceAtMost(this.responses.size - 1)
         calls++
         return this.responses[idx]
+    }
+
+    override fun supportsVision(): Boolean = vision
+
+    override suspend fun generateFromMedia(systemMessage: String, userMessage: String, media: MediaInput): String? {
+        mediaCalls++
+        return mediaResponse
     }
 }
 

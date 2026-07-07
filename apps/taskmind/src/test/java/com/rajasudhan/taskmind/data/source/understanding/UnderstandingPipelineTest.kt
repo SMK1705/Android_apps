@@ -1,5 +1,6 @@
 package com.rajasudhan.taskmind.data.source.understanding
 
+import android.net.Uri
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.rajasudhan.taskmind.data.local.TaskMindDao
@@ -329,6 +330,56 @@ class UnderstandingPipelineTest {
 
         val s = dao.getPendingSuggestions().first().single { it.extractedTitle == "Call Bob" }
         assertNull(s.possibleDuplicateOf)
+    }
+
+    // ---- processMedia (#211, Gemma 3n Phase 0): multimodal seam, dark until a vision engine lands ----
+
+    private val screenshot = Uri.parse("content://media/external/images/media/1")
+
+    @Test
+    fun processMedia_shipsDark_whenNoVisionEngine_returnsFalse_soCallerFallsBackToOcr() = runTest {
+        val llm = FakeLlmProvider(vision = false)
+
+        val handled = pipeline(llm).processMedia("Screenshot: shot.png", MediaInput(screenshot, "image/*"))
+
+        assertFalse(handled)                       // caller will OCR/transcribe instead
+        assertEquals(0, llm.mediaCalls)            // no engine → not even called
+        assertTrue(dao.getPendingSuggestions().first().isEmpty())
+        coVerify(exactly = 0) { notifier.notifyPending() }
+    }
+
+    @Test
+    fun processMedia_ingestsExtraction_whenAVisionEngineReadsTheImage() = runTest {
+        val llm = FakeLlmProvider(
+            vision = true,
+            mediaResponse = llmResponse(llmItem(type = "reminder", title = "Dentist", dueDate = "2026-07-10", dueTime = "15:00", confidence = 0.9)),
+        )
+
+        val handled = pipeline(llm).processMedia("Screenshot: invite.png", MediaInput(screenshot, "image/*"))
+
+        assertTrue(handled)
+        assertEquals(1, llm.mediaCalls)
+        with(dao.getPendingSuggestions().first().single()) {
+            assertEquals("Dentist", extractedTitle)
+            assertEquals("reminder", type)
+            assertEquals("2026-07-10", dueDate)
+            assertEquals("Screenshot: invite.png", source)
+            assertTrue(rawSnippet.isBlank()) // a directly-read image has no intermediate transcript to store
+        }
+        coVerify(exactly = 1) { notifier.notifyPending() }
+    }
+
+    @Test
+    fun processMedia_reportsHandled_butInsertsNothing_whenTheVisionEngineFindsNoTask() = runTest {
+        // Engine looked and found nothing actionable → still "handled" (don't double-process via OCR),
+        // but nothing inserted and no notification.
+        val llm = FakeLlmProvider(vision = true, mediaResponse = llmResponse())
+
+        val handled = pipeline(llm).processMedia("Screenshot: meme.png", MediaInput(screenshot, "image/*"))
+
+        assertTrue(handled)
+        assertTrue(dao.getPendingSuggestions().first().isEmpty())
+        coVerify(exactly = 0) { notifier.notifyPending() }
     }
 
     @Test
