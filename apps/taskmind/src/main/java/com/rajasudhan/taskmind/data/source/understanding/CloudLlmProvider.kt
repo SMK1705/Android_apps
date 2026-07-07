@@ -1,8 +1,11 @@
 package com.rajasudhan.taskmind.data.source.understanding
 
+import android.content.Context
+import android.util.Base64
 import com.rajasudhan.taskmind.data.model.Tags
 import com.rajasudhan.taskmind.data.source.EgressLogger
 import com.rajasudhan.taskmind.data.source.SettingsManager
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -14,6 +17,7 @@ import org.json.JSONObject
 import javax.inject.Inject
 
 class CloudLlmProvider @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val settingsManager: SettingsManager,
     private val client: OkHttpClient,
     private val egressLogger: EgressLogger
@@ -36,6 +40,41 @@ class CloudLlmProvider @Inject constructor(
      */
     override suspend fun generateIntent(systemMessage: String, userMessage: String): String =
         callGemini(systemMessage, userMessage, intentSchema(), "Cloud LLM ask intent", EMPTY_INTENT)
+
+    /** Gemini 2.5 Flash is multimodal, so the cloud engine can read a screenshot directly (#213). */
+    override fun supportsVision(): Boolean = true
+
+    /**
+     * Multimodal image extraction (#213, Gemma 3n migration Phase 2 — cloud engine): send the screenshot
+     * itself to Gemini as a base64 `inline_data` part alongside the extraction instruction + schema, so a
+     * poster/invite screenshot yields a fully-formed event WITHOUT going through Tesseract OCR.
+     *
+     * Returns **null** (not an empty-items JSON) on anything that means "no vision happened" — a non-image
+     * mime, a blank key, an unreadable image, or a non-2xx reply — so [RecentDataScanner] falls back to the
+     * OCR path instead of silently dropping the screenshot. Only a genuine model reply (even "no items")
+     * counts as handled. Audio stays on the transcription path for now; only images are sent here.
+     */
+    override suspend fun generateFromMedia(systemMessage: String, userMessage: String, media: MediaInput): String? =
+        withContext(Dispatchers.IO) {
+            if (!media.mimeType.startsWith("image/")) return@withContext null
+            val apiKey = settingsManager.llmApiKey
+            if (apiKey.isBlank()) return@withContext null
+
+            val base64 = runCatching {
+                appContext.contentResolver.openInputStream(media.uri)?.use { it.readBytes() }
+            }.getOrNull()?.let { Base64.encodeToString(it, Base64.NO_WRAP) }
+            if (base64.isNullOrBlank()) return@withContext null
+
+            // Audit: the image is about to leave the device (metadata only, never the pixels themselves).
+            egressLogger.record("generativelanguage.googleapis.com", "Cloud LLM vision extraction")
+
+            val body = buildVisionRequestBody(systemMessage, userMessage, media.mimeType, base64, responseSchema())
+            val request = Request.Builder()
+                .url("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey")
+                .post(body.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            sendForJsonOrNull(request)
+        }
 
     /**
      * Posts a Gemini generateContent request whose output is pinned to [schema], returning the
@@ -180,10 +219,63 @@ class CloudLlmProvider @Inject constructor(
             if (text.isNullOrBlank()) fallback else text
         }
 
+    /**
+     * Like [sendForJson] but returns **null** (rather than a schema-shaped empty) on any failure — the
+     * vision contract, where null means "no result, fall back to OCR" and a real reply (even empty items)
+     * means "the model saw the image; don't OCR it too".
+     */
+    private fun sendForJsonOrNull(request: Request): String? = runCatching {
+        // The whole send is guarded: a network IOException (timeout / socket / TLS) or a malformed body
+        // must yield null, not propagate — otherwise processMedia throws, the screenshot is left marked-
+        // processed but never OCR'd, and it's silently lost. null here just means "fall back to OCR".
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@runCatching null
+            val bodyStr = response.body?.string() ?: return@runCatching null
+            JSONObject(bodyStr)
+                .optJSONArray("candidates")
+                ?.optJSONObject(0)
+                ?.optJSONObject("content")
+                ?.optJSONArray("parts")
+                ?.optJSONObject(0)
+                ?.optString("text")
+        }
+    }.getOrNull()?.takeIf { it.isNotBlank() }
+
     companion object {
         // Empty results shaped to match each call's schema, so the caller's parser never chokes.
         private const val EMPTY_ITEMS = "{\"items\": []}"
         private const val EMPTY_ARRAY = "[]"
         private const val EMPTY_INTENT = "{\"action\": \"query\"}"
     }
+}
+
+/**
+ * Builds the Gemini `generateContent` body for a multimodal image extraction (#213): the schema-pinned
+ * [systemMessage], plus a user turn carrying the image as a base64 `inline_data` part and the
+ * [userMessage] text. Top-level + pure so the request shape — the exact `inline_data`/`mime_type`/`data`
+ * keys the Vision API needs — is unit-testable without a network call.
+ */
+internal fun buildVisionRequestBody(
+    systemMessage: String,
+    userMessage: String,
+    mimeType: String,
+    base64Data: String,
+    schema: JSONObject,
+): JSONObject = JSONObject().apply {
+    put("systemInstruction", JSONObject().put("parts", JSONObject().put("text", systemMessage)))
+    val imagePart = JSONObject().put(
+        "inline_data",
+        JSONObject().put("mime_type", mimeType).put("data", base64Data)
+    )
+    val textPart = JSONObject().put("text", userMessage)
+    // Image first, then the instruction — the model attends to "here is a screenshot; extract tasks".
+    val userContent = JSONObject().put("role", "user").put("parts", JSONArray().put(imagePart).put(textPart))
+    put("contents", JSONArray().put(userContent))
+    put(
+        "generationConfig",
+        JSONObject()
+            .put("temperature", 0.1)
+            .put("responseMimeType", "application/json")
+            .put("responseSchema", schema)
+    )
 }
