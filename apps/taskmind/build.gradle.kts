@@ -139,6 +139,7 @@ dependencies {
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.mediapipe.tasks.genai)
+    implementation(libs.mlkit.genai.prompt)
     implementation(libs.vosk.android)
     implementation(libs.tesseract4android)
     implementation(libs.reorderable)

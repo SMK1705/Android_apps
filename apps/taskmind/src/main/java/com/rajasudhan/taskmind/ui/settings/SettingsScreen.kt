@@ -65,6 +65,7 @@ fun SettingsScreen(
     val ocrStatus by viewModel.ocrStatus.collectAsState()
     val ocrModelPath = viewModel.ocrModelPath
     val useOnDeviceLlm by viewModel.useOnDeviceLlm.collectAsState()
+    val onDeviceEngine by viewModel.onDeviceEngine.collectAsState()
     val eventDurationMinutes by viewModel.eventDurationMinutes.collectAsState()
     val calendarId by viewModel.calendarId.collectAsState()
     val calendars by viewModel.calendars.collectAsState()
@@ -210,21 +211,42 @@ fun SettingsScreen(
             }
 
             if (useOnDeviceLlm) {
-                OutlinedTextField(
-                    value = modelPath,
-                    onValueChange = { viewModel.updateModelPath(it) },
-                    label = { Text("Model .task path (blank = default)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                val isNano = onDeviceEngine == "nano"
+                // Pick the on-device engine (#214): Gemma via MediaPipe (needs a pushed .task model) or
+                // system Gemini Nano via AICore (zero download, on supported devices like the S25).
                 Text(
-                    "Push a Gemma .task model (e.g. gemma3-4b-it-int4.task). Default location:\n" +
-                        viewModel.defaultModelPath,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    "On-device engine",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BoldFilterChip("Gemma (MediaPipe)", !isNano, { viewModel.updateOnDeviceEngine("mediapipe") })
+                    BoldFilterChip("Gemini Nano", isNano, { viewModel.updateOnDeviceEngine("nano") })
+                }
+                if (isNano) {
+                    Text(
+                        "System Gemini Nano runs through Android AICore — no model to push, nothing leaves " +
+                            "the device. Falls back to Gemma/MediaPipe (then Cloud) if Nano isn't available here.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = modelPath,
+                        onValueChange = { viewModel.updateModelPath(it) },
+                        label = { Text("Model .task path (blank = default)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "Push a Gemma .task model (e.g. gemma3-4b-it-int4.task). Default location:\n" +
+                            viewModel.defaultModelPath,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 OutlinedButton(onClick = { viewModel.checkOnDeviceModel() }) {
-                    Text("Check on-device model")
+                    Text(if (isNano) "Check Gemini Nano" else "Check on-device model")
                 }
                 onDeviceStatus?.let {
                     Text(

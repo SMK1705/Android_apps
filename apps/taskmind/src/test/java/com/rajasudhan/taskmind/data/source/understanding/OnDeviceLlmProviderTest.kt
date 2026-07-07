@@ -16,8 +16,9 @@ class OnDeviceLlmProviderTest {
 
     private val mediaPipe = mockk<MediaPipeEngine>(relaxed = true)
     private val liteRtLm = mockk<LiteRtLmEngine>(relaxed = true)
+    private val nano = mockk<NanoEngine>(relaxed = true)
     private val settings = mockk<SettingsManager>(relaxed = true)
-    private fun provider() = OnDeviceLlmProvider(mediaPipe, liteRtLm, settings)
+    private fun provider() = OnDeviceLlmProvider(mediaPipe, liteRtLm, nano, settings)
 
     @Test
     fun mediapipeSelected_usesMediaPipe() = runTest {
@@ -57,6 +58,26 @@ class OnDeviceLlmProviderTest {
         every { mediaPipe.isModelPresent() } returns false
 
         provider().generate("sys", "user")
+    }
+
+    @Test
+    fun nanoSelected_andAvailable_usesNano() = runTest {
+        every { settings.onDeviceEngine } returns "nano"
+        coEvery { nano.generate(any(), any()) } returns "NANO-out"
+
+        assertEquals("NANO-out", provider().generate("sys", "user"))
+        coVerify(exactly = 0) { mediaPipe.generate(any(), any()) }
+    }
+
+    @Test
+    fun nanoSelected_butUnavailable_fallsBackToMediaPipe() = runTest {
+        // Unsupported device / model not downloaded → Nano throws → MediaPipe runs so on-device still works.
+        every { settings.onDeviceEngine } returns "nano"
+        coEvery { nano.generate(any(), any()) } throws IllegalStateException("Gemini Nano not available")
+        every { mediaPipe.isModelPresent() } returns true
+        coEvery { mediaPipe.generate(any(), any()) } returns "MP-fallback"
+
+        assertEquals("MP-fallback", provider().generate("sys", "user"))
     }
 
     @Test

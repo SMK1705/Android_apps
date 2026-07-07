@@ -25,6 +25,7 @@ import com.rajasudhan.taskmind.data.source.dataStore
 import com.rajasudhan.taskmind.data.source.ocr.OcrEngine
 import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
 import com.rajasudhan.taskmind.data.source.transcription.WhisperTranscriber
+import com.rajasudhan.taskmind.data.source.understanding.OnDeviceEngineOption
 import com.rajasudhan.taskmind.data.source.understanding.OnDeviceLlmProvider
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
 import com.rajasudhan.taskmind.ui.theme.ThemeMode
@@ -176,6 +177,11 @@ class SettingsViewModel @Inject constructor(
     private val _useOnDeviceLlm = MutableStateFlow(settingsManager.useOnDeviceLlm)
     val useOnDeviceLlm: StateFlow<Boolean> = _useOnDeviceLlm
 
+    // Which on-device engine runs extraction (#214): "mediapipe" (Gemma via MediaPipe) or "nano" (system
+    // Gemini Nano via ML Kit / AICore). LiteRT-LM is a scaffold (#222) so it's not offered here yet.
+    private val _onDeviceEngine = MutableStateFlow(settingsManager.onDeviceEngine)
+    val onDeviceEngine: StateFlow<String> = _onDeviceEngine
+
     private val _eventDurationMinutes = MutableStateFlow(settingsManager.eventDurationMinutes)
     val eventDurationMinutes: StateFlow<Int> = _eventDurationMinutes
 
@@ -209,6 +215,12 @@ class SettingsViewModel @Inject constructor(
         _onDeviceStatus.value = null // force a fresh check after a path change
     }
 
+    fun updateOnDeviceEngine(id: String) {
+        settingsManager.onDeviceEngine = id
+        _onDeviceEngine.value = id
+        _onDeviceStatus.value = null // force a fresh check after an engine change
+    }
+
     /** Runs arbitrary text through the real routed pipeline (on-device or cloud) — for testing without SMS. */
     fun runTestExtraction(text: String) {
         if (text.isBlank() || _testRunning.value) return
@@ -227,14 +239,21 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /** Probes whether the on-device Gemma model is present and loads on this device. */
+    /** Probes whether the SELECTED on-device engine (Gemma/MediaPipe or Gemini Nano) is usable here. */
     fun checkOnDeviceModel() {
         viewModelScope.launch {
-            _onDeviceStatus.value = "Checking on-device model…"
-            val err = onDeviceLlm.tryLoad()
+            val isNano = onDeviceLlm.selectedEngineOption() == OnDeviceEngineOption.NANO
+            val engineName = if (isNano) "Gemini Nano" else "Gemma (MediaPipe)"
+            _onDeviceStatus.value = "Checking $engineName…"
+            // The selected engine's OWN status (no fallback), so the label is truthful about what was picked.
+            val err = onDeviceLlm.checkSelectedEngine()
             _onDeviceStatus.value = when {
+                err == null && isNano ->
+                    "✓ Gemini Nano is ready — runs on-device via AICore, zero download, no API cost."
                 err == null ->
                     "✓ On-device Gemma model loaded — runs offline, no API cost."
+                isNano ->
+                    "Gemini Nano isn't usable here: ${err.message ?: err::class.java.simpleName}"
                 !onDeviceLlm.isModelPresent() ->
                     "No model found. Push a Gemma .task file to:\n${onDeviceLlm.modelFile().absolutePath}"
                 else ->
@@ -272,6 +291,7 @@ class SettingsViewModel @Inject constructor(
             _eventDurationMinutes.value = settingsManager.eventDurationMinutes
             _calendarId.value = settingsManager.calendarId
             _modelPath.value = settingsManager.onDeviceModelPath
+            _onDeviceEngine.value = settingsManager.onDeviceEngine // back to the "mediapipe" default
             onDone()
         }
     }
