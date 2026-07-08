@@ -24,6 +24,15 @@ object AskQuery {
         return true
     }
 
+    /**
+     * True if the intent set at least one slot the filter can constrain on (type / tag / window / status
+     * / keyword). When it set none, [matches] returns true for EVERY note — so the caller must treat it as
+     * a content question and search the utterance instead of dumping the whole list (#128).
+     */
+    fun hasAnySlot(intent: AskIntent): Boolean =
+        intent.type != null || intent.tag != null || intent.window != null ||
+            intent.status != null || !intent.keyword.isNullOrBlank()
+
     /** Maps a model-supplied type ("task", "tasks", "todos", …) to the app's stored kind, else itself. */
     fun canonicalType(raw: String?): String? = when (raw?.trim()?.lowercase()) {
         null -> null

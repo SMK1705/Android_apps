@@ -63,6 +63,11 @@ class AskEngine @Inject constructor(
     }
 
     private suspend fun query(intent: AskIntent, today: LocalDate, utterance: String): AskResult {
+        // A query intent with NO slots the filter can use (the model failed to turn a content question
+        // like "what did the electrician quote?" into a keyword) would match EVERY note via
+        // AskQuery.matches and dump the whole list. It's really a content ask — degrade to keyword+semantic
+        // search on the utterance (this is the fall-through RoutingLlmProvider's EMPTY_INTENT relies on).
+        if (!AskQuery.hasAnySlot(intent)) return search(utterance)
         val base = if (isDone(intent)) dao.getCompletedNotes().first() else dao.getActiveNotes().first()
         val matched = base.filter { AskQuery.matches(it, intent, today) }
         if (matched.isNotEmpty()) return AskResult(answerFor(intent, matched.size), matched.take(RESULT_LIMIT))
