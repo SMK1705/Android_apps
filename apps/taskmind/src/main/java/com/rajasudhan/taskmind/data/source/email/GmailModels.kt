@@ -7,7 +7,9 @@ import com.squareup.moshi.JsonClass
 @JsonClass(generateAdapter = true)
 data class GmailMessageList(
     val messages: List<GmailRef> = emptyList(),
-    val resultSizeEstimate: Int = 0
+    val resultSizeEstimate: Int = 0,
+    /** Cursor for the next page of results; null/absent on the last page. */
+    val nextPageToken: String? = null
 )
 
 @JsonClass(generateAdapter = true)

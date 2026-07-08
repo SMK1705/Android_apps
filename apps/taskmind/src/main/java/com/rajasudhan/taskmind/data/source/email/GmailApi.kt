@@ -15,7 +15,9 @@ interface GmailApi {
     suspend fun listMessages(
         @Header("Authorization") authorization: String,
         @Query("q") query: String,
-        @Query("maxResults") maxResults: Int
+        @Query("maxResults") maxResults: Int,
+        // Cursor from a previous page's nextPageToken; null omits the param (first page).
+        @Query("pageToken") pageToken: String? = null
     ): GmailMessageList
 
     @GET("users/me/messages/{id}")
