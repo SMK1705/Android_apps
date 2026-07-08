@@ -12,6 +12,7 @@ import com.rajasudhan.taskmind.data.source.GeofenceManager
 import com.rajasudhan.taskmind.data.source.PlaceGeocoder
 import com.rajasudhan.taskmind.data.source.RecurrenceUtil
 import com.rajasudhan.taskmind.data.source.SettingsManager
+import com.rajasudhan.taskmind.data.source.embedding.SemanticIndex
 import com.rajasudhan.taskmind.data.source.understanding.LlmProvider
 import com.rajasudhan.taskmind.data.source.understanding.MagicBreakdown
 import com.rajasudhan.taskmind.data.source.understanding.OnDeviceLlmProvider
@@ -35,6 +36,7 @@ class NoteDetailViewModel @Inject constructor(
     private val placeGeocoder: PlaceGeocoder,
     private val completionRecurrence: CompletionRecurrence,
     private val calendarMirror: CalendarMirror,
+    private val semanticIndex: SemanticIndex,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -147,6 +149,9 @@ class NoteDetailViewModel @Inject constructor(
         if (title.isBlank() || title == current.title) return
         viewModelScope.launch {
             dao.updateNote(current.copy(title = title))
+            // Refresh the note's semantic vector so search/dedup reflect the new title, not the stale text
+            // it was indexed under at approval (#A2). upsert, so it just replaces the old vector.
+            semanticIndex.index(current.id, title, current.summary)
             if (current.type == "reminder" && current.dueTime != null) {
                 alarmScheduler.schedule(current.id, title, current.dueDate, current.dueTime, current.recurrence, current.recurrenceAnchorDay)
                 // Re-arming cancels any in-flight nag re-fire (schedule → cancelRefire), so the chain is
@@ -164,7 +169,11 @@ class NoteDetailViewModel @Inject constructor(
         val current = note.value ?: return
         val summary = newSummary.trim()
         if (summary == current.summary) return
-        viewModelScope.launch { dao.updateNote(current.copy(summary = summary)) }
+        viewModelScope.launch {
+            dao.updateNote(current.copy(summary = summary))
+            // Keep the semantic vector in step with the edited summary (see updateTitle / #A2).
+            semanticIndex.index(current.id, current.title, summary)
+        }
     }
 
     /** Set the item's priority flag ("low" / "normal" / "high"). */
