@@ -91,6 +91,9 @@ class TaskMindApp : Application(), Configuration.Provider, AppFunctionConfigurat
         recurrenceDetectorScheduler.schedule()
         // Keep the paired watch's next-due tile fresh (#216). KEEPs any existing schedule on launch.
         wearSyncScheduler.schedule()
+        // …and re-publish the moment the due set changes (#245), so the tile isn't stale for up to 30 min
+        // after an approve/complete/snooze/reschedule/delete.
+        wearSyncScheduler.observeDueChanges()
     }
 
     companion object {
