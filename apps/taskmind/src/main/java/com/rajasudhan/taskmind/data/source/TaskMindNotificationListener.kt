@@ -41,17 +41,10 @@ class TaskMindNotificationListener : NotificationListenerService() {
     }
     private val scope = CoroutineScope(Dispatchers.IO + job + exceptionHandler)
 
-    // In-memory, time-boxed suppression of RAPID unchanged re-posts (token -> last-handled millis).
-    // Deliberately NOT persisted: it must forget quickly so a later distinct event with identical
-    // content on the same key is re-captured (the persistent ledger is the sweep's job, not this).
-    private val recentLiveTokens = java.util.concurrent.ConcurrentHashMap<String, Long>()
-
-    /** True if [token] was handled on the live path within [RECENT_REPOST_WINDOW_MS]; records it as now. */
-    private fun isRecentLiveRepost(token: String, now: Long): Boolean {
-        recentLiveTokens.values.removeIf { now - it > RECENT_REPOST_WINDOW_MS } // prune expired
-        val prev = recentLiveTokens.put(token, now)
-        return prev != null && now - prev <= RECENT_REPOST_WINDOW_MS
-    }
+    // Time-boxed suppression of RAPID unchanged re-posts on the live path. Records a token only AFTER the
+    // message is handled (see [RecentRepostGuard]), so a first attempt that throws isn't suppressed before
+    // it ever succeeded — a re-post that lands while the first is still failing is still captured (#N5).
+    private val recentReposts = RecentRepostGuard(RECENT_REPOST_WINDOW_MS)
 
     companion object {
         private const val TAG = "TaskMindNotifListener"
@@ -194,7 +187,7 @@ class TaskMindNotificationListener : NotificationListenerService() {
             // dedup gets to decide. Evolving content hashes to a new token and is always processed.
             if (fromSweep) {
                 if (parsed.token in sourceManager.processedNotificationKeys.first()) return@launch
-            } else if (isRecentLiveRepost(parsed.token, System.currentTimeMillis())) {
+            } else if (recentReposts.seen(parsed.token, System.currentTimeMillis())) {
                 return@launch
             }
             // A "waiting on <this sender>" item: now they've been in touch, raise a one-tap "did they
@@ -230,6 +223,10 @@ class TaskMindNotificationListener : NotificationListenerService() {
             // won't reprocess it. A throw above skips this — the exception handler logs it — so it's
             // retried next time.
             sourceManager.addProcessedNotificationKeys(listOf(parsed.token))
+            // Live path only: record the in-memory rapid-repost token now that handling has actually
+            // succeeded (recording it during the dedup check would suppress a re-post that lands while the
+            // first attempt is still failing). The sweep relies on the persistent ledger above instead.
+            if (!fromSweep) recentReposts.record(parsed.token, System.currentTimeMillis())
         }
     }
 
