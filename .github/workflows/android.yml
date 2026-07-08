@@ -32,6 +32,23 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # The native Whisper second pass (#207) provisions the NDK (~1 GB) on first CMake configure and
+      # FetchContent-clones + compiles whisper.cpp per ABI — the slowest part of the build. Cache both so
+      # only the first run (or a change to the native inputs) pays that cost; #240 CI follow-up.
+      - name: Cache Android NDK
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.ANDROID_SDK_ROOT }}/ndk
+          key: ndk-${{ runner.os }}-27.0.12077973
+
+      - name: Cache native build (whisper.cpp compile + FetchContent clone)
+        uses: actions/cache@v4
+        with:
+          # Exact-key only (no restore-keys): reuse the cached compile ONLY when every native input is
+          # identical; any change to the CMake/JNI/ABI config rebuilds cleanly instead of risking stale objects.
+          path: apps/taskmind/.cxx
+          key: cxx-${{ runner.os }}-${{ hashFiles('apps/taskmind/src/main/cpp/**', 'apps/taskmind/build.gradle.kts') }}
+
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 

@@ -12,10 +12,13 @@ import javax.inject.Singleton
 /**
  * Whisper second-pass transcription (#126) — the second [TranscriptionProvider] behind the seam, more
  * accurate than Vosk on accents and Hindi/Tamil/English code-switching. Like Vosk, the model is NOT
- * bundled: adb-push a quantized ggml model to `filesDir/whisper-model.bin` (shown in Settings).
+ * bundled: install a quantized ggml model to `filesDir/whisper-model.bin` via the one-tap download in
+ * Settings (#241), or adb-push your own there.
  *
- * The actual whisper.cpp inference lives in [WhisperEngine]; its native binding is deferred to #207, so
- * until that lands [WhisperEngine.isAvailable] is false and this transcriber is a graceful no-op.
+ * The actual whisper.cpp inference lives in [WhisperEngine]; its native binding landed in #207, so the
+ * second pass runs once the model is present. If the native lib is missing (a build without the native
+ * module, or an unsupported ABI) [WhisperEngine.isAvailable] is false and this transcriber gracefully
+ * no-ops onto the Vosk first pass.
  */
 @Singleton
 class WhisperTranscriber @Inject constructor(
