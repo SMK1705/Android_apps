@@ -47,6 +47,31 @@ class OnDeviceLlmProvider @Inject constructor(
         }
     }
 
+    /**
+     * On-device vision is available only when the selected engine can see AND its model is present (#226) —
+     * so on a device where Nano isn't provisioned, this stays false and [RoutingLlmProvider] can route a
+     * screenshot to the cloud vision path (if a key is set) instead of trying an engine that can't run. There
+     * is no MediaPipe vision fallback (it's text-only), so unlike [generate] this does not widen to MediaPipe.
+     */
+    override fun supportsVision(): Boolean = selected().let { it.supportsVision() && it.isModelPresent() }
+
+    /** Delegate multimodal extraction to the selected engine when it can see; null otherwise (→ OCR fallback). */
+    override suspend fun generateFromMedia(
+        systemMessage: String,
+        userMessage: String,
+        media: MediaInput,
+    ): String? {
+        val engine = selected()
+        return if (engine.supportsVision()) engine.generateFromMedia(systemMessage, userMessage, media) else null
+    }
+
+    /**
+     * Kick off the system Gemini Nano download (#226) with 0..100 progress; null on success, else the failure.
+     * Only meaningful when Nano is the selected engine and reports `DOWNLOADABLE`; the caller (Settings) gates
+     * the action on that.
+     */
+    suspend fun downloadNano(onProgress: (Int) -> Unit): Throwable? = nano.download(onProgress)
+
     /** On-device is usable if the selected engine has its model, or MediaPipe (the fallback) does. */
     fun isModelPresent(): Boolean = selected().isModelPresent() || mediaPipe.isModelPresent()
 

@@ -39,4 +39,19 @@ interface OnDeviceEngine {
 
     /** Attempts to load the model; null on success, else the failure (for diagnostics / availability). */
     suspend fun tryLoad(): Throwable?
+
+    /**
+     * Whether this engine can read an image directly (#226, Gemma 3n migration Phase 2 — on-device). Default
+     * **false** so text-only engines (MediaPipe, LiteRT-LM today) need no change; only a vision-capable
+     * engine (Gemini Nano) overrides it.
+     */
+    fun supportsVision(): Boolean = false
+
+    /**
+     * Multimodal image extraction on-device: run this engine over [media] with a text instruction, returning
+     * the same extraction-JSON contract as [generate]. Returns **null** when the engine can't see (non-vision
+     * engine, non-image mime, unreadable image, or an inference failure) so the caller falls back to the OCR
+     * path — mirroring [CloudLlmProvider.generateFromMedia]. Default no-op null; only a vision engine overrides.
+     */
+    suspend fun generateFromMedia(systemMessage: String, userMessage: String, media: MediaInput): String? = null
 }

@@ -70,6 +70,7 @@ fun SettingsScreen(
     val llmModelPresent by viewModel.llmModelPresent.collectAsState()
     val llmStatus by viewModel.llmStatus.collectAsState()
     val hfToken by viewModel.hfToken.collectAsState()
+    val nanoStatus by viewModel.nanoStatus.collectAsState()
     val settingsContext = LocalContext.current
     val eventDurationMinutes by viewModel.eventDurationMinutes.collectAsState()
     val calendarId by viewModel.calendarId.collectAsState()
@@ -235,6 +236,15 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    // Explicit download action (#226): on a device where Nano is downloadable-but-not-installed,
+                    // fetch it via AICore with progress instead of blocking a first extraction on the download.
+                    Button(
+                        onClick = { viewModel.downloadNano() },
+                        enabled = nanoStatus?.startsWith("Downloading") != true
+                    ) { Text("Download Gemini Nano") }
+                    nanoStatus?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 } else {
                     OutlinedTextField(
                         value = modelPath,

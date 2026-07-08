@@ -295,6 +295,22 @@ class SettingsViewModel @Inject constructor(
         _llmStatus.value = if (freedMb > 0) "Removed — freed ~$freedMb MB." else "No model to remove."
     }
 
+    // ---- Gemini Nano download (#226): system AICore model, no HF token or URL needed ----
+    private val _nanoStatus = MutableStateFlow<String?>(null)
+    val nanoStatus: StateFlow<String?> = _nanoStatus
+
+    /** Kick off the system Gemini Nano download (via AICore), reporting progress. */
+    fun downloadNano() {
+        viewModelScope.launch {
+            _nanoStatus.value = "Downloading Gemini Nano… 0%"
+            val err = onDeviceLlm.downloadNano { pct -> _nanoStatus.value = "Downloading Gemini Nano… $pct%" }
+            _nanoStatus.value = when {
+                err != null -> "Nano download failed: ${err.message ?: err::class.java.simpleName}"
+                else -> "✓ Gemini Nano downloaded — tap “Check on-device model” to load it."
+            }
+        }
+    }
+
     fun updateUseOnDeviceLlm(useOnDevice: Boolean) {
         settingsManager.useOnDeviceLlm = useOnDevice
         _useOnDeviceLlm.value = useOnDevice

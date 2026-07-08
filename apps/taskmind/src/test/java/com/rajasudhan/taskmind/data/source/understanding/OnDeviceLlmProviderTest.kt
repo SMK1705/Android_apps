@@ -8,6 +8,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -113,5 +114,55 @@ class OnDeviceLlmProviderTest {
         coEvery { mediaPipe.tryLoad() } returns null // MediaPipe loads fine
 
         assertTrue(provider().isAvailable())
+    }
+
+    // ---- On-device vision delegation (#226) ----
+
+    @Test
+    fun supportsVision_trueWhenNanoSelected_visionCapable_andPresent() {
+        every { settings.onDeviceEngine } returns "nano"
+        every { nano.supportsVision() } returns true
+        every { nano.isModelPresent() } returns true
+
+        assertTrue(provider().supportsVision())
+    }
+
+    @Test
+    fun supportsVision_falseWhenNanoSelected_butModelNotPresent() {
+        // Nano not provisioned here → on-device vision reports false so routing can use cloud vision instead.
+        every { settings.onDeviceEngine } returns "nano"
+        every { nano.supportsVision() } returns true
+        every { nano.isModelPresent() } returns false
+
+        assertFalse(provider().supportsVision())
+    }
+
+    @Test
+    fun supportsVision_falseForTextOnlyEngine() {
+        every { settings.onDeviceEngine } returns "mediapipe"
+        every { mediaPipe.supportsVision() } returns false
+        every { mediaPipe.isModelPresent() } returns true
+
+        assertFalse(provider().supportsVision())
+    }
+
+    @Test
+    fun generateFromMedia_delegatesToSelectedVisionEngine() = runTest {
+        every { settings.onDeviceEngine } returns "nano"
+        every { nano.supportsVision() } returns true
+        val media = mockk<MediaInput>(relaxed = true)
+        coEvery { nano.generateFromMedia(any(), any(), media) } returns "NANO-vision"
+
+        assertEquals("NANO-vision", provider().generateFromMedia("sys", "user", media))
+    }
+
+    @Test
+    fun generateFromMedia_nullWhenSelectedEngineCannotSee() = runTest {
+        every { settings.onDeviceEngine } returns "mediapipe"
+        every { mediaPipe.supportsVision() } returns false
+        val media = mockk<MediaInput>(relaxed = true)
+
+        assertNull(provider().generateFromMedia("sys", "user", media))
+        coVerify(exactly = 0) { mediaPipe.generateFromMedia(any(), any(), any()) }
     }
 }
