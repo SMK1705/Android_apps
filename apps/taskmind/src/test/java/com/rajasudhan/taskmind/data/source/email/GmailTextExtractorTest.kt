@@ -30,6 +30,37 @@ class GmailTextExtractorTest {
     }
 
     @Test
+    fun decodesBodyUsingThePartsDeclaredCharset_notAlwaysUtf8() {
+        // #G2: "Café at 3pm" in ISO-8859-1 — 'é' is a single 0xE9 byte; decoding those bytes as UTF-8
+        // mojibakes it. The part's Content-Type charset must drive the decode.
+        val latin1 = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString("Café at 3pm".toByteArray(Charsets.ISO_8859_1))
+        val payload = GmailPayload(
+            mimeType = "text/plain",
+            headers = listOf(GmailHeader("Content-Type", "text/plain; charset=ISO-8859-1")),
+            body = GmailBody(data = latin1)
+        )
+        assertEquals("Café at 3pm", GmailTextExtractor.extractBodyText(payload))
+    }
+
+    @Test
+    fun decodeBody_defaultsToUtf8_andHonoursAnExplicitCharset() {
+        val eLatin1 = Base64.getUrlEncoder().withoutPadding().encodeToString("é".toByteArray(Charsets.ISO_8859_1))
+        // Default UTF-8 can't decode the lone 0xE9 byte -> replacement char...
+        assertEquals("�", GmailTextExtractor.decodeBody(eLatin1))
+        // ...but the right charset recovers it.
+        assertEquals("é", GmailTextExtractor.decodeBody(eLatin1, Charsets.ISO_8859_1))
+    }
+
+    @Test
+    fun charsetFor_readsContentType_andFallsBackToUtf8() {
+        assertEquals(Charsets.ISO_8859_1, GmailTextExtractor.charsetFor(listOf(GmailHeader("Content-Type", "text/plain; charset=iso-8859-1"))))
+        assertEquals(Charsets.UTF_8, GmailTextExtractor.charsetFor(listOf(GmailHeader("Content-Type", "text/plain"))))
+        assertEquals(Charsets.UTF_8, GmailTextExtractor.charsetFor(emptyList()))
+        assertEquals(Charsets.UTF_8, GmailTextExtractor.charsetFor(listOf(GmailHeader("Content-Type", "text/plain; charset=totally-bogus"))))
+    }
+
+    @Test
     fun extractsPlainTextDirectly() {
         val payload = GmailPayload(
             mimeType = "text/plain",
