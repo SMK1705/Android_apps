@@ -1,5 +1,6 @@
 package com.rajasudhan.taskmind.data.source.email
 
+import java.nio.charset.Charset
 import java.util.Base64
 
 /**
@@ -13,17 +14,31 @@ object GmailTextExtractor {
     fun header(headers: List<GmailHeader>, name: String): String? =
         headers.firstOrNull { it.name.equals(name, ignoreCase = true) }?.value
 
-    /** Decodes Gmail's base64url body data (tolerant of missing padding); null on empty/failure. */
-    fun decodeBody(data: String?): String? {
+    /**
+     * Decodes Gmail's base64url body data (tolerant of missing padding) using [charset]; null on
+     * empty/failure. Gmail's `format=full` already transfer-decodes the Content-Transfer-Encoding, so the
+     * bytes are the raw body — but in the *part's* charset, which is NOT always UTF-8. Callers pass the
+     * charset from the part's Content-Type (see [charsetFor]) so an ISO-8859-1 / windows-1252 / Shift_JIS
+     * body isn't mojibake'd by a hardcoded UTF-8 decode.
+     */
+    fun decodeBody(data: String?, charset: Charset = Charsets.UTF_8): String? {
         if (data.isNullOrBlank()) return null
         return try {
             val cleaned = data.trim().replace("\n", "").replace("\r", "")
             // Pad to a multiple of 4 so the strict decoder is happy with unpadded Gmail data.
             val padded = cleaned.padEnd((cleaned.length + 3) / 4 * 4, '=')
-            String(Base64.getUrlDecoder().decode(padded), Charsets.UTF_8)
+            String(Base64.getUrlDecoder().decode(padded), charset)
         } catch (e: Exception) {
             null
         }
+    }
+
+    /** The charset named in a part's `Content-Type: …; charset=…` header, or UTF-8 when absent/unknown. */
+    fun charsetFor(headers: List<GmailHeader>): Charset {
+        val contentType = header(headers, "Content-Type") ?: return Charsets.UTF_8
+        val name = Regex("(?i);\\s*charset=\"?([^\";\\s]+)\"?").find(contentType)?.groupValues?.get(1)
+            ?: return Charsets.UTF_8
+        return runCatching { Charset.forName(name) }.getOrDefault(Charsets.UTF_8)
     }
 
     /**
@@ -39,7 +54,7 @@ object GmailTextExtractor {
 
     private fun firstPartText(payload: GmailPayload, mimeType: String): String? {
         if (payload.mimeType.equals(mimeType, ignoreCase = true)) {
-            decodeBody(payload.body?.data)?.let { if (it.isNotBlank()) return it }
+            decodeBody(payload.body?.data, charsetFor(payload.headers))?.let { if (it.isNotBlank()) return it }
         }
         for (part in payload.parts) {
             firstPartText(part, mimeType)?.let { return it }
