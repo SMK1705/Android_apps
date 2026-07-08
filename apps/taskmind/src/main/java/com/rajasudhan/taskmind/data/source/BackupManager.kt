@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
+import androidx.annotation.VisibleForTesting
 import com.rajasudhan.taskmind.data.local.TaskMindDatabase
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
@@ -115,9 +116,13 @@ class BackupManager @Inject constructor(
             val staged = File(dbFile.path + ".restore")
             try {
                 staged.outputStream().use { it.write(data) }
-                if (!opensWithKey(staged.path, key)) {
-                    return Result.Failure("Backup couldn't be opened with its key — not restoring.")
-                }
+                val stagedVersion = schemaVersionWithKey(staged.path, key)
+                    ?: return Result.Failure("Backup couldn't be opened with its key — not restoring.")
+                // Refuse a backup from a NEWER app build up front: Room can't downgrade, so committing it
+                // would swap in a DB that fails to open on the mandatory restart and gets quarantined into
+                // an empty database — after we'd already reported "restore complete". Leave the current
+                // install untouched and tell the user to update first.
+                newerSchemaRejectionMessage(stagedVersion)?.let { return Result.Failure(it) }
 
                 // Park the matching key in a pending slot BEFORE the swap. If the process dies in the
                 // window between the swap and the primary-key commit below, the next launch finds the
@@ -222,23 +227,25 @@ class BackupManager @Inject constructor(
     }
 
     /**
-     * True if the SQLCipher database at [path] opens and reads with [keyBase64] (the same base64 raw
-     * key Room uses). Read-only and self-contained: opens its own connection, runs a trivial query,
-     * and closes. Used to validate a staged restore before swapping it over the live DB.
+     * The schema (`user_version`) of the SQLCipher database at [path] if it opens and reads with
+     * [keyBase64] (the same base64 raw key Room uses), or null if it can't be opened with that key.
+     * Read-only and self-contained: opens its own connection, runs a trivial query to prove the key,
+     * reads the version, and closes. Used to validate a staged restore — both that the key is right AND
+     * that the schema isn't newer than this build can open — before swapping it over the live DB.
      */
-    private fun opensWithKey(path: String, keyBase64: String): Boolean = try {
+    private fun schemaVersionWithKey(path: String, keyBase64: String): Int? = try {
         System.loadLibrary("sqlcipher") // no-op if already loaded by the DI graph
         val rawKey = android.util.Base64.decode(keyBase64, android.util.Base64.NO_WRAP)
         // Read-only open (no hook) so a bad key fails instead of creating/altering the staged file.
         val db = SQLiteDatabase.openDatabase(path, rawKey, null, SQLiteDatabase.OPEN_READONLY, null)
         try {
-            db.rawQuery("SELECT count(*) FROM sqlite_master", null).use { it.moveToFirst() }
-            true
+            db.rawQuery("SELECT count(*) FROM sqlite_master", null).use { it.moveToFirst() } // wrong key throws here
+            db.rawQuery("PRAGMA user_version", null).use { if (it.moveToFirst()) it.getInt(0) else 0 }
         } finally {
             db.close()
         }
     } catch (t: Throwable) {
-        false
+        null
     }
 
     /** Relaunches the app shortly after exiting — used after a restore so Room reopens cleanly. */
@@ -266,5 +273,18 @@ class BackupManager @Inject constructor(
          * because the DB open path reads it to promote a pending key.
          */
         const val DB_KEY_PENDING = "db_key_pending"
+
+        /**
+         * The failure message when a staged restore's schema [stagedVersion] is newer than this build's
+         * [TaskMindDatabase.SCHEMA_VERSION] (Room can't open a newer DB), or null when it's restorable.
+         * Split out so the boundary — strictly newer is rejected; same-or-older is fine (Room migrates
+         * an older backup forward) — is unit-testable without the SQLCipher native lib.
+         */
+        @VisibleForTesting
+        internal fun newerSchemaRejectionMessage(stagedVersion: Int): String? =
+            if (stagedVersion > TaskMindDatabase.SCHEMA_VERSION)
+                "This backup was made by a newer version of TaskMind (database v$stagedVersion; this " +
+                    "app supports up to v${TaskMindDatabase.SCHEMA_VERSION}). Update TaskMind, then restore."
+            else null
     }
 }

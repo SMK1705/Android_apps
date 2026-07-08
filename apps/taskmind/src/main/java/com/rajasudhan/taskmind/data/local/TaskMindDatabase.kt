@@ -11,13 +11,21 @@ import com.rajasudhan.taskmind.data.model.Suggestion
 
 @Database(
     entities = [Note::class, Suggestion::class, RejectedPattern::class, NoteEmbedding::class],
-    version = 18,
+    version = TaskMindDatabase.SCHEMA_VERSION,
     exportSchema = true
 )
 abstract class TaskMindDatabase : RoomDatabase() {
     abstract fun taskMindDao(): TaskMindDao
 
     companion object {
+        /**
+         * The current Room schema version — single source of truth for [Database.version] AND for
+         * BackupManager's guard that refuses a backup made by a NEWER app build (Room can't downgrade,
+         * so restoring one would swap in a DB that fails to open and gets quarantined into an empty one).
+         * Bump this in lockstep with each new migration below.
+         */
+        const val SCHEMA_VERSION = 18
+
         /** v2 adds a one-line `summary` column to both tables (existing rows default to ""). */
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
