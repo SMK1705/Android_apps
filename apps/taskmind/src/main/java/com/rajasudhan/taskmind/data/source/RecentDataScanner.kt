@@ -64,21 +64,27 @@ class RecentDataScanner @Inject constructor(
     }
 
     suspend fun scanSince(sinceMillis: Long) {
-        if (sourceManager.isSmsEnabled.first()) runCatching { scanSms(sinceMillis) }
-        if (sourceManager.isCallLogEnabled.first()) runCatching { scanCalls(sinceMillis) }
-        if (sourceManager.isEmailEnabled.first()) runCatching { scanEmail(sinceMillis) }
+        // Clamp each source's window to when it was turned on, so enabling a source captures forward-only
+        // instead of backfilling up to 24h of history (a 0 stamp — existing/legacy — leaves it unchanged).
+        if (sourceManager.isSmsEnabled.first()) runCatching { scanSms(maxOf(sinceMillis, sourceManager.smsEnabledAt.first())) }
+        if (sourceManager.isCallLogEnabled.first()) runCatching { scanCalls(maxOf(sinceMillis, sourceManager.callLogEnabledAt.first())) }
+        if (sourceManager.isEmailEnabled.first()) runCatching { scanEmail(maxOf(sinceMillis, sourceManager.emailEnabledAt.first())) }
         if (sourceManager.isAppUsageEnabled.first()) runCatching { appUsageCollector.generateDailyDigestIfDue() }
-        if (sourceManager.isAudioEnabled.first()) runCatching { scanAudio(sinceMillis) }
-        if (sourceManager.isImagesEnabled.first()) runCatching { scanImages(sinceMillis) }
+        if (sourceManager.isAudioEnabled.first()) runCatching { scanAudio(maxOf(sinceMillis, sourceManager.audioEnabledAt.first())) }
+        if (sourceManager.isImagesEnabled.first()) runCatching { scanImages(maxOf(sinceMillis, sourceManager.imagesEnabledAt.first())) }
     }
 
     /** Live entry points used by the foreground-service media observers (last few minutes only). */
     suspend fun scanAudioRecent() {
-        if (sourceManager.isAudioEnabled.first()) runCatching { scanAudio(System.currentTimeMillis() - 5 * 60 * 1000) }
+        if (sourceManager.isAudioEnabled.first()) runCatching {
+            scanAudio(maxOf(System.currentTimeMillis() - 5 * 60 * 1000, sourceManager.audioEnabledAt.first()))
+        }
     }
 
     suspend fun scanImagesRecent() {
-        if (sourceManager.isImagesEnabled.first()) runCatching { scanImages(System.currentTimeMillis() - 5 * 60 * 1000) }
+        if (sourceManager.isImagesEnabled.first()) runCatching {
+            scanImages(maxOf(System.currentTimeMillis() - 5 * 60 * 1000, sourceManager.imagesEnabledAt.first()))
+        }
     }
 
     private suspend fun scanSms(since: Long) {
