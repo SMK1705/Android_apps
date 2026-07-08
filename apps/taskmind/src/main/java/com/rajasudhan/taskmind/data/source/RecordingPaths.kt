@@ -25,4 +25,33 @@ object RecordingPaths {
         if (meaningful.isEmpty()) return null
         return meaningful.takeLast(maxSegments).joinToString("/")
     }
+
+    /**
+     * Folder fragments that call/voice recorders write to across common OEMs and popular third-party
+     * apps, scanned IN ADDITION to the user's configured Call/Voice folders so recording capture works
+     * out-of-the-box on more than just Samsung (whose layout the defaults were shaped for). Each is a
+     * `RELATIVE_PATH LIKE '%fragment%'` term, kept specific to recording folders — never a generic
+     * "Music"/"Ringtones" — and always paired with the scan's `IS_MUSIC = 0` guard, so general audio is
+     * not swept in. Not exhaustive across every OEM/region; the folder stays user-configurable in Settings.
+     */
+    val COMMON_RECORDING_PATTERNS = listOf(
+        "Recordings/Call",            // Samsung One UI 5.1+ call recordings
+        "Recordings/Voice Recorder",  // Samsung Voice Recorder
+        "Call Recordings",            // common across popular third-party call recorders…
+        "CallRecordings",
+        "CallRecorder",
+        "Call recording",
+        "PhoneRecord",                // some OEM / older builds
+        "MIUI/sound_recorder",        // Xiaomi call + voice recordings
+    )
+
+    /**
+     * The de-duplicated set of `RELATIVE_PATH LIKE` fragments to scan for recordings: the user's
+     * configured Call and Voice folders (mapped via [relativePattern]) unioned with
+     * [COMMON_RECORDING_PATTERNS]. Never empty, so the scan always has a bounded folder clause rather
+     * than an empty one (matches nothing) or an unbounded `%%` (sweeps in every recording).
+     */
+    fun scanPatterns(callPath: String, voicePath: String): List<String> =
+        (listOfNotNull(relativePattern(callPath), relativePattern(voicePath)) + COMMON_RECORDING_PATTERNS)
+            .distinct()
 }

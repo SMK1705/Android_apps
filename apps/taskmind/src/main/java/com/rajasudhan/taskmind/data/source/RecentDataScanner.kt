@@ -221,14 +221,14 @@ class RecentDataScanner @Inject constructor(
         val processed = sourceManager.processedAudioIds.first()
         val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         val projection = arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DISPLAY_NAME)
-        // Honour the user-configured Call / Voice recording folders (Settings → Sources) instead of a
-        // hardcoded filter; fall back to the common folder names if both are blank so we never build an
-        // empty clause (which would match nothing) or an unbounded one.
-        val patterns = listOf(
+        // Scan the user-configured Call / Voice recording folders (Settings → Sources) UNIONED with the
+        // common recorder folders across OEMs (RecordingPaths.COMMON_RECORDING_PATTERNS), so capture works
+        // out-of-the-box beyond Samsung — e.g. a Pixel/other-OEM user with a third-party recorder need not
+        // reconfigure. IS_MUSIC = 0 below keeps general audio out. Never empty (no match-nothing/unbounded).
+        val patterns = RecordingPaths.scanPatterns(
             sourceManager.callRecordingPath.first(),
             sourceManager.voiceRecordingPath.first(),
-        ).mapNotNull { RecordingPaths.relativePattern(it) }.distinct()
-            .ifEmpty { listOf("Recordings", "Call") }
+        )
         val pathClause = patterns.joinToString(" OR ") { "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?" }
         val selection = "${MediaStore.Audio.Media.DATE_MODIFIED} >= ? AND " +
             "${MediaStore.Audio.Media.IS_MUSIC} = 0 AND ($pathClause)"
