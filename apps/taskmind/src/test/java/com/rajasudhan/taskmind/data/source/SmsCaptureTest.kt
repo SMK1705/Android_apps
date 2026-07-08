@@ -6,6 +6,7 @@ import android.content.Context
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
+import android.provider.CallLog
 import android.provider.Telephony
 import androidx.datastore.preferences.core.edit
 import androidx.test.core.app.ApplicationProvider
@@ -41,10 +42,26 @@ class SmsCaptureTest {
     fun setUp() {
         Robolectric.setupContentProvider(FakeSmsProvider::class.java, "sms")
         FakeSmsProvider.rows = emptyList()
+        Robolectric.setupContentProvider(FakeCallLogProvider::class.java, CallLog.AUTHORITY)
+        FakeCallLogProvider.rows = emptyList()
     }
 
     /** Each element is a row: [_id: Long, address: String?, body: String?]. */
     private fun rows(vararg r: Array<Any?>) { FakeSmsProvider.rows = r.toList() }
+
+    /** Each element is a call row: [number, type: Int, duration, cachedName, date: Long]. */
+    private fun callRows(vararg r: Array<Any?>) { FakeCallLogProvider.rows = r.toList() }
+
+    /** A SourceManager mock with only the call-log source enabled (forward-only clamp at 0). */
+    private fun callLogSourceManager() = mockk<SourceManager>(relaxed = true).also { sm ->
+        every { sm.isSmsEnabled } returns flowOf(false)
+        every { sm.isCallLogEnabled } returns flowOf(true)
+        every { sm.callLogEnabledAt } returns flowOf(0L)
+        every { sm.isEmailEnabled } returns flowOf(false)
+        every { sm.isAppUsageEnabled } returns flowOf(false)
+        every { sm.isAudioEnabled } returns flowOf(false)
+        every { sm.isImagesEnabled } returns flowOf(false)
+    }
 
     /** A SourceManager mock with only the SMS source enabled and a given processed-id set. */
     private fun sourceManager(processed: Set<String> = emptySet()) = mockk<SourceManager>(relaxed = true).also { sm ->
@@ -55,6 +72,10 @@ class SmsCaptureTest {
         every { sm.isAudioEnabled } returns flowOf(false)
         every { sm.isImagesEnabled } returns flowOf(false)
         every { sm.processedSmsIds } returns flowOf(processed)
+        // #243 added a forward-only `smsEnabledAt` clamp to scanSince (`maxOf(since, smsEnabledAt.first())`).
+        // A relaxed mock returns an empty flow whose .first() throws NoSuchElementException, which
+        // scanSince swallows so scanSms never runs — silently reddening every scanSms_* assertion below.
+        every { sm.smsEnabledAt } returns flowOf(0L)
     }
 
     /** A SettingsManager mock whose lastProcessedSmsId watermark is a controllable, mutable var. */
@@ -232,6 +253,72 @@ class SmsCaptureTest {
         coVerify(exactly = 0) { sm.addProcessedSmsIds(any()) }
     }
 
+    @Test
+    fun observer_start_reSeedsWatermark_whenInitRanBeforePermission_soHistoryIsNotReplayed() = runTest {
+        // #249: init seeded -1 because READ_SMS wasn't granted when the @Singleton was constructed at
+        // service onCreate. start() (called when SMS is enabled, permission now held) must re-seed to the
+        // newest existing id, else the first onChange queries `_ID > -1` and replays the whole inbox.
+        rows(
+            arrayOf<Any?>(700L, "+15550001", "old one"),
+            arrayOf<Any?>(701L, "+15550002", "old two"),
+        )
+        val sm = mockk<SourceManager>(relaxed = true)
+        val observer = SmsObserver(context, pipeline, sm)
+        observer.lastSmsId = -1 // simulate the permission-less init (getLastSmsId() returned -1)
+
+        observer.start()
+        assertEquals(701L, observer.lastSmsId) // re-seeded to the current newest id
+
+        // A message that arrives after start is processed; the pre-existing history is not replayed.
+        rows(
+            arrayOf<Any?>(700L, "+15550001", "old one"),
+            arrayOf<Any?>(701L, "+15550002", "old two"),
+            arrayOf<Any?>(702L, "+15550003", "brand new"),
+        )
+        observer.processNewSms()
+
+        coVerify(exactly = 1) { pipeline.processText("SMS from +15550003", "brand new") }
+        coVerify(exactly = 1) { pipeline.processText(any(), any()) }
+        observer.stop()
+    }
+
+    @Test
+    fun observer_start_preservesAnAlreadyValidWatermark_noReReadOnReEnable() = runTest {
+        // A prior enable left a valid watermark; re-enabling (start() again) must NOT reset it to newest,
+        // which would drop anything that arrived while disabled (the periodic scanner recovers that gap).
+        rows(arrayOf<Any?>(800L, "+1", "later"))
+        val sm = mockk<SourceManager>(relaxed = true)
+        val observer = SmsObserver(context, pipeline, sm)
+        observer.lastSmsId = 750L // a valid watermark from an earlier enable
+
+        observer.start()
+
+        assertEquals(750L, observer.lastSmsId) // unchanged
+        observer.stop()
+    }
+
+    // ---------------- #250: scanCalls per-row isolation ----------------
+
+    @Test
+    fun scanCalls_oneRowFailing_doesNotAbortTheBatch_soLaterRowsStillCaptured() = runTest {
+        // A throwing row (e.g. a cloud-LLM network error surfacing from processText) must not drop the
+        // rest: the call log has no processed-id ledger, so any rows left unscanned when lastScanAt
+        // advances are lost for good. Mirrors scanSms_oneRowFailing_doesNotStopTheRest.
+        callRows(
+            arrayOf<Any?>("+15550001", CallLog.Calls.INCOMING_TYPE, "30", null, 100L),
+            arrayOf<Any?>("+15550002", CallLog.Calls.INCOMING_TYPE, "45", null, 100L),
+        )
+        coEvery {
+            pipeline.processText("Call Log", "Incoming call with +15550001 lasting 30 seconds.")
+        } throws RuntimeException("network down")
+        val sm = callLogSourceManager()
+
+        scanner(sm).scanSince(0L)
+
+        // The later row still reaches the pipeline despite the earlier row throwing.
+        coVerify(exactly = 1) { pipeline.processText("Call Log", "Incoming call with +15550002 lasting 45 seconds.") }
+    }
+
     // ---------------- SourceManager SMS ledger ----------------
 
     @Test
@@ -297,5 +384,39 @@ class FakeSmsProvider : ContentProvider() {
         var rows: List<Array<Any?>> = emptyList()
 
         private fun rowDate(r: Array<Any?>): Long = (r.getOrNull(3) as? Long) ?: Long.MAX_VALUE
+    }
+}
+
+/** A stub call-log provider whose query returns a fresh cursor from [rows], honouring `DATE >= ?`. */
+class FakeCallLogProvider : ContentProvider() {
+    override fun onCreate(): Boolean = true
+
+    override fun query(
+        uri: Uri,
+        projection: Array<out String>?,
+        selection: String?,
+        selectionArgs: Array<out String>?,
+        sortOrder: String?,
+    ): Cursor {
+        val cursor = MatrixCursor(
+            arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DURATION, CallLog.Calls.CACHED_NAME)
+        )
+        val dateGe = if (selection?.contains("${CallLog.Calls.DATE} >=") == true)
+            selectionArgs?.firstOrNull()?.toLongOrNull() else null
+        var matched = rows.filter { dateGe == null || (it[4] as Long) >= dateGe }
+        if (sortOrder?.contains("${CallLog.Calls.DATE} DESC") == true)
+            matched = matched.sortedByDescending { it[4] as Long }
+        matched.forEach { cursor.addRow(arrayOf(it[0], it[1], it[2], it[3])) } // the 4 projected columns
+        return cursor
+    }
+
+    override fun getType(uri: Uri): String? = null
+    override fun insert(uri: Uri, values: ContentValues?): Uri? = null
+    override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int = 0
+    override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?): Int = 0
+
+    companion object {
+        /** Each element is a row: [number: String, type: Int, duration: String, cachedName: String?, date: Long]. */
+        var rows: List<Array<Any?>> = emptyList()
     }
 }

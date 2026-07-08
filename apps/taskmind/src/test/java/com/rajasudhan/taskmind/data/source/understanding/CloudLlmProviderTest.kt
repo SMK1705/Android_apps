@@ -65,6 +65,19 @@ class CloudLlmProviderTest {
     }
 
     @Test
+    fun generate_returnsSchemaEmptyFallback_whenTheNetworkCallFails_soTheScanIsntAborted() = runTest {
+        // #250: a network IOException on the TEXT send must yield the schema-shaped empty result, not
+        // propagate — otherwise it unwinds through processText and drops the rest of the source's scan
+        // (the call log has no ledger, so those rows are lost). Mirrors the vision path above.
+        every { settings.llmApiKey } returns "key-123"
+        val call = mockk<Call>()
+        every { call.execute() } throws IOException("network down")
+        every { client.newCall(any()) } returns call
+
+        assertEquals("{\"items\": []}", provider().generate("sys", "user"))
+    }
+
+    @Test
     fun buildVisionRequestBody_carriesTheImageAsAnInlineDataPart_plusTheSchema() {
         val schema = JSONObject().put("type", "OBJECT")
         val body = buildVisionRequestBody("SYS", "USER", "image/png", "QUJD", schema)

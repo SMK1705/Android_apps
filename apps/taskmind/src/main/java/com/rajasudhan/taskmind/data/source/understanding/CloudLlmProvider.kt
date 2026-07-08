@@ -198,7 +198,12 @@ class CloudLlmProvider @Inject constructor(
             .put("propertyOrdering", JSONArray(listOf("action", "type", "tag", "window", "status", "keyword", "text")))
     }
 
-    private fun sendForJson(request: Request, fallback: String): String =
+    private fun sendForJson(request: Request, fallback: String): String = runCatching {
+        // Guard the whole send: a network IOException (timeout / socket / TLS) from execute() must yield
+        // the schema-shaped [fallback], not propagate — otherwise it unwinds through processText and
+        // aborts the rest of the source's scan, silently dropping the remaining rows (the call log has no
+        // ledger, so those are lost for good). The inner runCatching only covers JSON navigation of an
+        // already-received body; [sendForJsonOrNull] guards its send the same way.
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) return@use fallback
             val bodyStr = response.body?.string() ?: return@use fallback
@@ -218,6 +223,7 @@ class CloudLlmProvider @Inject constructor(
             }.getOrNull()
             if (text.isNullOrBlank()) fallback else text
         }
+    }.getOrElse { fallback }
 
     /**
      * Like [sendForJson] but returns **null** (rather than a schema-shaped empty) on any failure — the

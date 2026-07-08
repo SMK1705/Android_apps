@@ -10,6 +10,7 @@ import com.rajasudhan.taskmind.data.source.RecentDataScanner
 import com.rajasudhan.taskmind.data.source.RecurrenceDetectorWorker
 import com.rajasudhan.taskmind.data.source.RecurrencePattern
 import com.rajasudhan.taskmind.data.source.RejectionLearner
+import com.rajasudhan.taskmind.data.source.SourceManager
 import com.rajasudhan.taskmind.data.source.SuggestionApprover
 import com.rajasudhan.taskmind.data.source.SuggestionNotifier
 import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -41,17 +43,31 @@ class InboxViewModel @Inject constructor(
     private val pipeline: UnderstandingPipeline,
     private val suggestionEditor: SuggestionEditor,
     private val notifier: SuggestionNotifier,
-    private val routing: RoutingLlmProvider
+    private val routing: RoutingLlmProvider,
+    private val sourceManager: SourceManager
 ) : ViewModel() {
 
     // Whether extraction's data actually stays on-device, so the Inbox + quick-capture label the
-    // engine honestly instead of always claiming "on-device" (#197). Read once here and re-read on
-    // screen resume (via [refreshEngine]) since the setting/model can change while the user is away.
+    // engine honestly instead of always claiming "on-device" (#197). Extraction also covers media:
+    // on-device has no image/audio model, so an enabled Images/Audio source with a cloud key sends
+    // screenshots / recordings to Gemini (#251) — the label must not claim on-device then. The initial
+    // value is the text-only route; [refreshEngine] (in init, and on each resume) applies the media
+    // qualifier and re-reads since the setting/model/sources can change while the user is away.
     private val _onDeviceEngine = MutableStateFlow(routing.isOnDeviceEffective())
     val onDeviceEngine: StateFlow<Boolean> = _onDeviceEngine
 
+    init { refreshEngine() }
+
     /** Re-reads the effective engine; called when the Inbox resumes (e.g. back from Settings). */
-    fun refreshEngine() { _onDeviceEngine.value = routing.isOnDeviceEffective() }
+    fun refreshEngine() {
+        viewModelScope.launch {
+            // Media (screenshots / voice recordings) egresses only when the vision route is cloud AND a
+            // media source that uses it is actually enabled; a text-only user keeps the on-device label.
+            val mediaEgresses = routing.mediaEgressesToCloud() &&
+                (sourceManager.isImagesEnabled.first() || sourceManager.isAudioEnabled.first())
+            _onDeviceEngine.value = routing.isOnDeviceEffective() && !mediaEgresses
+        }
+    }
 
     // Ticks every 30s so snoozed items auto-resurface shortly after their time passes.
     private val nowTicker = flow {
