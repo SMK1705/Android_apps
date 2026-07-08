@@ -3,6 +3,7 @@ package com.rajasudhan.taskmind.data.source
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -30,6 +31,16 @@ class SourceManager @Inject constructor(
         // Contacts is an enrichment (resolve a name -> number for the Call button), not a scanned
         // source. It defaults ON (opt-out) so upgrades keep working; READ_CONTACTS still gates it.
         val KEY_CONTACTS_ENABLED = booleanPreferencesKey("contacts_enabled")
+
+        // When each capture source was turned ON (epoch ms). The scanner clamps that source's lookback to
+        // this, so enabling a source captures only messages that arrive AFTER — not up to 24h of backfilled
+        // history (the app-global 15-min first-run guard doesn't cover a source enabled later). 0 = never
+        // stamped (pre-fix / never enabled), which leaves the old behaviour unchanged for existing users.
+        val KEY_SMS_ENABLED_AT = longPreferencesKey("sms_enabled_at")
+        val KEY_CALL_LOG_ENABLED_AT = longPreferencesKey("call_log_enabled_at")
+        val KEY_AUDIO_ENABLED_AT = longPreferencesKey("audio_enabled_at")
+        val KEY_IMAGES_ENABLED_AT = longPreferencesKey("images_enabled_at")
+        val KEY_EMAIL_ENABLED_AT = longPreferencesKey("email_enabled_at")
         
         val KEY_CALL_RECORDING_PATH = stringPreferencesKey("call_recording_path")
         val KEY_VOICE_RECORDING_PATH = stringPreferencesKey("voice_recording_path")
@@ -87,12 +98,33 @@ class SourceManager @Inject constructor(
     val isEmailEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_EMAIL_ENABLED] ?: false }
     val isContactsEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_CONTACTS_ENABLED] ?: true }
 
+    // Per-source "enabled at" (epoch ms), 0 when never stamped. The scanner clamps each source's lookback
+    // to this so turning a source on captures forward-only, never backfilling history.
+    val smsEnabledAt: Flow<Long> = context.dataStore.data.map { it[KEY_SMS_ENABLED_AT] ?: 0L }
+    val callLogEnabledAt: Flow<Long> = context.dataStore.data.map { it[KEY_CALL_LOG_ENABLED_AT] ?: 0L }
+    val audioEnabledAt: Flow<Long> = context.dataStore.data.map { it[KEY_AUDIO_ENABLED_AT] ?: 0L }
+    val imagesEnabledAt: Flow<Long> = context.dataStore.data.map { it[KEY_IMAGES_ENABLED_AT] ?: 0L }
+    val emailEnabledAt: Flow<Long> = context.dataStore.data.map { it[KEY_EMAIL_ENABLED_AT] ?: 0L }
+
+    // Maps a source toggle to its "enabled at" key, so [setSourceEnabled] can stamp the turn-on moment.
+    private val enabledAtKeys = mapOf(
+        KEY_SMS_ENABLED to KEY_SMS_ENABLED_AT,
+        KEY_CALL_LOG_ENABLED to KEY_CALL_LOG_ENABLED_AT,
+        KEY_AUDIO_ENABLED to KEY_AUDIO_ENABLED_AT,
+        KEY_IMAGES_ENABLED to KEY_IMAGES_ENABLED_AT,
+        KEY_EMAIL_ENABLED to KEY_EMAIL_ENABLED_AT,
+    )
+
     val callRecordingPath: Flow<String> = context.dataStore.data.map { it[KEY_CALL_RECORDING_PATH] ?: DEFAULT_CALL_RECORDING_PATH }
     val voiceRecordingPath: Flow<String> = context.dataStore.data.map { it[KEY_VOICE_RECORDING_PATH] ?: DEFAULT_VOICE_RECORDING_PATH }
 
     suspend fun setSourceEnabled(key: androidx.datastore.preferences.core.Preferences.Key<Boolean>, enabled: Boolean) {
         context.dataStore.edit { preferences ->
+            val wasEnabled = preferences[key] == true
             preferences[key] = enabled
+            // Stamp only the OFF -> ON transition (re-saving an already-on toggle mustn't move the mark),
+            // so the scanner starts this source's capture window at the moment it was turned on.
+            if (enabled && !wasEnabled) enabledAtKeys[key]?.let { preferences[it] = System.currentTimeMillis() }
         }
     }
     
