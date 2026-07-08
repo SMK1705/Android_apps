@@ -33,6 +33,8 @@ import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
+import com.google.android.gms.wearable.CapabilityClient
+import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.Wearable
 
 /**
@@ -115,7 +117,13 @@ fun WearApp() {
     }
 }
 
-/** Fire-and-forget send of the spoken text to every connected phone node over the Data Layer. */
+/**
+ * Sends the spoken text to a paired phone that ACTUALLY has TaskMind installed — discovered via the
+ * capture [capability][WearContract.CAPABILITY_PHONE_CAPTURE], not "any connected node". The old code
+ * sent to every connected node and reported success on mere transport delivery, so a capture to a node
+ * without the app was silently lost while the watch showed "✓ Added to your Inbox" (and two app-bearing
+ * nodes duplicated it). [pickCaptureTarget] selects a SINGLE node so a capture lands exactly once.
+ */
 private fun sendCapture(
     context: Context,
     text: String,
@@ -124,22 +132,26 @@ private fun sendCapture(
     onError: () -> Unit,
 ) {
     val bytes = text.toByteArray(Charsets.UTF_8)
-    Wearable.getNodeClient(context).connectedNodes
-        .addOnSuccessListener { nodes ->
-            if (nodes.isEmpty()) {
-                onNoPhone()
+    Wearable.getCapabilityClient(context)
+        .getCapability(WearContract.CAPABILITY_PHONE_CAPTURE, CapabilityClient.FILTER_REACHABLE)
+        .addOnSuccessListener { capabilityInfo ->
+            val target = pickCaptureTarget(capabilityInfo.nodes)
+            if (target == null) {
+                onNoPhone() // no reachable phone with TaskMind installed — don't claim it was added
                 return@addOnSuccessListener
             }
-            val client = Wearable.getMessageClient(context)
-            var remaining = nodes.size
-            var anyFailed = false
-            nodes.forEach { node ->
-                client.sendMessage(node.id, WearContract.PATH_CAPTURE, bytes)
-                    .addOnCompleteListener { task ->
-                        if (!task.isSuccessful) anyFailed = true
-                        if (--remaining == 0) if (anyFailed) onError() else onSent()
-                    }
-            }
+            Wearable.getMessageClient(context)
+                .sendMessage(target.id, WearContract.PATH_CAPTURE, bytes)
+                .addOnSuccessListener { onSent() }
+                .addOnFailureListener { onError() }
         }
         .addOnFailureListener { onError() }
 }
+
+/**
+ * Picks the phone node to deliver a capture to: a directly-connected (nearby) one if any, else any
+ * reachable node advertising the capture capability, or null when none do. Choosing a SINGLE node (not
+ * every connected node) is what keeps one spoken capture from landing in two Inboxes.
+ */
+internal fun pickCaptureTarget(nodes: Collection<Node>): Node? =
+    nodes.firstOrNull { it.isNearby } ?: nodes.firstOrNull()
