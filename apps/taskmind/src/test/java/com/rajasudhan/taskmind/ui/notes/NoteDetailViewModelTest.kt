@@ -11,6 +11,7 @@ import com.rajasudhan.taskmind.testutil.FakeTaskMindDao
 import com.rajasudhan.taskmind.testutil.MainDispatcherRule
 import com.rajasudhan.taskmind.testutil.aNote
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -39,11 +40,12 @@ class NoteDetailViewModelTest {
     private val settingsManager = mockk<SettingsManager>(relaxed = true)
     private val placeGeocoder = mockk<com.rajasudhan.taskmind.data.source.PlaceGeocoder>()
     private val calendarMirror = mockk<com.rajasudhan.taskmind.data.source.CalendarMirror>(relaxed = true)
+    private val semanticIndex = mockk<com.rajasudhan.taskmind.data.source.embedding.SemanticIndex>(relaxed = true)
 
     /** Insert [note], build a VM bound to its id, and wait for the note flow to load. */
     private suspend fun vmFor(note: Note): Pair<NoteDetailViewModel, Int> {
         val id = dao.insertNote(note).toInt()
-        val vm = NoteDetailViewModel(dao, alarms, geofence, onDeviceLlm, llm, settingsManager, placeGeocoder, com.rajasudhan.taskmind.data.source.CompletionRecurrence(dao, alarms, calendarMirror), calendarMirror, SavedStateHandle(mapOf("noteId" to id)))
+        val vm = NoteDetailViewModel(dao, alarms, geofence, onDeviceLlm, llm, settingsManager, placeGeocoder, com.rajasudhan.taskmind.data.source.CompletionRecurrence(dao, alarms, calendarMirror), calendarMirror, semanticIndex, SavedStateHandle(mapOf("noteId" to id)))
         vm.note.filterNotNull().first()
         return vm to id
     }
@@ -52,6 +54,28 @@ class NoteDetailViewModelTest {
     fun loadsNoteByNavArgId() = runTest {
         val (vm, _) = vmFor(aNote(title = "Detail"))
         assertEquals("Detail", vm.note.filterNotNull().first().title)
+    }
+
+    @Test
+    fun updateTitle_reIndexesTheNote_soSemanticSearchReflectsTheNewText() = runTest {
+        // #A2: editing the title must refresh the note's semantic vector, not leave it under the stale
+        // text it was indexed with at approval (otherwise search/dedup match the old wording).
+        val (vm, id) = vmFor(aNote(title = "call plumber", summary = "leaky tap"))
+
+        vm.updateTitle("call electrician")
+
+        assertEquals("call electrician", dao.getNoteByIdNow(id)!!.title)
+        coVerify { semanticIndex.index(id, "call electrician", "leaky tap") }
+    }
+
+    @Test
+    fun updateSummary_reIndexesTheNote() = runTest {
+        val (vm, id) = vmFor(aNote(title = "call plumber", summary = "leaky tap"))
+
+        vm.updateSummary("burst pipe in the kitchen")
+
+        assertEquals("burst pipe in the kitchen", dao.getNoteByIdNow(id)!!.summary)
+        coVerify { semanticIndex.index(id, "call plumber", "burst pipe in the kitchen") }
     }
 
     @Test

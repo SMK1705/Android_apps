@@ -46,7 +46,7 @@ class NoteDetailScreenTest {
 
     private fun vmFor(note: Note): NoteDetailViewModel {
         val id = runBlocking { dao.insertNote(note) }.toInt()
-        return NoteDetailViewModel(dao, alarms, geofence, onDeviceLlm, llm, settingsManager, placeGeocoder, com.rajasudhan.taskmind.data.source.CompletionRecurrence(dao, alarms, mockk(relaxed = true)), mockk<com.rajasudhan.taskmind.data.source.CalendarMirror>(relaxed = true), SavedStateHandle(mapOf("noteId" to id)))
+        return NoteDetailViewModel(dao, alarms, geofence, onDeviceLlm, llm, settingsManager, placeGeocoder, com.rajasudhan.taskmind.data.source.CompletionRecurrence(dao, alarms, mockk(relaxed = true)), mockk<com.rajasudhan.taskmind.data.source.CalendarMirror>(relaxed = true), mockk<com.rajasudhan.taskmind.data.source.embedding.SemanticIndex>(relaxed = true), SavedStateHandle(mapOf("noteId" to id)))
     }
 
     @Test

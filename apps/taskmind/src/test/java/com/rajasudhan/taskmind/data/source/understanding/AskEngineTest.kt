@@ -70,6 +70,19 @@ class AskEngineTest {
     }
 
     @Test
+    fun slotlessQueryIntent_fallsThroughToSearch_notMatchAll() = runTest {
+        dao.insertNote(aNote(title = "Call the electrician about the quote", type = "todo"))
+        dao.insertNote(aNote(title = "Buy milk", type = "todo"))
+        dao.insertNote(aNote(title = "Pay rent", type = "todo"))
+
+        // A bare query intent with no slots (the EMPTY_INTENT fallback) for a content question must search
+        // the utterance — a single lexical hit — not match every note via AskQuery.matches and dump the list.
+        val r = engine(FakeLlmProvider("""{"action":"query"}""")).ask("electrician", now)
+
+        assertEquals(listOf("Call the electrician about the quote"), r.notes.map { it.title })
+    }
+
+    @Test
     fun structuredQueryWithNoMatch_reportsClear_ratherThanFuzzyResults() = runTest {
         dao.insertNote(aNote(title = "Buy milk", type = "todo")) // undated -> not "due today"
 
