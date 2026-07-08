@@ -64,9 +64,16 @@ class TaskMindAppFunctions @Inject constructor(
         val time = ExtractionHeuristics.sanitizeTime(request.dueTime)
 
         dao.updateNote(note.copy(dueDate = date, dueTime = time, nagFiring = false))
+        // A snooze is a reschedule: moving a monthly reminder's date re-anchors its intended day-of-month
+        // (same rule as the note-detail date change / one-tap reschedule), so the next occurrence follows
+        // the snoozed day instead of silently reverting to the old anchor day on the next fire.
+        val anchor = if (note.recurrence?.lowercase() == "monthly") {
+            RecurrenceUtil.dayOfMonth(date).also { dao.updateNoteRecurrenceAnchor(note.id, it) }
+        } else note.recurrenceAnchorDay
         val finalDate: String = if (time != null) {
-            // schedule() may advance a recurring reminder past a stale slot; keep the stored date in step.
-            val armed = alarmScheduler.schedule(note.id, note.title, date, time, note.recurrence)
+            // schedule() may advance a recurring reminder past a stale slot; pass the anchor so it keeps
+            // the snoozed day, and keep the stored date in step.
+            val armed = alarmScheduler.schedule(note.id, note.title, date, time, note.recurrence, anchor)
             if (!armed.isNullOrBlank() && armed != date) { dao.updateNoteDueDate(note.id, armed); armed } else date
         } else {
             alarmScheduler.cancel(note.id)

@@ -84,7 +84,7 @@ class AlarmReceiver : BroadcastReceiver() {
             // A recurring reminder is mirrored as a single event tracking its next occurrence — move it
             // forward with the note so the calendar doesn't fall a period behind on each fire (#119).
             note?.calendarEventId?.let { calendarMirror.update(it, title, next, dueTime) }
-            alarmScheduler.schedule(noteId, title, next, dueTime, recurrence)
+            alarmScheduler.schedule(noteId, title, next, dueTime, recurrence, anchor)
         }
 
         // Nag mode: keep re-firing until the task is done. Walks the escalation ladder (5 → 10 →

@@ -70,7 +70,7 @@ class BootReceiver : BroadcastReceiver() {
                 // change `now` is user-controlled, so a temporary set-forward-then-back would otherwise
                 // corrupt the stored date and skip an occurrence — re-arm the alarm but leave the date.
                 if (reNotify && next != date) dao.updateNoteDueDate(note.id, next)
-                alarmScheduler.schedule(note.id, note.title, next, time, note.recurrence)
+                alarmScheduler.schedule(note.id, note.title, next, time, note.recurrence, note.recurrenceAnchorDay)
             } else {
                 // One-shot: re-arm as stored. The scheduler drops it if it's already past
                 // (it fired, or was missed, while the device was off), which is correct.
@@ -87,9 +87,10 @@ class BootReceiver : BroadcastReceiver() {
             val date = note.dueDate ?: continue
             val time = note.dueTime ?: continue
             if (RecurrenceUtil.parseTime(time) == null) continue
-            // schedule() advances a recurring follow-up past its stale slot; persist the armed date so
-            // the stored date matches — but only on a reboot, not a clock change (see the reminder loop).
-            val armed = alarmScheduler.schedule(note.id, note.title, date, time, note.recurrence)
+            // schedule() advances a recurring follow-up past its stale slot; pass the anchor so a monthly
+            // follow-up keeps its day, and persist the armed date so the stored date matches — but only
+            // on a reboot, not a clock change (see the reminder loop).
+            val armed = alarmScheduler.schedule(note.id, note.title, date, time, note.recurrence, note.recurrenceAnchorDay)
             if (reNotify && !armed.isNullOrBlank() && armed != date) dao.updateNoteDueDate(note.id, armed)
             // A waiting-on nag note gets its nag chain restarted too — the restart was previously only
             // in the reminder loop, so a nag on a non-'reminder' note silently died on reboot.

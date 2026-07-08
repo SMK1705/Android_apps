@@ -103,7 +103,9 @@ class SnapshotManager @Inject constructor(
 
     private fun rearm(id: Int, note: Note) {
         if (!note.completed && note.type == "reminder" && note.dueDate != null && note.dueTime != null) {
-            alarmScheduler.schedule(id, note.title, note.dueDate, note.dueTime, note.recurrence)
+            // Pass the monthly anchor so a restored recurring reminder with a stale slot advances on its
+            // intended day-of-month instead of drifting to the 28th.
+            alarmScheduler.schedule(id, note.title, note.dueDate, note.dueTime, note.recurrence, note.recurrenceAnchorDay)
         }
         if (note.locationLat != null && note.locationLng != null && note.locationRadius != null) {
             geofenceManager.add(id, note.locationLat, note.locationLng, note.locationRadius.toFloat())

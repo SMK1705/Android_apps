@@ -53,7 +53,7 @@ class CompletionRecurrence @Inject constructor(
         if (anchor != null && note.recurrenceAnchorDay == null) dao.updateNoteRecurrenceAnchor(note.id, anchor)
         dao.updateNoteDueDate(note.id, next)
         dao.setNoteCompleted(note.id, false, null)
-        val armed = alarmScheduler.schedule(note.id, note.title, next, note.dueTime, note.recurrence)
+        val armed = alarmScheduler.schedule(note.id, note.title, next, note.dueTime, note.recurrence, anchor)
         val finalDate = armed?.takeIf { it.isNotBlank() } ?: next
         if (finalDate != next) dao.updateNoteDueDate(note.id, finalDate)
         // Move the mirrored calendar event (#119) onto the new occurrence too, so it doesn't drift stale.

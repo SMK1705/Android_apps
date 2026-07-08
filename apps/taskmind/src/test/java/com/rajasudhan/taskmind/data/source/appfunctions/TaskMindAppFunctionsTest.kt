@@ -95,6 +95,22 @@ class TaskMindAppFunctionsTest {
     }
 
     @Test
+    fun snoozeItem_monthlyReminder_reAnchorsToTheSnoozedDay_andArmsWithThatAnchor() = runTest {
+        // A monthly reminder anchored on the 15th, snoozed to the 20th: the anchor must move to 20 so the
+        // NEXT occurrence follows the snoozed day, instead of reverting to the 15th on the next fire.
+        val id = dao.insertNote(
+            aNote(type = "reminder", title = "Rent", dueDate = "2026-07-15", dueTime = "09:00",
+                recurrence = "monthly", recurrenceAnchorDay = 15)
+        ).toInt()
+
+        val r = fns.snoozeItem(SnoozeRequest(id = id, dueDate = "2026-07-20", dueTime = "09:00"))
+
+        assertTrue(r.success)
+        assertEquals(20, dao.getNoteByIdNow(id)!!.recurrenceAnchorDay) // re-anchored to the snoozed day
+        verify { alarms.schedule(id, "Rent", "2026-07-20", "09:00", "monthly", 20) } // armed with the new anchor
+    }
+
+    @Test
     fun snoozeItem_failsForAnUnknownId() = runTest {
         assertFalse(fns.snoozeItem(SnoozeRequest(id = 999, dueDate = "2026-07-09")).success)
     }

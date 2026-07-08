@@ -94,8 +94,12 @@ class SuggestionApprover @Inject constructor(
             }
         }
 
+        // The monthly anchor persisted on the new note above, reused so the alarm's stale-slot advance
+        // keeps the intended day-of-month for an already-past monthly suggestion instead of drifting.
+        val anchor = if (suggestion.recurrence?.lowercase() == "monthly")
+            RecurrenceUtil.dayOfMonth(suggestion.dueDate) else null
         if (isReminder) {
-            val armed = alarmScheduler.schedule(noteId.toInt(), suggestion.extractedTitle, suggestion.dueDate, suggestion.dueTime, suggestion.recurrence)
+            val armed = alarmScheduler.schedule(noteId.toInt(), suggestion.extractedTitle, suggestion.dueDate, suggestion.dueTime, suggestion.recurrence, anchor)
             if (!armed.isNullOrBlank() && armed != suggestion.dueDate) dao.updateNoteDueDate(noteId.toInt(), armed)
             // Mirror the calendar event onto the SAME occurrence the alarm + note landed on — schedule()
             // may have advanced a recurring reminder past a stale slot, so using the original (past)
@@ -110,7 +114,7 @@ class SuggestionApprover @Inject constructor(
         } else if (suggestion.type == "waiting_on" && suggestion.dueDate != null && suggestion.dueTime != null) {
             // A waiting-on item with a follow-up time gets a nudge to chase it up — no calendar event,
             // since you're not attending anything, just reminding yourself to follow up.
-            val armed = alarmScheduler.schedule(noteId.toInt(), suggestion.extractedTitle, suggestion.dueDate, suggestion.dueTime, suggestion.recurrence)
+            val armed = alarmScheduler.schedule(noteId.toInt(), suggestion.extractedTitle, suggestion.dueDate, suggestion.dueTime, suggestion.recurrence, anchor)
             if (!armed.isNullOrBlank() && armed != suggestion.dueDate) dao.updateNoteDueDate(noteId.toInt(), armed)
         } else if (suggestion.type == "todo" && suggestion.dueDate != null) {
             if (addCalendar) {
