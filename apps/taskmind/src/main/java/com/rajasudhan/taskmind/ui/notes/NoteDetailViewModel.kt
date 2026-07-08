@@ -148,7 +148,7 @@ class NoteDetailViewModel @Inject constructor(
         viewModelScope.launch {
             dao.updateNote(current.copy(title = title))
             if (current.type == "reminder" && current.dueTime != null) {
-                alarmScheduler.schedule(current.id, title, current.dueDate, current.dueTime, current.recurrence)
+                alarmScheduler.schedule(current.id, title, current.dueDate, current.dueTime, current.recurrence, current.recurrenceAnchorDay)
                 // Re-arming cancels any in-flight nag re-fire (schedule → cancelRefire), so the chain is
                 // now dead — clear the persisted flag or a reboot would resurrect it. Unconditional: the
                 // loaded snapshot may predate a fire that set nagFiring, so a guard could miss it.
@@ -196,9 +196,10 @@ class NoteDetailViewModel @Inject constructor(
             // keeps the day instead of drifting to the 28th after February.
             val anchor = if (value?.lowercase() == "monthly") RecurrenceUtil.dayOfMonth(current.dueDate) else null
             dao.updateNoteRecurrenceAnchor(current.id, anchor)
-            // schedule() advances a recurring reminder past a stale slot; persist the armed date so the
-            // stored dueDate matches when the reminder will actually next fire.
-            val armed = alarmScheduler.schedule(current.id, current.title, current.dueDate, current.dueTime, value)
+            // schedule() advances a recurring reminder past a stale slot; pass the anchor so a monthly
+            // reminder keeps its intended day, and persist the armed date so the stored dueDate matches
+            // when the reminder will actually next fire.
+            val armed = alarmScheduler.schedule(current.id, current.title, current.dueDate, current.dueTime, value, anchor)
             if (!armed.isNullOrBlank() && armed != current.dueDate) dao.updateNoteDueDate(current.id, armed)
             // If schedule() advanced a recurring reminder past a stale slot, move its calendar event too (#119).
             val effective = armed?.takeIf { it.isNotBlank() } ?: current.dueDate
@@ -220,11 +221,12 @@ class NoteDetailViewModel @Inject constructor(
             dao.updateNote(current.copy(dueDate = dueDate, dueTime = dueTime, type = type, nagFiring = false))
             val finalDate: String?
             if (dueTime != null) {
-                // A monthly reminder's intended day-of-month moves with the new date — re-anchor it.
-                if (current.recurrence?.lowercase() == "monthly") {
-                    dao.updateNoteRecurrenceAnchor(current.id, RecurrenceUtil.dayOfMonth(dueDate))
-                }
-                val armed = alarmScheduler.schedule(current.id, current.title, dueDate, dueTime, current.recurrence)
+                // A monthly reminder's intended day-of-month moves with the new date — re-anchor it, and
+                // pass that anchor so the alarm's stale-slot advance keeps the new day instead of drifting.
+                val anchor = if (current.recurrence?.lowercase() == "monthly") {
+                    RecurrenceUtil.dayOfMonth(dueDate).also { dao.updateNoteRecurrenceAnchor(current.id, it) }
+                } else current.recurrenceAnchorDay
+                val armed = alarmScheduler.schedule(current.id, current.title, dueDate, dueTime, current.recurrence, anchor)
                 finalDate = if (!armed.isNullOrBlank() && armed != dueDate) { dao.updateNoteDueDate(current.id, armed); armed } else dueDate
             } else {
                 alarmScheduler.cancel(current.id)

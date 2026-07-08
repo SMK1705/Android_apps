@@ -31,8 +31,20 @@ class AlarmScheduler @Inject constructor(
      * from a past slot never fired.) A one-shot keeps its date and is still dropped if it's in the past.
      * Callers with DB access should persist the returned date when it differs from what they passed, so
      * the stored dueDate stays in step with the armed slot.
+     *
+     * [anchorDay] is the monthly reminder's intended day-of-month (the note's `recurrenceAnchorDay`):
+     * pass it so the stale-slot advance keeps that day (e.g. the 31st) rather than clamping through a
+     * short month and drifting permanently to the 28th (#177). Callers that hand us a raw stored date to
+     * advance MUST pass it; those that already pre-advanced with the anchor may pass it too (a no-op).
      */
-    fun schedule(noteId: Int, title: String, dueDate: String?, dueTime: String?, recurrence: String?): String? {
+    fun schedule(
+        noteId: Int,
+        title: String,
+        dueDate: String?,
+        dueTime: String?,
+        recurrence: String?,
+        anchorDay: Int? = null,
+    ): String? {
         // (Re)establishing the main alarm invalidates any pending snooze/nag re-fire from an earlier
         // fire — otherwise a rescheduled or snoozed nag note would keep ringing on its old cadence in
         // parallel with the new schedule. AlarmReceiver's nag branch re-arms the re-fire *after* its
@@ -43,11 +55,11 @@ class AlarmScheduler @Inject constructor(
         // and persisted, and a strict HH parser would reject them and silently drop the alarm.
         val time = RecurrenceUtil.parseTime(dueTime) ?: return null
         // A recurring reminder must never be dropped just because its stored slot has passed; land on
-        // the next future occurrence. (firstFutureOccurrence returns the date unchanged when it's
-        // already in the future, and null for an unknown recurrence — in which case fall back to the
-        // stored date and let the past-time guard below decide.)
+        // the next future occurrence, keeping the monthly anchor day so it doesn't drift (see [anchorDay]).
+        // (firstFutureOccurrence returns the date unchanged when it's already in the future, and null for
+        // an unknown recurrence — in which case fall back to the stored date and let the guard below decide.)
         val armDate = if (!recurrence.isNullOrBlank())
-            RecurrenceUtil.firstFutureOccurrence(dueDate, dueTime, recurrence, LocalDateTime.now()) ?: dueDate
+            RecurrenceUtil.firstFutureOccurrence(dueDate, dueTime, recurrence, LocalDateTime.now(), anchorDay) ?: dueDate
         else dueDate
         val timeMillis = runCatching {
             LocalDateTime.of(LocalDate.parse(armDate), time)

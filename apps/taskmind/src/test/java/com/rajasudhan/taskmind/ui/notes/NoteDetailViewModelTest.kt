@@ -182,6 +182,17 @@ class NoteDetailViewModelTest {
     }
 
     @Test
+    fun updateRecurrence_monthly_handsTheAnchorToTheScheduler_soTheAdvanceDoesntDrift() = runTest {
+        val (vm, id) = vmFor(aNote(title = "Rent", type = "reminder", dueDate = "2026-01-31", dueTime = "09:00"))
+
+        vm.updateRecurrence("Monthly")
+
+        // #R2: the anchor isn't only persisted — it's passed to schedule() so a stale-slot advance keeps
+        // the 31st instead of clamping through February and drifting to the 28th.
+        verify { alarms.schedule(id, "Rent", "2026-01-31", "09:00", "Monthly", 31) }
+    }
+
+    @Test
     fun updateRecurrence_persistsTheAdvancedDate_whenSchedulerReschedulesPastAStaleSlot() = runTest {
         val (vm, id) = vmFor(aNote(title = "Rent", type = "reminder", dueDate = "2026-07-01", dueTime = "09:00"))
         // The scheduler advanced the stale (past) slot to the next weekly occurrence and reports it back.

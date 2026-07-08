@@ -234,11 +234,12 @@ class NotesViewModel @Inject constructor(
             dao.updateNoteDueDate(note.id, newDueDate)
             // Moving a monthly reminder's date re-anchors its intended day-of-month (same rule as the
             // note-detail date change), so the recurrence follows the new day rather than drifting.
-            if (note.recurrence?.lowercase() == "monthly") {
-                dao.updateNoteRecurrenceAnchor(note.id, RecurrenceUtil.dayOfMonth(newDueDate))
-            }
-            // schedule() advances a recurring reminder past a stale slot; keep the stored date in step.
-            val armed = alarmScheduler.schedule(note.id, note.title, newDueDate, note.dueTime, note.recurrence)
+            val anchor = if (note.recurrence?.lowercase() == "monthly") {
+                RecurrenceUtil.dayOfMonth(newDueDate).also { dao.updateNoteRecurrenceAnchor(note.id, it) }
+            } else note.recurrenceAnchorDay
+            // schedule() advances a recurring reminder past a stale slot; pass the anchor so the advance
+            // keeps the new day, and keep the stored date in step.
+            val armed = alarmScheduler.schedule(note.id, note.title, newDueDate, note.dueTime, note.recurrence, anchor)
             val finalDate = if (!armed.isNullOrBlank() && armed != newDueDate) { dao.updateNoteDueDate(note.id, armed); armed } else newDueDate
             // Move the mirrored calendar event to the new date too (#119) — one-tap triage shouldn't drift it.
             note.calendarEventId?.let { calendarMirror.update(it, note.title, finalDate, note.dueTime) }
