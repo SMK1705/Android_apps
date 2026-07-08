@@ -176,26 +176,32 @@ class RecentDataScanner @Inject constructor(
             "${CallLog.Calls.DATE} DESC"
         )?.use { cursor ->
             while (cursor.moveToNext()) {
-                val number = cursor.getString(0)
-                val type = cursor.getInt(1)
-                val duration = cursor.getString(2)
-                val cachedName = cursor.getString(3)
-                // Person-context: a call from a known contact surfaces any open item tied to them.
-                if (!cachedName.isNullOrBlank()) personContextNotifier.notifyForContact(cachedName)
-                if (type == CallLog.Calls.MISSED_TYPE) {
-                    // A missed call is a concrete "call back" task, but the LLM tends to drop it as
-                    // non-actionable — so build the suggestion straight from the log, which already
-                    // has the number (and often the contact name). addCallback normalizes the number
-                    // and skips private/unknown callers we couldn't dial back anyway.
-                    pipeline.addCallback(cachedName, number)
-                    continue
-                }
-                val typeStr = when (type) {
-                    CallLog.Calls.INCOMING_TYPE -> "Incoming"
-                    CallLog.Calls.OUTGOING_TYPE -> "Outgoing"
-                    else -> "Unknown"
-                }
-                pipeline.processText("Call Log", "$typeStr call with $number lasting $duration seconds.")
+                // Isolate each row: a throw (e.g. a cloud-LLM network IOException, or a transient DB read
+                // inside notifyForContact/addCallback) must not abort the batch. The call log has no
+                // processed-id ledger, so any rows left unscanned when lastScanAt advances are lost for
+                // good — mirror consumeSmsRows and swallow per-row failures.
+                runCatching {
+                    val number = cursor.getString(0)
+                    val type = cursor.getInt(1)
+                    val duration = cursor.getString(2)
+                    val cachedName = cursor.getString(3)
+                    // Person-context: a call from a known contact surfaces any open item tied to them.
+                    if (!cachedName.isNullOrBlank()) personContextNotifier.notifyForContact(cachedName)
+                    if (type == CallLog.Calls.MISSED_TYPE) {
+                        // A missed call is a concrete "call back" task, but the LLM tends to drop it as
+                        // non-actionable — so build the suggestion straight from the log, which already
+                        // has the number (and often the contact name). addCallback normalizes the number
+                        // and skips private/unknown callers we couldn't dial back anyway.
+                        pipeline.addCallback(cachedName, number)
+                        return@runCatching
+                    }
+                    val typeStr = when (type) {
+                        CallLog.Calls.INCOMING_TYPE -> "Incoming"
+                        CallLog.Calls.OUTGOING_TYPE -> "Outgoing"
+                        else -> "Unknown"
+                    }
+                    pipeline.processText("Call Log", "$typeStr call with $number lasting $duration seconds.")
+                }.onFailure { android.util.Log.w(TAG, "call-log row failed", it) }
             }
         }
     }

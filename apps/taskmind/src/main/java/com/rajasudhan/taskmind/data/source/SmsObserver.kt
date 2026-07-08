@@ -54,6 +54,13 @@ class SmsObserver @Inject constructor(
     }
 
     fun start() {
+        // Re-seed the watermark if [init] never got a valid one. [init] runs when Hilt constructs this
+        // @Singleton — at service onCreate, which can be *before* READ_SMS is granted, so getLastSmsId()
+        // returned -1. By the time a source is enabled the permission is held, so seed from the current
+        // newest id now; otherwise the first onChange would query `_ID > -1` and replay the whole inbox
+        // through the pipeline. A genuinely empty inbox stays -1 (correct: capture everything future),
+        // and a valid watermark from a prior enable is preserved (no reprocessing on re-enable).
+        if (lastSmsId < 0) lastSmsId = getLastSmsId()
         context.contentResolver.registerContentObserver(
             Telephony.Sms.CONTENT_URI,
             true,
