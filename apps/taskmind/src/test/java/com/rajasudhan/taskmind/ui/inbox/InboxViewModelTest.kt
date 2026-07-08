@@ -2,6 +2,7 @@ package com.rajasudhan.taskmind.ui.inbox
 
 import com.rajasudhan.taskmind.data.source.RecentDataScanner
 import com.rajasudhan.taskmind.data.source.RejectionLearner
+import com.rajasudhan.taskmind.data.source.SourceManager
 import com.rajasudhan.taskmind.data.source.SuggestionApprover
 import com.rajasudhan.taskmind.data.source.SuggestionNotifier
 import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
@@ -16,6 +17,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -45,11 +47,16 @@ class InboxViewModelTest {
     private val suggestionEditor = mockk<com.rajasudhan.taskmind.data.source.understanding.SuggestionEditor>(relaxed = true)
     private val notifier = mockk<SuggestionNotifier>(relaxed = true)
     private val routing = mockk<RoutingLlmProvider>(relaxed = true)
+    private val sourceManager = mockk<SourceManager>(relaxed = true)
     private lateinit var vm: InboxViewModel
 
     @Before
     fun setUp() {
-        vm = InboxViewModel(dao, scanner, approver, RejectionLearner(dao), vosk, pipeline, suggestionEditor, notifier, routing)
+        // Default: no media sources on, so the engine label follows the text route only.
+        every { sourceManager.isImagesEnabled } returns flowOf(false)
+        every { sourceManager.isAudioEnabled } returns flowOf(false)
+        every { routing.mediaEgressesToCloud() } returns false
+        vm = InboxViewModel(dao, scanner, approver, RejectionLearner(dao), vosk, pipeline, suggestionEditor, notifier, routing, sourceManager)
     }
 
     private suspend fun pending() = dao.getPendingSuggestions().first()
@@ -63,6 +70,33 @@ class InboxViewModelTest {
 
         every { routing.isOnDeviceEffective() } returns true
         vm.refreshEngine()
+        assertTrue(vm.onDeviceEngine.value)
+    }
+
+    @Test
+    fun onDeviceEngine_isCloud_whenAnImageSourceEgresses_evenThoughTextIsOnDevice() {
+        // #251: extraction also handles media. On-device has no image model, so an enabled Images source
+        // with a cloud key sends screenshots to Gemini — the label must say "cloud" even though text
+        // extraction (isOnDeviceEffective) is on-device.
+        every { routing.isOnDeviceEffective() } returns true
+        every { routing.mediaEgressesToCloud() } returns true
+        every { sourceManager.isImagesEnabled } returns flowOf(true)
+        every { sourceManager.isAudioEnabled } returns flowOf(false)
+
+        vm.refreshEngine()
+
+        assertFalse(vm.onDeviceEngine.value)
+    }
+
+    @Test
+    fun onDeviceEngine_staysOnDevice_whenMediaSourceEnabledButVisionDoesNotEgress() {
+        // Images enabled but no cloud vision route (no key) -> nothing egresses -> honest label stays on-device.
+        every { routing.isOnDeviceEffective() } returns true
+        every { routing.mediaEgressesToCloud() } returns false
+        every { sourceManager.isImagesEnabled } returns flowOf(true)
+
+        vm.refreshEngine()
+
         assertTrue(vm.onDeviceEngine.value)
     }
 

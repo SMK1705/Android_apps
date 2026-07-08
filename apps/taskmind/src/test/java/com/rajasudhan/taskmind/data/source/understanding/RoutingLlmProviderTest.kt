@@ -88,4 +88,37 @@ class RoutingLlmProviderTest {
         every { settings.llmApiKey } returns ""
         assertEquals(true, router.isOnDeviceEffective())
     }
+
+    // mediaEgressesToCloud() — the honest vision-route signal (#251): true when captured media leaves the phone.
+
+    @Test
+    fun mediaEgressesToCloud_trueWhenOnDeviceSelected_butCloudHandlesVisionWithKey() {
+        // The exact honest-label bug config: on-device text is effective, but on-device has no vision,
+        // so a configured key routes screenshots/audio to Gemini even while isOnDeviceEffective() is true.
+        every { settings.useOnDeviceLlm } returns true
+        every { onDevice.isModelPresent() } returns true
+        every { onDevice.supportsVision() } returns false
+        every { cloud.supportsVision() } returns true
+        every { settings.llmApiKey } returns "key-123"
+        assertEquals(true, router.isOnDeviceEffective())   // text stays local
+        assertEquals(true, router.mediaEgressesToCloud())  // but media does not
+    }
+
+    @Test
+    fun mediaEgressesToCloud_falseWhenNoCloudKey() {
+        every { settings.useOnDeviceLlm } returns true
+        every { onDevice.supportsVision() } returns false
+        every { cloud.supportsVision() } returns true
+        every { settings.llmApiKey } returns ""
+        assertEquals(false, router.mediaEgressesToCloud())
+    }
+
+    @Test
+    fun mediaEgressesToCloud_falseWhenOnDeviceCanSee() {
+        every { settings.useOnDeviceLlm } returns true
+        every { onDevice.supportsVision() } returns true
+        every { cloud.supportsVision() } returns true
+        every { settings.llmApiKey } returns "key-123"
+        assertEquals(false, router.mediaEgressesToCloud())
+    }
 }

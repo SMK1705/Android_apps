@@ -106,6 +106,15 @@ class RoutingLlmProvider @Inject constructor(
      */
     fun isOnDeviceEffective(): Boolean =
         settingsManager.useOnDeviceLlm && (onDevice.isModelPresent() || settingsManager.llmApiKey.isBlank())
+
+    /**
+     * Whether a multimodal (screenshot / voice-recording) extraction would leave the device. On-device
+     * has no vision/audio model yet, so [visionRoute] routes media to the cloud whenever a key is set —
+     * even while [isOnDeviceEffective] (text) is true. Callers that label the *extraction* engine (the
+     * Inbox) use this so image/audio-bearing capture isn't mislabelled "on-device" (#197 follow-up,
+     * #251). Text-only contexts (Ask) don't touch media and keep using [isOnDeviceEffective].
+     */
+    fun mediaEgressesToCloud(): Boolean = route() == VisionRoute.CLOUD
 }
 
 /** Which engine (if any) should handle a multimodal extraction. */

@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import com.rajasudhan.taskmind.data.source.RecentDataScanner
 import com.rajasudhan.taskmind.data.source.RejectionLearner
+import com.rajasudhan.taskmind.data.source.SourceManager
 import com.rajasudhan.taskmind.data.source.SuggestionApprover
 import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
@@ -12,8 +13,10 @@ import com.rajasudhan.taskmind.testutil.FakeTaskMindDao
 import com.rajasudhan.taskmind.testutil.MainDispatcherRule
 import com.rajasudhan.taskmind.testutil.aSuggestion
 import com.rajasudhan.taskmind.ui.theme.TaskMindTheme
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
@@ -47,8 +50,12 @@ class InboxScreenTest {
     private val notifier = mockk<com.rajasudhan.taskmind.data.source.SuggestionNotifier>(relaxed = true)
     private val suggestionEditor = mockk<com.rajasudhan.taskmind.data.source.understanding.SuggestionEditor>(relaxed = true)
     private val routing = mockk<com.rajasudhan.taskmind.data.source.understanding.RoutingLlmProvider>(relaxed = true)
+    private val sourceManager = mockk<SourceManager>(relaxed = true).also {
+        every { it.isImagesEnabled } returns flowOf(false)
+        every { it.isAudioEnabled } returns flowOf(false)
+    }
 
-    private fun viewModel() = InboxViewModel(dao, scanner, approver, RejectionLearner(dao), vosk, pipeline, suggestionEditor, notifier, routing)
+    private fun viewModel() = InboxViewModel(dao, scanner, approver, RejectionLearner(dao), vosk, pipeline, suggestionEditor, notifier, routing, sourceManager)
 
     private fun seed(vararg suggestions: com.rajasudhan.taskmind.data.model.Suggestion) = runBlocking {
         suggestions.forEach { dao.insertSuggestion(it) }
