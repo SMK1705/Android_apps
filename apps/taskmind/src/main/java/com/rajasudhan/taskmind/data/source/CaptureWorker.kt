@@ -29,18 +29,17 @@ class CaptureWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         val source = inputData.getString(KEY_SOURCE) ?: "Shared"
         val imagePath = inputData.getString(KEY_IMAGE_PATH)
+        val imageFile = imagePath?.let { File(it) }
         return try {
-            val text = if (imagePath != null) {
-                val file = File(imagePath)
-                val ocr = ocrEngine.recognize(file)
-                runCatching { file.delete() }
-                ocr
-            } else {
-                inputData.getString(KEY_TEXT)
-            }
+            val text = if (imageFile != null) ocrEngine.recognize(imageFile) else inputData.getString(KEY_TEXT)
             // Seed the deterministic date parser only for TYPED capture (not OCR'd images, whose text is
             // noisier) — #116.
             if (!text.isNullOrBlank()) pipeline.processText(source, text, seedSchedule = imagePath == null)
+            // Delete the source image ONLY after the pipeline has consumed it. Deleting before processText
+            // made a Result.retry() non-idempotent: a transient failure (LLM route down / DB busy) would
+            // retry against a now-missing file, recognize() would return null, and doWork would report
+            // success — silently losing the capture. Leaving it until here means a retry can re-OCR it.
+            imageFile?.let { runCatching { it.delete() } }
             Result.success()
         } catch (e: Exception) {
             Result.retry()
