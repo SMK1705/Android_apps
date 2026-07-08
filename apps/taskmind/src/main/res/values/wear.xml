@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Advertises to a paired Wear OS watch that THIS node (the phone) has TaskMind installed and can receive
+  wrist voice captures (#216). The watch's CapabilityClient.getCapability("taskmind_phone_capture") uses
+  this to target only a phone that actually has the app — instead of any connected node — so a capture is
+  never reported "Added to your Inbox" when nothing consumed it. The item MUST match
+  WearContract.CAPABILITY_PHONE_CAPTURE.
+
+  tools:keep protects the array from resource shrinking: it's referenced only by the Wear SDK at runtime
+  (by resource name), never by app code, so a release build could otherwise strip it and break discovery.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@array/android_wear_capabilities">
+    <string-array name="android_wear_capabilities">
+        <item>taskmind_phone_capture</item>
+    </string-array>
+</resources>

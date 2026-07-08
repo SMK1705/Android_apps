@@ -9,6 +9,13 @@ object WearContract {
     /** MessageClient path: the watch sends the spoken capture text (UTF-8 bytes) to the phone. */
     const val PATH_CAPTURE = "/taskmind/capture"
 
+    /**
+     * CapabilityClient capability the PHONE app advertises (via `res/values/wear.xml`) so the watch can
+     * target only a phone that actually has TaskMind installed, instead of any connected node. MUST match
+     * the `android_wear_capabilities` item in the phone's wear.xml.
+     */
+    const val CAPABILITY_PHONE_CAPTURE = "taskmind_phone_capture"
+
     /** DataClient path: the phone publishes the next-due item for the watch tile to read. */
     const val PATH_NEXT_DUE = "/taskmind/next_due"
 
