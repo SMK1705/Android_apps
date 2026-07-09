@@ -320,7 +320,7 @@ class RecentDataScanner @Inject constructor(
         for (account in accounts) {
             val token = gmailAuth.silentAccessToken(account)
             if (token == null) {
-                android.util.Log.w("RecentDataScanner", "Gmail account $account not authorized; skipping it")
+                android.util.Log.w("RecentDataScanner", "Gmail account ${GmailAuth.mask(account)} not authorized; skipping it")
                 continue
             }
             val skip = sourceManager.processedEmailIds(account).first()
@@ -330,12 +330,12 @@ class RecentDataScanner @Inject constructor(
                 // The token was accepted by GoogleAuthUtil but rejected by Gmail (401 — expired/revoked
                 // mid-use). Invalidate it so Play Services mints a fresh one, then retry ONCE; otherwise
                 // the scan silently returns nothing until the OS token cache happens to refresh (#G1).
-                android.util.Log.w("RecentDataScanner", "Gmail($account) token rejected (401); refreshing and retrying")
+                android.util.Log.w("RecentDataScanner", "Gmail(${GmailAuth.mask(account)}) token rejected (401); refreshing and retrying")
                 gmailAuth.invalidate(token)
                 val fresh = gmailAuth.silentAccessToken(account) ?: continue
                 runCatching { gmailCollector.fetchUnreadPrimary(fresh, since, skip) }.getOrDefault(emptyList())
             }
-            android.util.Log.i("RecentDataScanner", "Gmail($account) fetched ${emails.size} new email(s) since $since")
+            android.util.Log.i("RecentDataScanner", "Gmail(${GmailAuth.mask(account)}) fetched ${emails.size} new email(s) since $since")
             for (email in emails) {
                 // Tag the source with the mailbox so the inbox shows which account it came from.
                 pipeline.processText("Email ($account) from ${email.sender}", "${email.subject}\n\n${email.body}")

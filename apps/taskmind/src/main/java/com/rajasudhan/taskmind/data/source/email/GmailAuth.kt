@@ -88,18 +88,19 @@ class GmailAuth @Inject constructor(
                 // still on the device (a removed/re-added account loses this app's token grant and hard-
                 // fails here even when consent looks fine). Account is masked in logs (PII).
                 val onDevice = googleAccountsOnDevice()
-                // Classify the hard failure: does a BASIC scope work for this same account? "OK" means the
-                // account signs in fine and ONLY the restricted gmail.readonly scope is blocked (test-user /
-                // app-verification / Advanced Protection / supervised account); a failure means the account's
-                // own Play Services state is broken. Splits the two very different fixes.
+                // Classify the hard failure: does a BASIC scope work for this same account? OK / RECOVERABLE
+                // (the account signs in, consent just isn't granted yet) both mean ONLY the restricted
+                // gmail.readonly scope is blocked (test-user / app-verification / Advanced Protection /
+                // supervised account); BROKEN means the account's own Play Services state is broken;
+                // UNREACHABLE means Google couldn't be reached. Splits the very different fixes.
                 val probe = probeBasicScope(accountEmail)
                 android.util.Log.e(
                     TAG,
                     "getToken failed for ${mask(accountEmail)}: ${e.javaClass.simpleName}: ${e.message} " +
-                        "(device Google accounts: ${onDevice.size}; basic-scope probe: $probe)",
+                        "(device Google accounts: ${onDevice.size}; basic-scope probe: ${probe.category}(${probe.detail}))",
                     e
                 )
-                GmailAuthState.Error(authGuidance(e.message, accountEmail, onDevice, basicScopeOk = probe == PROBE_OK))
+                GmailAuthState.Error(authGuidance(e.message, accountEmail, onDevice, probe.category))
             } catch (e: IOException) {
                 GmailAuthState.Error("Network error reaching Google — try again.")
             }
@@ -129,15 +130,17 @@ class GmailAuth @Inject constructor(
 
     /**
      * Diagnostic run only when the Gmail token HARD-fails: try a BASIC (non-restricted) scope for the same
-     * account. [PROBE_OK] means the account signs in fine and only the restricted Gmail scope is blocked;
-     * anything else means the account's own Play Services sign-in state is broken. The exact result is
-     * logged and folded into [authGuidance]. Never throws.
+     * account, then [classifyProbe] the outcome. [BasicScopeProbe.OK]/[BasicScopeProbe.RECOVERABLE] mean the
+     * account signs in fine and only the restricted Gmail scope is blocked; [BasicScopeProbe.BROKEN] means the
+     * account's own Play Services sign-in state is broken; [BasicScopeProbe.UNREACHABLE] means Google was
+     * unreachable. The [ProbeResult.detail] is logged and the [ProbeResult.category] folds into
+     * [authGuidance]. Never throws.
      */
-    private suspend fun probeBasicScope(accountEmail: String): String =
+    private suspend fun probeBasicScope(accountEmail: String): ProbeResult =
         runCatching {
             GoogleAuthUtil.getToken(appContext, Account(accountEmail, GOOGLE_TYPE), OAUTH2_EMAIL_SCOPE)
-            PROBE_OK
-        }.getOrElse { "FAILED(${it.javaClass.simpleName}: ${it.message})" }
+            ProbeResult(BasicScopeProbe.OK, "OK")
+        }.getOrElse { ProbeResult(classifyProbe(it), "${it.javaClass.simpleName}: ${it.message}") }
 
     /**
      * Intent that shows the system Google-account chooser (all Google accounts plus "Add account").
@@ -189,6 +192,26 @@ class GmailAuth @Inject constructor(
         connectedAccounts.toList().forEach { disconnect(it) }
     }
 
+    /** How the basic-scope diagnostic probe came back — its category folds into [authGuidance]. */
+    internal enum class BasicScopeProbe {
+        /** A basic token issued — the account signs in fully. */
+        OK,
+
+        /** Consent merely isn't granted yet (a [UserRecoverableAuthException] — NeedRemoteConsent /
+         *  NeedPermission). The account is healthy; like [OK], this means the *restricted* Gmail scope is
+         *  the thing that's blocked, NOT the account's device sign-in. */
+        RECOVERABLE,
+
+        /** A hard, non-recoverable auth failure — the account's own device sign-in state is broken. */
+        BROKEN,
+
+        /** Google couldn't be reached — inconclusive. */
+        UNREACHABLE,
+    }
+
+    /** [category] drives the guidance; [detail] keeps the raw reason for logcat. */
+    internal data class ProbeResult(val category: BasicScopeProbe, val detail: String)
+
     companion object {
         const val GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
         private const val OAUTH2_SCOPE = "oauth2:$GMAIL_READONLY_SCOPE"
@@ -197,12 +220,30 @@ class GmailAuth @Inject constructor(
         private const val OAUTH2_EMAIL_SCOPE = "oauth2:https://www.googleapis.com/auth/userinfo.email"
         private const val GOOGLE_TYPE = "com.google"
         private const val TAG = "GmailAuth"
-        private const val PROBE_OK = "OK"
+
+        /**
+         * Classifies a basic-scope probe failure. A [UserRecoverableAuthException] (NeedRemoteConsent /
+         * NeedPermission) means the account is healthy and merely needs consent → [BasicScopeProbe.RECOVERABLE],
+         * NOT a broken sign-in. IO / NetworkError / Timeout failures are [BasicScopeProbe.UNREACHABLE]; every
+         * other hard [GoogleAuthException] is [BasicScopeProbe.BROKEN]. Pure + unit-testable.
+         */
+        @VisibleForTesting
+        internal fun classifyProbe(t: Throwable): BasicScopeProbe = when {
+            t is UserRecoverableAuthException -> BasicScopeProbe.RECOVERABLE
+            t is IOException -> BasicScopeProbe.UNREACHABLE
+            t is GoogleAuthException && isNetworkStatus(t.message) -> BasicScopeProbe.UNREACHABLE
+            else -> BasicScopeProbe.BROKEN
+        }
+
+        /** GoogleAuthUtil's transient-connectivity status strings. */
+        private fun isNetworkStatus(status: String?): Boolean =
+            status?.trim() == "NetworkError" || status?.trim() == "Timeout"
 
         /**
          * Turns a GoogleAuthUtil failure into actionable, user-facing guidance instead of an opaque "ERROR".
          *  - account no longer on the device → re-add it;
-         *  - else [basicScopeOk] true → the account signs in but the *restricted Gmail scope* is blocked for
+         *  - Google unreachable (the main status or the probe) → check the connection;
+         *  - [probe] OK or RECOVERABLE → the account signs in but the *restricted Gmail scope* is blocked for
          *    it (Advanced Protection / supervised account / not an OAuth test user / app not yet verified);
          *  - else the account's own sign-in on the device is broken → re-add / clear Play Services.
          * Pure, so it's unit-testable without Play Services.
@@ -212,30 +253,30 @@ class GmailAuth @Inject constructor(
             status: String?,
             accountEmail: String,
             onDeviceEmails: List<String>,
-            basicScopeOk: Boolean,
+            probe: BasicScopeProbe,
         ): String {
             if (onDeviceEmails.isNotEmpty() && onDeviceEmails.none { it.equals(accountEmail, ignoreCase = true) }) {
                 return "This Google account isn't signed in on the device anymore. Add it under Settings → " +
                     "Accounts, open Gmail once, then reconnect it here."
             }
-            if (basicScopeOk) {
+            if (isNetworkStatus(status) || probe == BasicScopeProbe.UNREACHABLE) {
+                return "Couldn't reach Google — check your connection and try again."
+            }
+            if (probe == BasicScopeProbe.OK || probe == BasicScopeProbe.RECOVERABLE) {
                 return "This account signs in, but Gmail access is blocked for it specifically. That points to " +
                     "the account (Advanced Protection, or a supervised/Family Link account, blocks third-party " +
                     "Gmail access) or to app authorization (it must be an OAuth test user; a public connection " +
                     "needs Google to verify the app for the Gmail scope). Your other accounts work because they " +
                     "don't have this restriction."
             }
-            return when (status?.trim()) {
-                "NetworkError", "Timeout" ->
-                    "Couldn't reach Google — check your connection and try again."
-                else ->
-                    "This account's sign-in on the device is stuck. Remove it under Settings → Accounts and " +
-                        "re-add it — or clear Google Play Services storage — then reconnect."
-            }
+            return "This account's sign-in on the device is stuck. Remove it under Settings → Accounts and " +
+                "re-add it — or clear Google Play Services storage — then reconnect."
         }
 
-        /** Masks an email for logs (first char + domain) so account PII is never written to logcat. */
-        @VisibleForTesting
+        /**
+         * Masks an email for logs (first char + domain) so account PII is never written to logcat. Shared:
+         * also used by RecentDataScanner's Gmail scan logs.
+         */
         internal fun mask(email: String?): String {
             if (email.isNullOrBlank()) return "(none)"
             val at = email.indexOf('@')
