@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -63,6 +64,8 @@ fun NotesScreen(
     isDark: Boolean = true,
     onToggleTheme: () -> Unit = {},
     onNoteClick: (Int) -> Unit = {},
+    onOpenGuide: () -> Unit = {},
+    onLock: (() -> Unit)? = null,
     viewModel: NotesViewModel = hiltViewModel()
 ) {
     val c = BoldTheme.colors
@@ -84,85 +87,94 @@ fun NotesScreen(
     var pendingDelete by remember { mutableStateOf<SavedFilter?>(null) }
     var showBankruptcyDialog by remember { mutableStateOf(false) } // #125 batch-archive confirm
 
-    Column(Modifier.fillMaxSize().background(c.screen)) {
-        // Header / search / segment share the spec's 22dp inset; the card list uses 16dp.
-        Column(Modifier.padding(start = 22.dp, end = 22.dp, top = 14.dp)) {
-            BoldPageHeader(
-                title = "Notes",
-                subtitle = "Approved · encrypted at rest",
-                isDark = isDark,
-                onToggleTheme = onToggleTheme
-            )
-            Spacer(Modifier.height(14.dp))
-            BoldSearchField(query, viewModel::setQuery)
-            Spacer(Modifier.height(12.dp))
-            NotesSegment(
-                showCompleted = showCompleted,
-                activeCount = counts["all"] ?: 0,
-                completedCount = completedCount,
-                onSelect = { viewModel.setShowCompleted(it) }
-            )
-            // Kind + tag + saved filters apply to the Active list only; the Done view is unfiltered.
-            if (!showCompleted) {
-                Spacer(Modifier.height(12.dp))
-                NotesKindFilter(kind = kindFilter, counts = counts, archivedCount = archivedCount, onSelect = viewModel::setKindFilter)
-                if (presentTags.isNotEmpty()) {
-                    Spacer(Modifier.height(8.dp))
-                    NotesTagFilter(presentTags, tagFilter, tagCounts, viewModel::toggleTag)
-                }
-                if (savedFilters.isNotEmpty() || canSaveFilter) {
-                    Spacer(Modifier.height(8.dp))
-                    SavedFilterRow(
-                        saved = savedFilters,
-                        activeKind = kindFilter,
-                        activeTags = tagFilter,
-                        canSave = canSaveFilter,
-                        onApply = viewModel::applySavedFilter,
-                        onRequestDelete = { pendingDelete = it },
-                        onSaveClick = { showSaveDialog = true }
-                    )
-                }
-            }
-            Spacer(Modifier.height(14.dp))
-        }
+    val listState = rememberLazyListState()
 
-        val current = notes
-        when {
-            current == null -> SkeletonList(modifier = Modifier.weight(1f))
-            current.isEmpty() -> NotesEmpty(Modifier.weight(1f), query, showCompleted)
-            else -> {
-                val now = System.currentTimeMillis()
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 96.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    // #125: the Fading shelf offers one-tap bankruptcy; the Archived shelf offers restore.
-                    if (kindFilter == "fading") {
-                        item {
-                            LifecycleBanner(
-                                "${current.size} task${if (current.size == 1) "" else "s"} untouched for weeks",
-                                "Archive all", c.skip
-                            ) { showBankruptcyDialog = true }
+    Box(Modifier.fillMaxSize()) {
+        BoldCollapsingHeader(
+            title = "Notes",
+            subtitle = "Approved · encrypted at rest",
+            isDark = isDark,
+            onToggleTheme = onToggleTheme,
+            onOpenGuide = onOpenGuide,
+            onLock = onLock,
+            listState = listState,
+            hasScrollableContent = notes?.isNotEmpty() == true,
+            resetKey = listOf(showCompleted, kindFilter, tagFilter, query),
+            collapsible = {
+                Spacer(Modifier.height(14.dp))
+                BoldSearchField(query, viewModel::setQuery)
+                Spacer(Modifier.height(12.dp))
+                NotesSegment(
+                    showCompleted = showCompleted,
+                    activeCount = counts["all"] ?: 0,
+                    completedCount = completedCount,
+                    onSelect = { viewModel.setShowCompleted(it) }
+                )
+            },
+            pinned = {
+                // Filter chips (Option 2): stay put while the cards scroll under them.
+                if (!showCompleted) {
+                    Column(Modifier.padding(start = 22.dp, end = 22.dp, top = 12.dp)) {
+                        NotesKindFilter(kind = kindFilter, counts = counts, archivedCount = archivedCount, onSelect = viewModel::setKindFilter)
+                        if (presentTags.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            NotesTagFilter(presentTags, tagFilter, tagCounts, viewModel::toggleTag)
                         }
-                    } else if (kindFilter == "archived") {
-                        item {
-                            LifecycleBanner("${current.size} archived · kept, not deleted", "Restore all", c.accent) {
-                                viewModel.restoreAllArchived()
-                            }
+                        if (savedFilters.isNotEmpty() || canSaveFilter) {
+                            Spacer(Modifier.height(8.dp))
+                            SavedFilterRow(
+                                saved = savedFilters,
+                                activeKind = kindFilter,
+                                activeTags = tagFilter,
+                                canSave = canSaveFilter,
+                                onApply = viewModel::applySavedFilter,
+                                onRequestDelete = { pendingDelete = it },
+                                onSaveClick = { showSaveDialog = true }
+                            )
                         }
                     }
-                    items(current, key = { it.id }) { note ->
-                        // Stale to-dos render faded in every list; archived items are always faded.
-                        val faded = kindFilter == "archived" ||
-                            TaskFade.isFading(note.type, note.dueDate, note.completed, note.archived, note.createdDate, now)
-                        BoldNoteCard(
-                            modifier = Modifier.animateItem().then(if (faded) Modifier.alpha(0.5f) else Modifier),
-                            note = note,
-                            onClick = { onNoteClick(note.id) },
-                            onToggleComplete = { if (kindFilter != "archived") viewModel.setCompleted(note, !note.completed) },
-                            onReschedule = { viewModel.reschedule(note, it) }
-                        )
+                }
+            },
+        ) {
+            val current = notes
+            when {
+                current == null -> SkeletonList(modifier = Modifier.fillMaxSize())
+                current.isEmpty() -> NotesEmpty(Modifier.fillMaxSize(), query, showCompleted)
+                else -> {
+                    val now = System.currentTimeMillis()
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 96.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // #125: the Fading shelf offers one-tap bankruptcy; the Archived shelf offers restore.
+                        if (kindFilter == "fading") {
+                            item {
+                                LifecycleBanner(
+                                    "${current.size} task${if (current.size == 1) "" else "s"} untouched for weeks",
+                                    "Archive all", c.skip
+                                ) { showBankruptcyDialog = true }
+                            }
+                        } else if (kindFilter == "archived") {
+                            item {
+                                LifecycleBanner("${current.size} archived · kept, not deleted", "Restore all", c.accent) {
+                                    viewModel.restoreAllArchived()
+                                }
+                            }
+                        }
+                        items(current, key = { it.id }) { note ->
+                            // Stale to-dos render faded in every list; archived items are always faded.
+                            val faded = kindFilter == "archived" ||
+                                TaskFade.isFading(note.type, note.dueDate, note.completed, note.archived, note.createdDate, now)
+                            BoldNoteCard(
+                                modifier = Modifier.animateItem().then(if (faded) Modifier.alpha(0.5f) else Modifier),
+                                note = note,
+                                onClick = { onNoteClick(note.id) },
+                                onToggleComplete = { if (kindFilter != "archived") viewModel.setCompleted(note, !note.completed) },
+                                onReschedule = { viewModel.reschedule(note, it) }
+                            )
+                        }
                     }
                 }
             }

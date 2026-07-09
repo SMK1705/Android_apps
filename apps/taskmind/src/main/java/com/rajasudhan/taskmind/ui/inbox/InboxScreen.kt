@@ -28,9 +28,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
@@ -139,6 +141,8 @@ private fun rowDetail(s: Suggestion): String {
 fun InboxScreen(
     isDark: Boolean = true,
     onToggleTheme: () -> Unit = {},
+    onOpenGuide: () -> Unit = {},
+    onLock: (() -> Unit)? = null,
     viewModel: InboxViewModel = hiltViewModel()
 ) {
     val c = BoldTheme.colors
@@ -266,6 +270,8 @@ fun InboxScreen(
                             isOnDevice = onDeviceEngine,
                             isDark = isDark,
                             onToggleTheme = onToggleTheme,
+                            onOpenGuide = onOpenGuide,
+                            onLock = onLock,
                             overflowExpanded = overflowMenu,
                             onOverflowToggle = { overflowMenu = it },
                             isRefreshing = isRefreshing,
@@ -406,6 +412,8 @@ private fun InboxHeader(
     isOnDevice: Boolean,
     isDark: Boolean,
     onToggleTheme: () -> Unit,
+    onOpenGuide: () -> Unit,
+    onLock: (() -> Unit)?,
     overflowExpanded: Boolean,
     onOverflowToggle: (Boolean) -> Unit,
     isRefreshing: Boolean,
@@ -451,6 +459,14 @@ private fun InboxHeader(
             ) {
                 if (isRefreshing) CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp, color = c.accent)
                 else Icon(Icons.Default.Refresh, contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp))
+            }
+            HeaderIconButton(onClick = onOpenGuide, label = "How to use TaskMind") {
+                Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp))
+            }
+            onLock?.let { lock ->
+                HeaderIconButton(onClick = lock, label = "Lock app") {
+                    Icon(Icons.Filled.Lock, contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp))
+                }
             }
             Box {
                 HeaderIconButton(

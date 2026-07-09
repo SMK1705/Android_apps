@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
@@ -27,7 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.accompanist.permissions.*
 import com.rajasudhan.taskmind.ui.bold.BoldCard
-import com.rajasudhan.taskmind.ui.bold.BoldPageHeader
+import com.rajasudhan.taskmind.ui.bold.BoldCollapsingHeader
 import com.rajasudhan.taskmind.ui.bold.BoldSwitch
 import com.rajasudhan.taskmind.ui.theme.BoldTheme
 import com.rajasudhan.taskmind.ui.theme.BoldType
@@ -39,10 +40,13 @@ import com.rajasudhan.taskmind.ui.theme.ShapePanel
 fun SourcesScreen(
     isDark: Boolean = true,
     onToggleTheme: () -> Unit = {},
+    onOpenGuide: () -> Unit = {},
+    onLock: (() -> Unit)? = null,
     viewModel: SourcesViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val c = BoldTheme.colors
+    val listState = rememberLazyListState()
 
     val notificationsEnabled by viewModel.isNotificationsEnabled.collectAsState()
     val smsEnabled by viewModel.isSmsEnabled.collectAsState()
@@ -105,18 +109,19 @@ fun SourcesScreen(
         }
     }
 
-    Column(Modifier.fillMaxSize().background(c.screen)) {
-        Column(Modifier.padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 8.dp)) {
-            BoldPageHeader(
-                title = "Sources",
-                subtitle = "What TaskMind is allowed to read",
-                isDark = isDark,
-                onToggleTheme = onToggleTheme
-            )
-        }
-
+    BoldCollapsingHeader(
+        title = "Sources",
+        subtitle = "What TaskMind is allowed to read",
+        isDark = isDark,
+        onToggleTheme = onToggleTheme,
+        onOpenGuide = onOpenGuide,
+        onLock = onLock,
+        listState = listState,
+        hasScrollableContent = true,
+    ) {
         LazyColumn(
-            modifier = Modifier.weight(1f),
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(11.dp)
         ) {
