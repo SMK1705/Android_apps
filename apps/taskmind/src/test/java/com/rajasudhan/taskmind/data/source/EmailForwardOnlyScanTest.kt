@@ -80,4 +80,22 @@ class EmailForwardOnlyScanTest {
 
         coVerify { gmailCollector.fetchUnreadPrimary("token", since, emptySet()) }
     }
+
+    @Test
+    fun emailScan_on401_invalidatesTheStaleToken_thenRetriesOnceWithAFreshOne() = runTest {
+        // #G1: a token accepted by GoogleAuthUtil but rejected by Gmail (401) must self-heal — invalidate
+        // the stale token, re-authorize, and retry once — instead of the scan silently returning nothing.
+        every { settingsManager.gmailAccounts } returns setOf(account)
+        coEvery { gmailAuth.silentAccessToken(account) } returns "stale" andThen "fresh"
+        var attempt = 0
+        coEvery { gmailCollector.fetchUnreadPrimary(any(), any(), any()) } coAnswers {
+            if (attempt++ == 0) throw GmailCollector.Unauthorized()
+            listOf(GmailCollector.Email("m1", "amy@x.com", "Hi", "Body"))
+        }
+
+        scanner(emailOnlySources()).scanSince(enabledAt + 60_000L)
+
+        coVerify { gmailAuth.invalidate("stale") }                                // the stale token is dropped
+        coVerify { pipeline.processText(match { it.startsWith("Email") }, any()) } // the retry's email is processed
+    }
 }
