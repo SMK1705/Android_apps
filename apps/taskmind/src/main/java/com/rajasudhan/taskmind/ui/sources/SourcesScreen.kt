@@ -239,7 +239,7 @@ fun SourcesScreen(
             item {
                 BoldSourceRow(
                     name = "Email (Gmail)",
-                    desc = "Unread Primary, read-only",
+                    desc = "Primary inbox, read-only",
                     meta = if (gmailAccounts.isEmpty()) "Not connected"
                         else "${gmailAccounts.size} account${if (gmailAccounts.size == 1) "" else "s"} connected",
                     checked = emailEnabled,

@@ -376,7 +376,7 @@ _Scope: per-source enable + runtime permission prompts, persistence, allowlist, 
 #### TM-SRC-15 · Disconnect last Gmail account disables source — `P1` · edge
 - **Preconditions:** Email ON with exactly one connected account.
 - **Steps:** 1. Expand the Email row. 2. Tap **Disconnect** next to the only account. 3. Observe the switch, meta, and hero count.
-- **Expected:** `disconnectGmailAccount` removes it; since `remaining` is empty it calls `setSourceEnabled(KEY_EMAIL_ENABLED, false)`. The switch flips OFF, hero count decrements, meta reverts to "Read unread Primary emails (read-only)". Toggling Email OFF directly (instead of disconnecting) disconnects **all** accounts (`disconnectAll()`), clears the list and status, and persists OFF.
+- **Expected:** `disconnectGmailAccount` removes it; since `remaining` is empty it calls `setSourceEnabled(KEY_EMAIL_ENABLED, false)`. The switch flips OFF, hero count decrements, meta reverts to "Primary inbox, read-only". Toggling Email OFF directly (instead of disconnecting) disconnects **all** accounts (`disconnectAll()`), clears the list and status, and persists OFF.
 
 ### 5. Quick-capture surfaces
 _Scope: capture entry points feed the same understanding pipeline; capture bypasses the lock but reads stay gated. Source of truth: `apps/taskmind/src/main/java/com/rajasudhan/taskmind/ui/capture/ShareTargetActivity.kt`._
@@ -1708,9 +1708,9 @@ _Scope: the egress audit. Source of truth: `apps/taskmind/src/main/java/com/raja
 - **Expected:** The logged `EgressEvent` has only `timestamp`, `host`, `purpose` (per the data class) — the secret string appears nowhere in the log row or the persisted JSON. Purpose text is the fixed `"Cloud LLM extraction"`.
 
 #### TM-EGRESS-04 · Gmail fetch is logged — `P1` · positive
-- **Preconditions:** A Gmail account connected (Sources tab); unread Primary mail available.
-- **Steps:** 1. Trigger a Gmail fetch (manual refresh / background scan that runs `GmailCollector.fetchUnreadPrimary`). 2. Open Data Egress.
-- **Expected:** A row `… · gmail.googleapis.com — Gmail fetch (unread primary)` is recorded once per fetch call (logged before the API call, so it's recorded even if the API later returns nothing/fails). Email bodies are NOT in the log.
+- **Preconditions:** A Gmail account connected (Sources tab); recent Primary mail available.
+- **Steps:** 1. Trigger a Gmail fetch (manual refresh / background scan that runs `GmailCollector.fetchRecentPrimary`). 2. Open Data Egress.
+- **Expected:** A row `… · gmail.googleapis.com — Gmail fetch (recent primary)` is recorded once per fetch call (logged before the API call, so it's recorded even if the API later returns nothing/fails). Email bodies are NOT in the log.
 
 #### TM-EGRESS-05 · Gmail profile lookup (OAuth connect) is logged — `P1` · positive
 - **Preconditions:** Connecting a Gmail account that triggers `profileEmail`.

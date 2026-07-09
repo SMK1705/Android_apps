@@ -67,7 +67,7 @@ class EmailForwardOnlyScanTest {
 
         // The fetch must start at enabledAt, not the earlier window — Gmail is only ever asked for mail
         // that arrived AFTER email was turned on; nothing older is fetched or run through the LLM.
-        coVerify { gmailCollector.fetchUnreadPrimary("token", enabledAt, emptySet()) }
+        coVerify { gmailCollector.fetchRecentPrimary("token", enabledAt, emptySet()) }
     }
 
     @Test
@@ -78,7 +78,7 @@ class EmailForwardOnlyScanTest {
 
         scanner(emailOnlySources()).scanSince(since)
 
-        coVerify { gmailCollector.fetchUnreadPrimary("token", since, emptySet()) }
+        coVerify { gmailCollector.fetchRecentPrimary("token", since, emptySet()) }
     }
 
     @Test
@@ -88,7 +88,7 @@ class EmailForwardOnlyScanTest {
         every { settingsManager.gmailAccounts } returns setOf(account)
         coEvery { gmailAuth.silentAccessToken(account) } returns "stale" andThen "fresh"
         var attempt = 0
-        coEvery { gmailCollector.fetchUnreadPrimary(any(), any(), any()) } coAnswers {
+        coEvery { gmailCollector.fetchRecentPrimary(any(), any(), any()) } coAnswers {
             if (attempt++ == 0) throw GmailCollector.Unauthorized()
             listOf(GmailCollector.Email("m1", "amy@x.com", "Hi", "Body"))
         }

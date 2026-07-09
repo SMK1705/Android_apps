@@ -8,9 +8,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Fetches recent **unread, Primary-category** emails via the Gmail REST API and turns each into a
- * small [Email] (sender, subject, plain-text body) for the understanding pipeline. Email content
- * stays on the device; only the Gmail API request itself is network egress, and it is audited.
+ * Fetches recent **Primary-category** emails (read *or* unread) via the Gmail REST API and turns each into
+ * a small [Email] (sender, subject, plain-text body) for the understanding pipeline. Read mail is included
+ * on purpose, so an email the user opens before the next scan runs isn't silently dropped — dedup is the
+ * caller's processed-id ledger and the `after:` window keeps the fetch bounded. Email content stays on the
+ * device; only the Gmail API request itself is network egress, and it is audited.
  */
 @Singleton
 class GmailCollector @Inject constructor(
@@ -24,13 +26,13 @@ class GmailCollector @Inject constructor(
 
     private companion object {
         const val TAG = "GmailCollector"
-        // Safety caps so a huge unread-in-window backlog can't fetch/process unboundedly. The scan is
+        // Safety caps so a huge in-window backlog can't fetch/process unboundedly. The scan is
         // already window-clamped (`after:` + the per-source enabled-at stamp), so these are backstops.
         const val MAX_MESSAGES_PER_SCAN = 100
         const val MAX_PAGES = 25
     }
 
-    suspend fun fetchUnreadPrimary(
+    suspend fun fetchRecentPrimary(
         accessToken: String,
         sinceMillis: Long,
         skipIds: Set<String>,
@@ -39,13 +41,15 @@ class GmailCollector @Inject constructor(
     ): List<Email> = withContext(Dispatchers.IO) {
         val bearer = "Bearer $accessToken"
         val afterSeconds = sinceMillis / 1000
-        val query = "is:unread category:primary after:$afterSeconds"
+        // No `is:unread`: read mail is scanned too, so an email the user opens before the next scan isn't
+        // dropped. Dedup is the caller's processed-id ledger (skipIds); the `after:` window bounds the fetch.
+        val query = "category:primary after:$afterSeconds"
 
-        egressLogger.record("gmail.googleapis.com", "Gmail fetch (unread primary)")
+        egressLogger.record("gmail.googleapis.com", "Gmail fetch (recent primary)")
         val emails = mutableListOf<Email>()
         // Follow nextPageToken until the whole window is covered — a single page (maxResults) would
-        // permanently drop the oldest emails when more than one page of unread Primary mail is in the
-        // window (they're never added to the processed-id ledger and fall outside the next scan's window).
+        // permanently drop the oldest emails when more than one page of Primary mail is in the window
+        // (they're never added to the processed-id ledger and fall outside the next scan's window).
         var pageToken: String? = null
         var pages = 0
         do {
@@ -69,7 +73,7 @@ class GmailCollector @Inject constructor(
         } while (pageToken != null && emails.size < maxMessages && pages < MAX_PAGES)
 
         if (pageToken != null && (emails.size >= maxMessages || pages >= MAX_PAGES)) {
-            android.util.Log.w(TAG, "hit a scan cap (messages=${emails.size}, pages=$pages); more unread remain in the window")
+            android.util.Log.w(TAG, "hit a scan cap (messages=${emails.size}, pages=$pages); more mail remains in the window")
         }
         android.util.Log.i(TAG, "Gmail fetch: ${emails.size} email(s) over $pages page(s) for query=$query")
         emails
