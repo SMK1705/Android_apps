@@ -307,9 +307,10 @@ class RecentDataScanner @Inject constructor(
     }
 
     /**
-     * Fetches recent unread Primary-category emails and runs them through the pipeline. Skips the
-     * scan silently if Gmail isn't currently authorized (the user reconnects in Sources). Already-
-     * processed message ids are skipped so a still-unread email isn't re-run on every scan.
+     * Fetches recent Primary-category emails (read or unread) and runs them through the pipeline. Skips
+     * the scan silently if Gmail isn't currently authorized (the user reconnects in Sources). Already-
+     * processed message ids are skipped so an email isn't re-run on every scan — read mail is included so
+     * one the user opens before the next scan isn't dropped.
      */
     private suspend fun scanEmail(since: Long) {
         val accounts = settingsManager.gmailAccounts
@@ -325,7 +326,7 @@ class RecentDataScanner @Inject constructor(
             }
             val skip = sourceManager.processedEmailIds(account).first()
             val emails = try {
-                gmailCollector.fetchUnreadPrimary(token, since, skip)
+                gmailCollector.fetchRecentPrimary(token, since, skip)
             } catch (e: GmailCollector.Unauthorized) {
                 // The token was accepted by GoogleAuthUtil but rejected by Gmail (401 — expired/revoked
                 // mid-use). Invalidate it so Play Services mints a fresh one, then retry ONCE; otherwise
@@ -333,7 +334,7 @@ class RecentDataScanner @Inject constructor(
                 android.util.Log.w("RecentDataScanner", "Gmail(${GmailAuth.mask(account)}) token rejected (401); refreshing and retrying")
                 gmailAuth.invalidate(token)
                 val fresh = gmailAuth.silentAccessToken(account) ?: continue
-                runCatching { gmailCollector.fetchUnreadPrimary(fresh, since, skip) }.getOrDefault(emptyList())
+                runCatching { gmailCollector.fetchRecentPrimary(fresh, since, skip) }.getOrDefault(emptyList())
             }
             android.util.Log.i("RecentDataScanner", "Gmail(${GmailAuth.mask(account)}) fetched ${emails.size} new email(s) since $since")
             for (email in emails) {

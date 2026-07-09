@@ -3,9 +3,12 @@ package com.rajasudhan.taskmind.data.source.email
 import com.rajasudhan.taskmind.data.source.EgressLogger
 import io.mockk.coEvery
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import retrofit2.HttpException
@@ -13,9 +16,9 @@ import retrofit2.Response
 import java.util.Base64
 
 /**
- * Gmail fetch pagination (#G3): when more than one page of unread Primary mail is in the window, every
- * message must be collected — a single page silently dropped the oldest (they never enter the processed-id
- * ledger and fall outside the next scan's window).
+ * Gmail fetch behaviour: pagination (collect every message across pages, not just the first) and the query,
+ * which scans **read or unread** Primary mail in the window so an email the user opens before the next scan
+ * isn't dropped — dedup is the caller's processed-id ledger, not the unread flag.
  */
 class GmailCollectorTest {
 
@@ -34,14 +37,28 @@ class GmailCollectorTest {
     )
 
     @Test
-    fun followsNextPageToken_collectingEveryUnreadEmail_notJustTheFirstPage() = runTest {
+    fun query_scansReadAndUnreadPrimaryMail_withinTheAfterWindow() = runTest {
+        val query = slot<String>()
+        coEvery { api.listMessages(any(), capture(query), any(), null) } returns
+            GmailMessageList(messages = emptyList(), nextPageToken = null)
+
+        collector.fetchRecentPrimary("tok", sinceMillis = 60_000L, skipIds = emptySet())
+
+        // No `is:unread`: an email the user opens before the scan runs must still be caught (dedup is the
+        // processed-id ledger, not the read flag). 60_000 ms -> after:60 (epoch seconds).
+        assertFalse("query must not restrict to unread", query.captured.contains("is:unread"))
+        assertEquals("category:primary after:60", query.captured)
+    }
+
+    @Test
+    fun followsNextPageToken_collectingEveryEmail_notJustTheFirstPage() = runTest {
         val page1 = GmailMessageList(messages = (1..20).map { ref("m$it") }, nextPageToken = "PAGE2")
         val page2 = GmailMessageList(messages = (21..25).map { ref("m$it") }, nextPageToken = null)
         coEvery { api.listMessages(any(), any(), any(), null) } returns page1
         coEvery { api.listMessages(any(), any(), any(), "PAGE2") } returns page2
         (1..25).forEach { coEvery { api.getMessage(any(), "m$it", any()) } returns msg("m$it") }
 
-        val emails = collector.fetchUnreadPrimary("tok", sinceMillis = 0L, skipIds = emptySet(), maxResults = 20)
+        val emails = collector.fetchRecentPrimary("tok", sinceMillis = 0L, skipIds = emptySet(), maxResults = 20)
 
         assertEquals(25, emails.size) // both pages, not just the first 20
         assertEquals((1..25).map { "m$it" }, emails.map { it.id })
@@ -53,7 +70,7 @@ class GmailCollectorTest {
         coEvery { api.listMessages(any(), any(), any(), null) } returns page1
         (1..20).forEach { coEvery { api.getMessage(any(), "m$it", any()) } returns msg("m$it") }
 
-        val emails = collector.fetchUnreadPrimary("tok", 0L, emptySet(), maxResults = 20, maxMessages = 10)
+        val emails = collector.fetchRecentPrimary("tok", 0L, emptySet(), maxResults = 20, maxMessages = 10)
 
         assertEquals(10, emails.size) // capped; page 2 never requested
     }
@@ -67,7 +84,7 @@ class GmailCollectorTest {
         coEvery { api.getMessage(any(), "a", any()) } returns msg("a")
         coEvery { api.getMessage(any(), "c", any()) } returns msg("c")
 
-        val emails = collector.fetchUnreadPrimary("tok", 0L, skipIds = setOf("b"), maxResults = 20)
+        val emails = collector.fetchRecentPrimary("tok", 0L, skipIds = setOf("b"), maxResults = 20)
 
         assertEquals(listOf("a", "c"), emails.map { it.id }) // b skipped; c on page 2 still collected
     }
@@ -76,7 +93,7 @@ class GmailCollectorTest {
     fun listFailure_onTheFirstPage_yieldsEmpty_notACrash() = runTest {
         coEvery { api.listMessages(any(), any(), any(), null) } throws RuntimeException("boom")
 
-        val emails = collector.fetchUnreadPrimary("tok", 0L, emptySet())
+        val emails = collector.fetchRecentPrimary("tok", 0L, emptySet())
 
         assertEquals(emptyList<GmailCollector.Email>(), emails)
     }
@@ -89,7 +106,7 @@ class GmailCollectorTest {
             HttpException(Response.error<GmailMessageList>(401, "unauthorized".toResponseBody(null)))
 
         try {
-            collector.fetchUnreadPrimary("stale-token", 0L, emptySet())
+            collector.fetchRecentPrimary("stale-token", 0L, emptySet())
             fail("expected GmailCollector.Unauthorized")
         } catch (e: GmailCollector.Unauthorized) {
             // expected

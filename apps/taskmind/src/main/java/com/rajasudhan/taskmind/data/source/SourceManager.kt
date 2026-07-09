@@ -48,7 +48,7 @@ class SourceManager @Inject constructor(
         // Set of package names whose notifications we process. Empty = monitor all apps.
         val KEY_NOTIFICATION_ALLOWLIST = stringSetPreferencesKey("notification_allowlist")
 
-        // Gmail message ids already processed, so a still-unread email isn't re-run every scan.
+        // Gmail message ids already processed, so an email isn't re-run every scan (read mail included).
         // Keyed per account so multiple mailboxes don't share (and evict) each other's ids.
         fun processedEmailKey(account: String) = stringSetPreferencesKey("processed_email_ids_$account")
         const val MAX_PROCESSED_EMAIL_IDS = 200
