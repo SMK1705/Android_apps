@@ -10,7 +10,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -29,17 +33,28 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -57,6 +72,7 @@ import com.rajasudhan.taskmind.ui.theme.ShapeCard
 import com.rajasudhan.taskmind.ui.theme.ShapeChip
 import com.rajasudhan.taskmind.ui.theme.ShapeField
 import java.time.LocalDate
+import kotlin.math.roundToInt
 
 @Composable
 fun NotesScreen(
@@ -84,27 +100,126 @@ fun NotesScreen(
     var pendingDelete by remember { mutableStateOf<SavedFilter?>(null) }
     var showBankruptcyDialog by remember { mutableStateOf(false) } // #125 batch-archive confirm
 
-    Column(Modifier.fillMaxSize().background(c.screen)) {
-        // Header / search / segment share the spec's 22dp inset; the card list uses 16dp.
-        Column(Modifier.padding(start = 22.dp, end = 22.dp, top = 14.dp)) {
-            BoldPageHeader(
-                title = "Notes",
-                subtitle = "Approved · encrypted at rest",
-                isDark = isDark,
-                onToggleTheme = onToggleTheme
-            )
-            Spacer(Modifier.height(14.dp))
-            BoldSearchField(query, viewModel::setQuery)
-            Spacer(Modifier.height(12.dp))
-            NotesSegment(
-                showCompleted = showCompleted,
-                activeCount = counts["all"] ?: 0,
-                completedCount = completedCount,
-                onSelect = { viewModel.setShowCompleted(it) }
-            )
-            // Kind + tag + saved filters apply to the Active list only; the Done view is unfiltered.
-            if (!showCompleted) {
+    // Collapsing header: on scroll, the title + subtitle + search + Active/Done segment shrink up into a
+    // slim pinned bar (small "Notes" + theme toggle), while the filter chips stay pinned below it. A
+    // NestedScroll connection consumes the list's scroll to drive the collapse; the list stays a sibling.
+    // headerOffsetPx / collapsibleFullPx are read only inside layout / graphicsLayer / drawBehind (deferred
+    // phases), so a scroll frame updates the layer without recomposing the screen.
+    val listState = rememberLazyListState()
+    val density = LocalDensity.current
+    var headerOffsetPx by remember { mutableFloatStateOf(0f) }     // collapse offset, coerced to [-max, 0]
+    var collapsibleFullPx by remember { mutableFloatStateOf(0f) }  // measured natural height of the region
+    // Collapsed height the region floors at = the pinned bar's footprint (14dp top inset + 44dp bar).
+    val pinnedBarPx = with(density) { 58.dp.toPx() }
+
+    val headerNsc = remember {
+        object : NestedScrollConnection {
+            private fun drag(dy: Float): Offset {
+                val max = (collapsibleFullPx - pinnedBarPx).coerceAtLeast(0f)
+                if (max <= 0f) return Offset.Zero
+                val prev = headerOffsetPx
+                headerOffsetPx = (prev + dy).coerceIn(-max, 0f)
+                return Offset(0f, headerOffsetPx - prev)
+            }
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset =
+                if (available.y < 0f) drag(available.y) else Offset.Zero      // finger up → collapse first
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset =
+                if (available.y > 0f) drag(available.y) else Offset.Zero      // list already at top → re-expand
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                val max = (collapsibleFullPx - pinnedBarPx).coerceAtLeast(0f)
+                if (max > 0f && headerOffsetPx != 0f && headerOffsetPx != -max) {
+                    val target = if (-headerOffsetPx > max / 2f) -max else 0f  // settle to the nearer end
+                    animate(headerOffsetPx, target, available.y, spring(stiffness = Spring.StiffnessMediumLow)) { v, _ -> headerOffsetPx = v }
+                }
+                return Velocity.Zero
+            }
+        }
+    }
+
+    val hasList = notes?.isNotEmpty() == true
+    // Re-expand + re-anchor to the top whenever the segment / filter / query changes, so a fresh list starts
+    // expanded rather than inheriting a stale collapsed offset.
+    LaunchedEffect(showCompleted, kindFilter, tagFilter, query) {
+        if (hasList) listState.scrollToItem(0)
+        animate(headerOffsetPx, 0f) { v, _ -> headerOffsetPx = v }
+    }
+    // A branch with no scrollable list (empty / skeleton / a list shorter than the screen) can't re-expand on
+    // its own — settle it open so the header can never get stuck collapsed with nothing to scroll.
+    LaunchedEffect(hasList) {
+        if (!hasList) {
+            if (headerOffsetPx != 0f) animate(headerOffsetPx, 0f) { v, _ -> headerOffsetPx = v }
+        } else {
+            snapshotFlow { listState.canScrollForward || listState.canScrollBackward }
+                .collect { scrollable -> if (!scrollable && headerOffsetPx != 0f) animate(headerOffsetPx, 0f) { v, _ -> headerOffsetPx = v } }
+        }
+    }
+
+    Box(Modifier.fillMaxSize().background(c.screen)) {
+      Column(Modifier.fillMaxSize().nestedScroll(headerNsc)) {
+        // --- Collapsing region (title + subtitle + search + segment) with the pinned bar overlaid on top ---
+        Box(Modifier.fillMaxWidth()) {
+            Column(
+                Modifier.fillMaxWidth()
+                    .clipToBounds()
+                    .layout { measurable, constraints ->
+                        val placeable = measurable.measure(constraints)
+                        val full = placeable.height
+                        if (collapsibleFullPx != full.toFloat()) collapsibleFullPx = full.toFloat()
+                        val collapse = (-headerOffsetPx).roundToInt().coerceIn(0, full)
+                        layout(placeable.width, full - collapse) { placeable.place(0, -collapse) }
+                    }
+                    .padding(start = 22.dp, end = 22.dp, top = 14.dp)
+            ) {
+                Text(
+                    "Notes",
+                    style = BoldType.screenTitle,
+                    color = c.ink,
+                    modifier = Modifier
+                        .padding(end = 52.dp)
+                        .graphicsLayer { alpha = 1f - (collapseFraction(headerOffsetPx, collapsibleFullPx, pinnedBarPx) / 0.6f).coerceIn(0f, 1f) }
+                        .semantics { heading() }
+                )
+                Spacer(Modifier.height(7.dp))
+                Text(
+                    "Approved · encrypted at rest",
+                    style = BoldType.srcLabel.copy(fontSize = 11.5.sp, letterSpacing = 0.3.sp),
+                    color = c.muted,
+                    modifier = Modifier.graphicsLayer { alpha = 1f - collapseFraction(headerOffsetPx, collapsibleFullPx, pinnedBarPx) }
+                )
+                Spacer(Modifier.height(14.dp))
+                BoldSearchField(query, viewModel::setQuery)
                 Spacer(Modifier.height(12.dp))
+                NotesSegment(
+                    showCompleted = showCompleted,
+                    activeCount = counts["all"] ?: 0,
+                    completedCount = completedCount,
+                    onSelect = { viewModel.setShowCompleted(it) }
+                )
+            }
+            // Pinned bar: an opaque scrim (fades in on collapse to hide the shrinking region) that carries the
+            // compact title (fades in) plus the theme toggle (always present, so it works in both states).
+            Row(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+                    .drawBehind { drawRect(color = c.screen, alpha = collapseFraction(headerOffsetPx, collapsibleFullPx, pinnedBarPx)) }
+                    .padding(start = 22.dp, end = 22.dp, top = 14.dp)
+                    .height(44.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "Notes",
+                    style = BoldType.screenTitle.copy(fontSize = 22.sp, lineHeight = 24.sp),
+                    color = c.ink,
+                    modifier = Modifier.graphicsLayer { alpha = ((collapseFraction(headerOffsetPx, collapsibleFullPx, pinnedBarPx) - 0.4f) / 0.6f).coerceIn(0f, 1f) }
+                )
+                BoldThemeToggle(isDark, onToggleTheme)
+            }
+        }
+        // --- Pinned filter chips (Option 2): stay put while the cards scroll under them ---
+        if (!showCompleted) {
+            Column(Modifier.padding(start = 22.dp, end = 22.dp, top = 12.dp)) {
                 NotesKindFilter(kind = kindFilter, counts = counts, archivedCount = archivedCount, onSelect = viewModel::setKindFilter)
                 if (presentTags.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
@@ -123,8 +238,8 @@ fun NotesScreen(
                     )
                 }
             }
-            Spacer(Modifier.height(14.dp))
         }
+        Spacer(Modifier.height(14.dp))
 
         val current = notes
         when {
@@ -133,6 +248,7 @@ fun NotesScreen(
             else -> {
                 val now = System.currentTimeMillis()
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -167,6 +283,7 @@ fun NotesScreen(
                 }
             }
         }
+      }
 
         if (showSaveDialog) {
             SaveFilterDialog(
@@ -202,6 +319,16 @@ fun NotesScreen(
             )
         }
     }
+}
+
+/**
+ * Header collapse progress: 0f fully expanded, 1f fully collapsed. [offsetPx] is the (negative) scroll the
+ * header has absorbed; the collapsible region shrinks from its measured [fullPx] down to the pinned bar
+ * ([pinnedPx]). Pure, so the mapping is unit-testable without Compose.
+ */
+internal fun collapseFraction(offsetPx: Float, fullPx: Float, pinnedPx: Float): Float {
+    val max = (fullPx - pinnedPx).coerceAtLeast(0f)
+    return if (max > 0f) (-offsetPx / max).coerceIn(0f, 1f) else 0f
 }
 
 @Composable
