@@ -88,13 +88,18 @@ class GmailAuth @Inject constructor(
                 // still on the device (a removed/re-added account loses this app's token grant and hard-
                 // fails here even when consent looks fine). Account is masked in logs (PII).
                 val onDevice = googleAccountsOnDevice()
+                // Classify the hard failure: does a BASIC scope work for this same account? "OK" means the
+                // account signs in fine and ONLY the restricted gmail.readonly scope is blocked (test-user /
+                // app-verification / Advanced Protection / supervised account); a failure means the account's
+                // own Play Services state is broken. Splits the two very different fixes.
+                val probe = probeBasicScope(accountEmail)
                 android.util.Log.e(
                     TAG,
                     "getToken failed for ${mask(accountEmail)}: ${e.javaClass.simpleName}: ${e.message} " +
-                        "(device Google accounts: ${onDevice.size})",
+                        "(device Google accounts: ${onDevice.size}; basic-scope probe: $probe)",
                     e
                 )
-                GmailAuthState.Error(authGuidance(e.message, accountEmail, onDevice))
+                GmailAuthState.Error(authGuidance(e.message, accountEmail, onDevice, basicScopeOk = probe == PROBE_OK))
             } catch (e: IOException) {
                 GmailAuthState.Error("Network error reaching Google — try again.")
             }
@@ -121,6 +126,18 @@ class GmailAuth @Inject constructor(
     private fun googleAccountsOnDevice(): List<String> =
         runCatching { AccountManager.get(appContext).getAccountsByType(GOOGLE_TYPE).map { it.name } }
             .getOrDefault(emptyList())
+
+    /**
+     * Diagnostic run only when the Gmail token HARD-fails: try a BASIC (non-restricted) scope for the same
+     * account. [PROBE_OK] means the account signs in fine and only the restricted Gmail scope is blocked;
+     * anything else means the account's own Play Services sign-in state is broken. The exact result is
+     * logged and folded into [authGuidance]. Never throws.
+     */
+    private suspend fun probeBasicScope(accountEmail: String): String =
+        runCatching {
+            GoogleAuthUtil.getToken(appContext, Account(accountEmail, GOOGLE_TYPE), OAUTH2_EMAIL_SCOPE)
+            PROBE_OK
+        }.getOrElse { "FAILED(${it.javaClass.simpleName}: ${it.message})" }
 
     /**
      * Intent that shows the system Google-account chooser (all Google accounts plus "Add account").
@@ -175,33 +192,45 @@ class GmailAuth @Inject constructor(
     companion object {
         const val GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
         private const val OAUTH2_SCOPE = "oauth2:$GMAIL_READONLY_SCOPE"
+        // A basic, NON-restricted scope for the diagnostic probe (identity only — never gated the way the
+        // restricted Gmail scope is).
+        private const val OAUTH2_EMAIL_SCOPE = "oauth2:https://www.googleapis.com/auth/userinfo.email"
         private const val GOOGLE_TYPE = "com.google"
         private const val TAG = "GmailAuth"
+        private const val PROBE_OK = "OK"
 
         /**
-         * Turns a GoogleAuthUtil failure into actionable, user-facing guidance instead of an opaque
-         * "ERROR". If [accountEmail] is no longer among the device's [onDeviceEmails] (and we could read
-         * that list), the account was removed — the user must re-add it; otherwise map the [status] string
-         * GoogleAuthUtil reported. Pure, so it's unit-testable without Play Services.
+         * Turns a GoogleAuthUtil failure into actionable, user-facing guidance instead of an opaque "ERROR".
+         *  - account no longer on the device → re-add it;
+         *  - else [basicScopeOk] true → the account signs in but the *restricted Gmail scope* is blocked for
+         *    it (Advanced Protection / supervised account / not an OAuth test user / app not yet verified);
+         *  - else the account's own sign-in on the device is broken → re-add / clear Play Services.
+         * Pure, so it's unit-testable without Play Services.
          */
         @VisibleForTesting
-        internal fun authGuidance(status: String?, accountEmail: String, onDeviceEmails: List<String>): String {
+        internal fun authGuidance(
+            status: String?,
+            accountEmail: String,
+            onDeviceEmails: List<String>,
+            basicScopeOk: Boolean,
+        ): String {
             if (onDeviceEmails.isNotEmpty() && onDeviceEmails.none { it.equals(accountEmail, ignoreCase = true) }) {
                 return "This Google account isn't signed in on the device anymore. Add it under Settings → " +
                     "Accounts, open Gmail once, then reconnect it here."
             }
+            if (basicScopeOk) {
+                return "This account signs in, but Gmail access is blocked for it specifically. That points to " +
+                    "the account (Advanced Protection, or a supervised/Family Link account, blocks third-party " +
+                    "Gmail access) or to app authorization (it must be an OAuth test user; a public connection " +
+                    "needs Google to verify the app for the Gmail scope). Your other accounts work because they " +
+                    "don't have this restriction."
+            }
             return when (status?.trim()) {
-                "NeedPermission", "NeedRemoteConsent" ->
-                    "Gmail access was withdrawn for this account — reconnect it to grant read access again."
-                "BadAuthentication" ->
-                    "Google couldn't verify this account on the device. Re-add it under Settings → Accounts, then reconnect."
-                "ServiceDisabled", "AccountDeleted", "AccountDisabled" ->
-                    "Google has disabled access for this account — check its security settings, then reconnect."
                 "NetworkError", "Timeout" ->
                     "Couldn't reach Google — check your connection and try again."
                 else ->
-                    "Google couldn't issue Gmail access for this account. Reconnect it; if it keeps failing, " +
-                        "re-add the Google account under Settings → Accounts."
+                    "This account's sign-in on the device is stuck. Remove it under Settings → Accounts and " +
+                        "re-add it — or clear Google Play Services storage — then reconnect."
             }
         }
 
