@@ -12,34 +12,30 @@ class GmailAuthGuidanceTest {
 
     @Test
     fun authGuidance_accountRemovedFromDevice_tellsUserToReAddIt() {
-        // The failing account is not among the device's Google accounts -> the real fix is re-adding it.
-        val msg = GmailAuth.authGuidance("ERROR", "me@gmail.com", listOf("other@gmail.com"))
+        // Not among the device's Google accounts -> the real fix is re-adding it (regardless of the probe).
+        val msg = GmailAuth.authGuidance("ERROR", "me@gmail.com", listOf("other@gmail.com"), basicScopeOk = false)
         assertTrue(msg.contains("Settings", ignoreCase = true) && msg.contains("Accounts", ignoreCase = true))
     }
 
     @Test
-    fun authGuidance_emptyDeviceList_doesNotFalselyClaimRemoved_usesStatus() {
-        // If we couldn't read the account list, don't claim it was removed — fall back to status guidance.
-        val msg = GmailAuth.authGuidance("NetworkError", "me@gmail.com", emptyList())
+    fun authGuidance_basicScopeWorks_pointsAtTheAccountOrAppAuthorization_notDeviceState() {
+        // The account signs in (basic scope OK) but the restricted Gmail scope is blocked for it specifically.
+        val msg = GmailAuth.authGuidance("ERROR", "me@gmail.com", listOf("me@gmail.com"), basicScopeOk = true)
+        assertTrue(msg.contains("Gmail access is blocked", ignoreCase = true))
+        assertTrue(msg.contains("Advanced Protection", ignoreCase = true) || msg.contains("test user", ignoreCase = true))
+    }
+
+    @Test
+    fun authGuidance_basicScopeAlsoFails_pointsAtStuckDeviceAccountState() {
+        val msg = GmailAuth.authGuidance("ERROR", "me@gmail.com", listOf("me@gmail.com"), basicScopeOk = false)
+        assertTrue(msg.contains("stuck", ignoreCase = true))
+        assertTrue(msg.contains("Play Services", ignoreCase = true) || msg.contains("Accounts", ignoreCase = true))
+    }
+
+    @Test
+    fun authGuidance_networkError_whenBasicAlsoFails_tellsUserToCheckConnection() {
+        val msg = GmailAuth.authGuidance("NetworkError", "me@gmail.com", emptyList(), basicScopeOk = false)
         assertTrue(msg.contains("connection", ignoreCase = true))
-    }
-
-    @Test
-    fun authGuidance_needPermission_tellsUserToReconnect() {
-        val msg = GmailAuth.authGuidance("NeedPermission", "me@gmail.com", listOf("me@gmail.com"))
-        assertTrue(msg.contains("reconnect", ignoreCase = true))
-    }
-
-    @Test
-    fun authGuidance_badAuthentication_tellsUserToReAddTheAccount() {
-        val msg = GmailAuth.authGuidance("BadAuthentication", "me@gmail.com", listOf("me@gmail.com"))
-        assertTrue(msg.contains("Accounts", ignoreCase = true))
-    }
-
-    @Test
-    fun authGuidance_genericError_whenAccountIsOnDevice_isStillActionable() {
-        val msg = GmailAuth.authGuidance("ERROR", "me@gmail.com", listOf("me@gmail.com"))
-        assertTrue(msg.contains("Reconnect", ignoreCase = true))
     }
 
     @Test
