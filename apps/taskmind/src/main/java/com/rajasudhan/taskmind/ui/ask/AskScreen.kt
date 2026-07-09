@@ -10,7 +10,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -32,6 +34,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.rajasudhan.taskmind.data.model.Note
+import com.rajasudhan.taskmind.ui.bold.BoldHeaderIconButton
 import com.rajasudhan.taskmind.ui.bold.BoldPageHeader
 import com.rajasudhan.taskmind.ui.theme.BoldOnAccent
 import com.rajasudhan.taskmind.ui.theme.BoldTheme
@@ -51,6 +54,8 @@ fun AskScreen(
     isDark: Boolean = true,
     onToggleTheme: () -> Unit = {},
     onNoteClick: (Int) -> Unit = {},
+    onOpenGuide: () -> Unit = {},
+    onLock: (() -> Unit)? = null,
     viewModel: AskViewModel = hiltViewModel(),
 ) {
     val c = BoldTheme.colors
@@ -83,7 +88,17 @@ fun AskScreen(
                 title = "Ask",
                 subtitle = "Search and recall across everything you've saved",
                 isDark = isDark,
-                onToggleTheme = onToggleTheme
+                onToggleTheme = onToggleTheme,
+                trailing = {
+                    BoldHeaderIconButton(onClick = onOpenGuide, label = "How to use TaskMind") {
+                        Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp))
+                    }
+                    onLock?.let { lock ->
+                        BoldHeaderIconButton(onClick = lock, label = "Lock app") {
+                            Icon(Icons.Filled.Lock, contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
             )
             Spacer(Modifier.height(6.dp))
         }

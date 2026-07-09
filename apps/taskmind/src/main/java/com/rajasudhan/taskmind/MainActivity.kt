@@ -375,9 +375,10 @@ fun TaskMindAppContent(
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                // Every main tab renders its own in-screen serif header now, so the top bar carries no
-                // title there (only the note-detail sub-screen keeps a bar title alongside its back arrow).
+            // Tab screens fold the help/lock/theme controls into their own in-screen serif header, so the
+            // top app bar is only shown for the detail sub-screens (which need a title + back arrow). This
+            // reclaims the ~64dp the near-empty bar used to occupy above every tab.
+            if (isDetail) CenterAlignedTopAppBar(
                 title = {
                     if (isDetail) Text(
                         when {
@@ -444,13 +445,20 @@ fun TaskMindAppContent(
             }
         ) {
             composable("inbox") {
-                com.rajasudhan.taskmind.ui.inbox.InboxScreen(isDark = isDark, onToggleTheme = onToggleTheme)
+                com.rajasudhan.taskmind.ui.inbox.InboxScreen(
+                    isDark = isDark,
+                    onToggleTheme = onToggleTheme,
+                    onOpenGuide = { guideViewModel.open() },
+                    onLock = onLock
+                )
             }
             composable("notes") {
                 com.rajasudhan.taskmind.ui.notes.NotesScreen(
                     isDark = isDark,
                     onToggleTheme = onToggleTheme,
-                    onNoteClick = { id -> navController.navigate("notes/$id") { launchSingleTop = true } }
+                    onNoteClick = { id -> navController.navigate("notes/$id") { launchSingleTop = true } },
+                    onOpenGuide = { guideViewModel.open() },
+                    onLock = onLock
                 )
             }
             composable(
@@ -465,11 +473,18 @@ fun TaskMindAppContent(
                 com.rajasudhan.taskmind.ui.ask.AskScreen(
                     isDark = isDark,
                     onToggleTheme = onToggleTheme,
-                    onNoteClick = { id -> navController.navigate("notes/$id") { launchSingleTop = true } }
+                    onNoteClick = { id -> navController.navigate("notes/$id") { launchSingleTop = true } },
+                    onOpenGuide = { guideViewModel.open() },
+                    onLock = onLock
                 )
             }
             composable("sources") {
-                com.rajasudhan.taskmind.ui.sources.SourcesScreen(isDark = isDark, onToggleTheme = onToggleTheme)
+                com.rajasudhan.taskmind.ui.sources.SourcesScreen(
+                    isDark = isDark,
+                    onToggleTheme = onToggleTheme,
+                    onOpenGuide = { guideViewModel.open() },
+                    onLock = onLock
+                )
             }
             composable("settings") {
                 com.rajasudhan.taskmind.ui.settings.PrivacyScreen(
@@ -477,7 +492,9 @@ fun TaskMindAppContent(
                     onToggleTheme = onToggleTheme,
                     onOpenSettings = { navController.navigate("settings_all") { launchSingleTop = true } },
                     onOpenReliability = { navController.navigate("reliability") { launchSingleTop = true } },
-                    onOpenKnows = { navController.navigate("privacy_knows") { launchSingleTop = true } }
+                    onOpenKnows = { navController.navigate("privacy_knows") { launchSingleTop = true } },
+                    onOpenGuide = { guideViewModel.open() },
+                    onLock = onLock
                 )
             }
             composable("settings_all") { com.rajasudhan.taskmind.ui.settings.SettingsScreen() }

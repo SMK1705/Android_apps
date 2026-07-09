@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,8 +35,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.rajasudhan.taskmind.ui.bold.BoldCollapsingHeader
 import com.rajasudhan.taskmind.ui.bold.BoldHeaderIconButton
-import com.rajasudhan.taskmind.ui.bold.BoldPageHeader
 import com.rajasudhan.taskmind.ui.theme.BoldTheme
 import com.rajasudhan.taskmind.ui.theme.BoldType
 import com.rajasudhan.taskmind.ui.theme.ShapeCard
@@ -52,31 +53,35 @@ fun PrivacyScreen(
     onOpenSettings: () -> Unit = {},
     onOpenReliability: () -> Unit = {},
     onOpenKnows: () -> Unit = {},
+    onOpenGuide: () -> Unit = {},
+    onLock: (() -> Unit)? = null,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val c = BoldTheme.colors
+    val listState = rememberLazyListState()
     val egressEvents by viewModel.egressEvents.collectAsState()
     val appLockEnabled by viewModel.appLockEnabled.collectAsState()
     val useOnDeviceLlm by viewModel.useOnDeviceLlm.collectAsState()
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    Column(Modifier.fillMaxSize().background(c.screen)) {
-        Column(Modifier.padding(start = 22.dp, end = 22.dp, top = 14.dp, bottom = 8.dp)) {
-            BoldPageHeader(
-                title = "Privacy",
-                subtitle = "Auditable · on-device by default",
-                isDark = isDark,
-                onToggleTheme = onToggleTheme,
-                trailing = {
-                    BoldHeaderIconButton(onClick = onOpenSettings, label = "Settings") {
-                        Icon(Icons.Outlined.Settings, contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp))
-                    }
-                }
-            )
-        }
-
+    BoldCollapsingHeader(
+        title = "Privacy",
+        subtitle = "Auditable · on-device by default",
+        isDark = isDark,
+        onToggleTheme = onToggleTheme,
+        onOpenGuide = onOpenGuide,
+        onLock = onLock,
+        listState = listState,
+        hasScrollableContent = true,
+        actions = {
+            BoldHeaderIconButton(onClick = onOpenSettings, label = "Settings") {
+                Icon(Icons.Outlined.Settings, contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp))
+            }
+        },
+    ) {
         LazyColumn(
-            modifier = Modifier.weight(1f),
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {

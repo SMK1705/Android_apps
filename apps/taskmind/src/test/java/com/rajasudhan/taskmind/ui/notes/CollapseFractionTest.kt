@@ -1,5 +1,6 @@
 package com.rajasudhan.taskmind.ui.notes
 
+import com.rajasudhan.taskmind.ui.bold.collapseFraction
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
