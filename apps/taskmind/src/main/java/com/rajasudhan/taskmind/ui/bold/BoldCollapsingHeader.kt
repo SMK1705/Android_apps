@@ -104,6 +104,10 @@ fun BoldCollapsingHeader(
             private fun drag(dy: Float): Offset {
                 val max = (collapsibleFullPx - pinnedBarPx).coerceAtLeast(0f)
                 if (max <= 0f) return Offset.Zero
+                // Only COLLAPSE (dy < 0) when the list can actually scroll down — a short/empty list has
+                // nothing to scroll, so collapsing would leave the header stuck. Expanding (dy > 0) is always
+                // allowed so a collapsed header can re-open.
+                if (dy < 0f && !listState.canScrollForward) return Offset.Zero
                 val prev = headerOffsetPx
                 headerOffsetPx = (prev + dy).coerceIn(-max, 0f)
                 return Offset(0f, headerOffsetPx - prev)

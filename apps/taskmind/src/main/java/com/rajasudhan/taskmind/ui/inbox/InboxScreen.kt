@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -146,6 +147,7 @@ fun InboxScreen(
     viewModel: InboxViewModel = hiltViewModel()
 ) {
     val c = BoldTheme.colors
+    val listState = rememberLazyListState()
     // null = first load not finished yet (skeleton); empty list = caught up (empty state).
     val suggestions by viewModel.pendingSuggestions.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
@@ -254,33 +256,53 @@ fun InboxScreen(
         }
     ) { paddingValues ->
         val current = suggestions
+        BoldCollapsingHeader(
+            title = "Inbox",
+            subtitle = buildString {
+                append(if ((current?.size ?: 0) == 0) "All caught up" else "${current?.size} pending")
+                append(if (onDeviceEngine) " · on-device" else " · cloud")
+            },
+            isDark = isDark,
+            onToggleTheme = onToggleTheme,
+            onOpenGuide = onOpenGuide,
+            onLock = onLock,
+            listState = listState,
+            hasScrollableContent = current != null && current.isNotEmpty(),
+            modifier = Modifier.padding(paddingValues),
+            actions = {
+                HeaderIconButton(
+                    onClick = { viewModel.refreshRecentData() },
+                    label = if (isRefreshing) "Scanning in progress" else "Scan now"
+                ) {
+                    if (isRefreshing) CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp, color = c.accent)
+                    else Icon(Icons.Default.Refresh, contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp))
+                }
+                Box {
+                    HeaderIconButton(
+                        onClick = { overflowMenu = true },
+                        label = if (overflowMenu) "More actions, menu open" else "More actions"
+                    ) {
+                        Icon(Icons.Default.MoreVert, contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp))
+                    }
+                    DropdownMenu(expanded = overflowMenu, onDismissRequest = { overflowMenu = false }) {
+                        DropdownMenuItem(text = { Text("Add item") }, onClick = { overflowMenu = false; showCaptureSheet = true })
+                        DropdownMenuItem(text = { Text("Keep all") }, onClick = { overflowMenu = false; showApproveAllDialog = true })
+                        DropdownMenuItem(text = { Text("Dismiss all") }, onClick = { overflowMenu = false; viewModel.rejectAll() })
+                    }
+                }
+            },
+        ) {
         when {
-            current == null -> SkeletonList(modifier = Modifier.padding(paddingValues))
+            current == null -> SkeletonList(modifier = Modifier.fillMaxSize())
             else -> {
                 val isEmpty = current.isEmpty()
                 val noiseCount = current.count { it.confidence < 0.5 }
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(paddingValues),
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(11.dp)
                 ) {
-                    item {
-                        InboxHeader(
-                            count = current.size,
-                            isOnDevice = onDeviceEngine,
-                            isDark = isDark,
-                            onToggleTheme = onToggleTheme,
-                            onOpenGuide = onOpenGuide,
-                            onLock = onLock,
-                            overflowExpanded = overflowMenu,
-                            onOverflowToggle = { overflowMenu = it },
-                            isRefreshing = isRefreshing,
-                            onRefresh = { viewModel.refreshRecentData() },
-                            onAdd = { showCaptureSheet = true },
-                            onApproveAll = { showApproveAllDialog = true },
-                            onRejectAll = { viewModel.rejectAll() }
-                        )
-                    }
                     if (isRefreshing) {
                         item { ScanningPipelineCard(isOnDevice = onDeviceEngine) }
                     }
@@ -346,6 +368,7 @@ fun InboxScreen(
                 }
             }
         }
+        }
 
         if (showApproveAllDialog) {
             AlertDialog(
@@ -403,85 +426,6 @@ fun InboxScreen(
             )
         }
 
-    }
-}
-
-@Composable
-private fun InboxHeader(
-    count: Int,
-    isOnDevice: Boolean,
-    isDark: Boolean,
-    onToggleTheme: () -> Unit,
-    onOpenGuide: () -> Unit,
-    onLock: (() -> Unit)?,
-    overflowExpanded: Boolean,
-    onOverflowToggle: (Boolean) -> Unit,
-    isRefreshing: Boolean,
-    onRefresh: () -> Unit,
-    onAdd: () -> Unit,
-    onApproveAll: () -> Unit,
-    onRejectAll: () -> Unit,
-) {
-    val c = BoldTheme.colors
-    Row(
-        // +6dp over the list's 16dp content padding → the spec's 22dp header inset.
-        Modifier.fillMaxWidth().padding(horizontal = 6.dp).padding(top = 8.dp, bottom = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top
-    ) {
-        Column(Modifier.weight(1f).padding(end = 8.dp)) {
-            Text("Inbox", style = BoldType.screenTitle, color = c.ink)
-            Spacer(Modifier.height(6.dp))
-            Text(
-                buildString {
-                    append(if (count == 0) "All caught up" else "$count pending")
-                    append(if (isOnDevice) " · on-device" else " · cloud")
-                },
-                style = BoldType.srcLabel.copy(fontSize = 11.5.sp, letterSpacing = 0.3.sp),
-                color = c.ink2
-            )
-        }
-        // 48dp targets with 38dp visuals; negative spacing keeps the chips ~6dp apart as designed
-        // while every touch target stays at the 48dp accessibility minimum.
-        Row(horizontalArrangement = Arrangement.spacedBy((-4).dp), verticalAlignment = Alignment.CenterVertically) {
-            HeaderIconButton(
-                onClick = onToggleTheme,
-                label = if (isDark) "Switch to light theme" else "Switch to dark theme"
-            ) {
-                Icon(
-                    if (isDark) Icons.Outlined.LightMode else Icons.Outlined.DarkMode,
-                    contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp)
-                )
-            }
-            HeaderIconButton(
-                onClick = onRefresh,
-                label = if (isRefreshing) "Scanning in progress" else "Scan now"
-            ) {
-                if (isRefreshing) CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp, color = c.accent)
-                else Icon(Icons.Default.Refresh, contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp))
-            }
-            HeaderIconButton(onClick = onOpenGuide, label = "How to use TaskMind") {
-                Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp))
-            }
-            onLock?.let { lock ->
-                HeaderIconButton(onClick = lock, label = "Lock app") {
-                    Icon(Icons.Filled.Lock, contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp))
-                }
-            }
-            Box {
-                HeaderIconButton(
-                    onClick = { onOverflowToggle(true) },
-                    label = if (overflowExpanded) "More actions, menu open" else "More actions"
-                ) {
-                    Icon(Icons.Default.MoreVert, contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp))
-                }
-                DropdownMenu(expanded = overflowExpanded, onDismissRequest = { onOverflowToggle(false) }) {
-                    DropdownMenuItem(text = { Text("Add item") }, onClick = { onOverflowToggle(false); onAdd() })
-                    DropdownMenuItem(text = { Text("Keep all") }, onClick = { onOverflowToggle(false); onApproveAll() })
-                    DropdownMenuItem(text = { Text("Dismiss all") }, onClick = { onOverflowToggle(false); onRejectAll() })
-                }
-            }
-        }
     }
 }
 
