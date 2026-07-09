@@ -4,6 +4,7 @@ import android.accounts.Account
 import android.accounts.AccountManager
 import android.content.Context
 import android.content.Intent
+import androidx.annotation.VisibleForTesting
 import com.google.android.gms.auth.GoogleAuthException
 import com.google.android.gms.auth.GoogleAuthUtil
 import com.google.android.gms.auth.UserRecoverableAuthException
@@ -80,8 +81,20 @@ class GmailAuth @Inject constructor(
                 e.intent?.let { GmailAuthState.NeedsConsent(it) }
                     ?: GmailAuthState.Error(e.message ?: "Gmail consent required.")
             } catch (e: GoogleAuthException) {
-                android.util.Log.e(TAG, "getToken failed", e)
-                GmailAuthState.Error(e.message ?: e::class.java.simpleName)
+                // A HARD, non-recoverable auth failure — distinct from the consent path above (which is a
+                // UserRecoverableAuthException, a subclass). e.message is GoogleAuthUtil's status string
+                // ("NeedPermission" / "BadAuthentication" / "ServiceDisabled" / "NetworkError" / "Unknown"
+                // / "ERROR"), the real discriminator — log the full detail plus whether the account is even
+                // still on the device (a removed/re-added account loses this app's token grant and hard-
+                // fails here even when consent looks fine). Account is masked in logs (PII).
+                val onDevice = googleAccountsOnDevice()
+                android.util.Log.e(
+                    TAG,
+                    "getToken failed for ${mask(accountEmail)}: ${e.javaClass.simpleName}: ${e.message} " +
+                        "(device Google accounts: ${onDevice.size})",
+                    e
+                )
+                GmailAuthState.Error(authGuidance(e.message, accountEmail, onDevice))
             } catch (e: IOException) {
                 GmailAuthState.Error("Network error reaching Google — try again.")
             }
@@ -91,6 +104,23 @@ class GmailAuth @Inject constructor(
     /** Silent token for background scans; null if not currently authorized (caller skips the scan). */
     suspend fun silentAccessToken(accountEmail: String? = null): String? =
         (authorize(accountEmail) as? GmailAuthState.Authorized)?.accessToken
+
+    /**
+     * Invalidates a cached access [token] in Google Play Services so the next [authorize] re-fetches a
+     * fresh one. This is the app-visible way to clear a stale/poisoned GMS token — an app reinstall does
+     * NOT clear it (the cache is keyed by package + account + scope INSIDE Play Services). Call it when
+     * the server rejects a token mid-use (a Gmail 401) so the following scan re-authorizes cleanly.
+     */
+    suspend fun invalidate(token: String) {
+        if (token.isBlank()) return
+        egressLogger.record("oauth2.googleapis.com", "Gmail token invalidate")
+        runCatching { withContext(Dispatchers.IO) { GoogleAuthUtil.clearToken(appContext, token) } }
+    }
+
+    /** Names of the Google accounts currently visible on the device; empty if unreadable. */
+    private fun googleAccountsOnDevice(): List<String> =
+        runCatching { AccountManager.get(appContext).getAccountsByType(GOOGLE_TYPE).map { it.name } }
+            .getOrDefault(emptyList())
 
     /**
      * Intent that shows the system Google-account chooser (all Google accounts plus "Add account").
@@ -147,5 +177,40 @@ class GmailAuth @Inject constructor(
         private const val OAUTH2_SCOPE = "oauth2:$GMAIL_READONLY_SCOPE"
         private const val GOOGLE_TYPE = "com.google"
         private const val TAG = "GmailAuth"
+
+        /**
+         * Turns a GoogleAuthUtil failure into actionable, user-facing guidance instead of an opaque
+         * "ERROR". If [accountEmail] is no longer among the device's [onDeviceEmails] (and we could read
+         * that list), the account was removed — the user must re-add it; otherwise map the [status] string
+         * GoogleAuthUtil reported. Pure, so it's unit-testable without Play Services.
+         */
+        @VisibleForTesting
+        internal fun authGuidance(status: String?, accountEmail: String, onDeviceEmails: List<String>): String {
+            if (onDeviceEmails.isNotEmpty() && onDeviceEmails.none { it.equals(accountEmail, ignoreCase = true) }) {
+                return "This Google account isn't signed in on the device anymore. Add it under Settings → " +
+                    "Accounts, open Gmail once, then reconnect it here."
+            }
+            return when (status?.trim()) {
+                "NeedPermission", "NeedRemoteConsent" ->
+                    "Gmail access was withdrawn for this account — reconnect it to grant read access again."
+                "BadAuthentication" ->
+                    "Google couldn't verify this account on the device. Re-add it under Settings → Accounts, then reconnect."
+                "ServiceDisabled", "AccountDeleted", "AccountDisabled" ->
+                    "Google has disabled access for this account — check its security settings, then reconnect."
+                "NetworkError", "Timeout" ->
+                    "Couldn't reach Google — check your connection and try again."
+                else ->
+                    "Google couldn't issue Gmail access for this account. Reconnect it; if it keeps failing, " +
+                        "re-add the Google account under Settings → Accounts."
+            }
+        }
+
+        /** Masks an email for logs (first char + domain) so account PII is never written to logcat. */
+        @VisibleForTesting
+        internal fun mask(email: String?): String {
+            if (email.isNullOrBlank()) return "(none)"
+            val at = email.indexOf('@')
+            return if (at <= 0) "***" else "${email.first()}***${email.substring(at)}"
+        }
     }
 }
