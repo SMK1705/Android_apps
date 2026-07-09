@@ -3,6 +3,7 @@ package com.rajasudhan.taskmind.data.source.email
 import com.rajasudhan.taskmind.data.source.EgressLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import retrofit2.HttpException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,6 +18,9 @@ class GmailCollector @Inject constructor(
     private val egressLogger: EgressLogger
 ) {
     data class Email(val id: String, val sender: String, val subject: String, val body: String)
+
+    /** The Gmail access token was rejected with a 401 — the caller should invalidate it, re-authorize, and retry. */
+    class Unauthorized : Exception()
 
     private companion object {
         const val TAG = "GmailCollector"
@@ -45,16 +49,12 @@ class GmailCollector @Inject constructor(
         var pageToken: String? = null
         var pages = 0
         do {
-            val list = runCatching { api.listMessages(bearer, query, maxResults, pageToken) }
-                .onFailure { android.util.Log.e(TAG, "listMessages failed for query=$query", it) }
-                .getOrNull() ?: break
+            val list = apiCall("listMessages") { api.listMessages(bearer, query, maxResults, pageToken) } ?: break
             pages++
             for (ref in list.messages) {
                 if (emails.size >= maxMessages) break
                 if (ref.id in skipIds) continue
-                val msg = runCatching { api.getMessage(bearer, ref.id, "full") }
-                    .onFailure { android.util.Log.e(TAG, "getMessage ${ref.id} failed", it) }
-                    .getOrNull() ?: continue
+                val msg = apiCall("getMessage ${ref.id}") { api.getMessage(bearer, ref.id, "full") } ?: continue
                 val headers = msg.payload?.headers ?: emptyList()
                 val sender = GmailTextExtractor.header(headers, "From") ?: "unknown sender"
                 val subject = GmailTextExtractor.header(headers, "Subject") ?: "(no subject)"
@@ -74,6 +74,24 @@ class GmailCollector @Inject constructor(
         android.util.Log.i(TAG, "Gmail fetch: ${emails.size} email(s) over $pages page(s) for query=$query")
         emails
     }
+
+    /**
+     * Runs a Gmail API [call], returning its result, or **null** (logged) on a non-auth failure so one
+     * bad call doesn't abort the batch. A **401** (the token was accepted by GoogleAuthUtil but rejected
+     * by Gmail — stale/revoked) is re-thrown as [Unauthorized] so the caller can invalidate the token,
+     * re-authorize, and retry once instead of the scan silently returning nothing (#G1).
+     */
+    private suspend fun <T> apiCall(what: String, call: suspend () -> T): T? =
+        try {
+            call()
+        } catch (e: HttpException) {
+            if (e.code() == 401) throw Unauthorized()
+            android.util.Log.e(TAG, "Gmail $what failed (HTTP ${e.code()})", e)
+            null
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Gmail $what failed", e)
+            null
+        }
 
     /** The connected account's email address (for display in Settings/Sources). */
     suspend fun profileEmail(accessToken: String): String? = withContext(Dispatchers.IO) {

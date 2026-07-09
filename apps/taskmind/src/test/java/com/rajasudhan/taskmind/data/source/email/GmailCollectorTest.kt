@@ -4,8 +4,12 @@ import com.rajasudhan.taskmind.data.source.EgressLogger
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
+import org.junit.Assert.fail
 import org.junit.Test
+import retrofit2.HttpException
+import retrofit2.Response
 import java.util.Base64
 
 /**
@@ -70,10 +74,25 @@ class GmailCollectorTest {
 
     @Test
     fun listFailure_onTheFirstPage_yieldsEmpty_notACrash() = runTest {
-        coEvery { api.listMessages(any(), any(), any(), null) } throws RuntimeException("401")
+        coEvery { api.listMessages(any(), any(), any(), null) } throws RuntimeException("boom")
 
         val emails = collector.fetchUnreadPrimary("tok", 0L, emptySet())
 
         assertEquals(emptyList<GmailCollector.Email>(), emails)
+    }
+
+    @Test
+    fun a401_isSurfacedAsUnauthorized_soTheScanCanRefreshTheToken() = runTest {
+        // A real HTTP 401 (stale/revoked token) must NOT be swallowed to empty like other errors — it's
+        // re-thrown as Unauthorized so RecentDataScanner can invalidate the token and retry (#G1).
+        coEvery { api.listMessages(any(), any(), any(), any()) } throws
+            HttpException(Response.error<GmailMessageList>(401, "unauthorized".toResponseBody(null)))
+
+        try {
+            collector.fetchUnreadPrimary("stale-token", 0L, emptySet())
+            fail("expected GmailCollector.Unauthorized")
+        } catch (e: GmailCollector.Unauthorized) {
+            // expected
+        }
     }
 }
