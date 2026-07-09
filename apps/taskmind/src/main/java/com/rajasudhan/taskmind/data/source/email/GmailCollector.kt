@@ -26,7 +26,7 @@ class GmailCollector @Inject constructor(
 
     private companion object {
         const val TAG = "GmailCollector"
-        // Safety caps so a huge unread-in-window backlog can't fetch/process unboundedly. The scan is
+        // Safety caps so a huge in-window backlog can't fetch/process unboundedly. The scan is
         // already window-clamped (`after:` + the per-source enabled-at stamp), so these are backstops.
         const val MAX_MESSAGES_PER_SCAN = 100
         const val MAX_PAGES = 25
