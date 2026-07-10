@@ -127,7 +127,7 @@ The core value proposition is **zero-effort capture with full user control**. Ra
 
 Architecturally, TaskMind is deliberately **backend-less**. There is no first-party server; the phone itself is the backend. LLM inference is routed per request by a `RoutingLlmProvider` between an **on-device engine** (MediaPipe LLM Inference running a Gemma `.task`/`.litertlm` model, or ML Kit GenAI / Gemini Nano via AICore) and an optional **cloud engine** (Google Gemini `gemini-2.5-flash` with enforced structured JSON output). Consistent with the project's "honest engine labels" policy, the UI always reports the *effective* route rather than a hardcoded claim. The only outbound network calls the app makes are to Google — the cloud LLM, Gmail read-only OAuth, and Maps — and every such call is recorded (metadata only, never content) in a user-visible **Data Egress** audit screen that normally reads "No data has left this device."
 
-Privacy and security are treated as first-class, verifiable properties rather than marketing claims. Data at rest lives in a **SQLCipher-encrypted Room database** (AES-256-GCM, schema v5) with secrets held in Keystore-backed `EncryptedSharedPreferences`; reads are gated by an optional **biometric app lock** (`BiometricPrompt`) that re-authenticates on every return to the foreground; and an encrypted local backup (`TMBK1`, PBKDF2-HMAC-SHA256 + AES-256-GCM) protects against data loss without ever exposing plaintext off-device. On-device transcription (whisper.cpp via JNI, with a Vosk fallback) and on-device OCR (ML Kit GenAI / Tesseract) ensure that even audio and images can be understood without leaving the device.
+Privacy and security are treated as first-class, verifiable properties rather than marketing claims. Data at rest lives in a **SQLCipher-encrypted Room database** (AES-256-CBC + HMAC-SHA512, Room schema v18) with secrets held in Keystore-backed `EncryptedSharedPreferences`; reads are gated by an optional **biometric app lock** (`BiometricPrompt`) that re-authenticates on every return to the foreground; and an encrypted local backup (`TMBK1`, PBKDF2-HMAC-SHA256 + AES-256-GCM) protects against data loss without ever exposing plaintext off-device. On-device transcription (whisper.cpp via JNI, with a Vosk fallback) and on-device OCR (ML Kit GenAI / Tesseract) ensure that even audio and images can be understood without leaving the device.
 
 Operationally, the app sustains passive capture through a `dataSync` **foreground service** (live SMS and notification watchers), a battery-aware **WorkManager** periodic scan (`DataCollectionWorker`, user-configurable 15 min – 6 h, default ~30 min, `requiresBatteryNotLow`), and **exact alarms** (`AlarmManager`) that are re-armed across reboots, app updates, and timezone/clock changes via a `BootReceiver`. The app additionally exposes itself to the system agent (Gemini/Assistant) through Android **AppFunctions** (`createTask` / `getItemsDueToday` / `snoozeItem`) and to the wrist through the Wear companion.
 
@@ -248,7 +248,7 @@ Because TaskMind is backend-less, its "containers" are the major runtime compone
 | **Ingestion & sources** | Read opted-in signals incrementally from a per-source watermark; live + periodic. | `RecentDataScanner`, per-source collectors, `TaskMindNotificationListener`, `TaskMindForegroundService`, `WearCaptureListenerService`, capture surfaces (`ShareTargetActivity`, `QuickTileService`, `QuickAddWidget`, `QuickCaptureActivity`). |
 | **Understanding pipeline** | Noise pre-filter → OCR/STT → LLM extraction → JSON parse, dedup, learned-rejection down-rank → Suggestion. | `UnderstandingPipeline`, OCR (Tesseract / ML Kit GenAI), STT (whisper.cpp JNI / Vosk). |
 | **LLM routing** | Choose on-device vs cloud per request; expose honest route label. | `RoutingLlmProvider`, on-device MediaPipe / ML Kit GenAI engine, cloud Gemini (Retrofit/OkHttp). |
-| **Persistence** | Encrypted structured storage + settings/ledgers. | Room + SQLCipher DB (schema v5: `Note`, `Suggestion`, `NoteEmbedding`, `RejectedPattern`, `SavedFilter`, Tags), `SettingsManager` (EncryptedSharedPreferences), `SourceManager` (DataStore). |
+| **Persistence** | Encrypted structured storage + settings/ledgers. | Room + SQLCipher DB (schema v18: `Note`, `Suggestion`, `NoteEmbedding`, `RejectedPattern`, `SavedFilter`, Tags), `SettingsManager` (EncryptedSharedPreferences), `SourceManager` (DataStore). |
 | **Retrieval (Ask)** | RAG Q&A over saved Notes. | `HashingEmbedder` → `NoteEmbedding` cosine similarity + LLM answer. |
 | **Scheduling & reliability** | Background scans, exact reminders, geofences, mirroring, self-test, backup. | `WorkManager` (`DataCollectionWorker`, DailyBrief/WeeklyWins/RecurrenceDetector/AutoSnapshot), `AlarmScheduler` + `AlarmReceiver` + `BootReceiver`, `GeofenceManager`, `CalendarMirror`, `ReliabilityChecker`, `BackupManager`/`BackupCrypto`. |
 | **Integration / egress** | Outbound Google calls + system-agent surface + audit. | Retrofit/OkHttp client, `EgressLogger`, AppFunctions (`AgentFunctions`), Google OAuth (`GoogleAuthUtil`). |
@@ -273,7 +273,7 @@ Targets below are engineering objectives for a personal, single-user on-device a
 | Attribute | Target / statement | Mechanism (grounded in code) | Notes |
 |-----------|--------------------|------------------------------|-------|
 | **Privacy** | Zero data egress by default; every exception is opt-in and auditable. | On-device LLM routing default; on-device STT/OCR; `EgressLogger` (host + purpose, never content); Data Egress screen. | The only network peers are Google (Gemini, Gmail, Maps). No telemetry/analytics. |
-| **Confidentiality (at rest)** | All user content encrypted at rest with AES-256-GCM. | SQLCipher Room DB (schema v5); Keystore-backed `EncryptedSharedPreferences`; encrypted backup (`TMBK1`, PBKDF2-HMAC-SHA256). | Backup is unrecoverable without the passphrase (by design). |
+| **Confidentiality (at rest)** | All user content encrypted at rest (SQLCipher DB uses AES-256-CBC + HMAC-SHA512; keystore-backed stores and the backup envelope use AES-256-GCM). | SQLCipher Room DB (AES-256-CBC + HMAC-SHA512, schema v18); Keystore-backed `EncryptedSharedPreferences`; encrypted backup (`TMBK1`, PBKDF2-HMAC-SHA256). | Backup is unrecoverable without the passphrase (by design). |
 | **Confidentiality (in transit)** | All outbound calls over TLS. | OkHttp/Retrofit TLS to Google endpoints. | — |
 | **Access control** | Reads gated by device biometrics; re-auth on every foreground return. | `BiometricPrompt` (BIOMETRIC_STRONG or DEVICE_CREDENTIAL); re-lock on `ON_STOP`, re-check enrollment on `ON_RESUME`. | Lock is optional but DB stays encrypted regardless; lock is not enforced if no credential is enrolled (fail-safe against lockout). |
 | **User control / correctness of intent** | Nothing persisted or scheduled without explicit approval. | Suggestion → Inbox approve/edit/reject/snooze → Note; confidence scoring; learned-rejection down-rank (`RejectedPattern`). | Human-in-the-loop is a structural invariant, not a setting. |
@@ -499,7 +499,7 @@ Privacy (`PrivacyScreen`, backed by `SettingsViewModel`) is an auditable, at-a-g
 | Aspect | Detail |
 |---|---|
 | **Inputs** | `EgressLogger.events` (host + purpose + timestamp, metadata only, capped at 100); app-lock state; effective engine flag. |
-| **Processing** | The hero shows "No data has left this device" when the log is empty, else "*N* egress events logged." Status rows render App lock (ON/OFF), Encryption at rest (SQLCipher · AES-256-GCM), Understanding engine (LOCAL Gemma vs CLOUD "calls are logged"), and No telemetry (✓). |
+| **Processing** | The hero shows "No data has left this device" when the log is empty, else "*N* egress events logged." Status rows render App lock (ON/OFF), Encryption at rest (SQLCipher · AES-256-CBC), Understanding engine (LOCAL Gemma vs CLOUD "calls are logged"), and No telemetry (✓). |
 | **Outputs** | The board plus navigation into the full egress log (Settings), the "What TaskMind knows about me" screen, and the Reliability Doctor. |
 | **Errors** | Delete-all is guarded by a confirmation dialog; `EgressLogger` load failures degrade to an empty log rather than crashing. |
 
@@ -962,7 +962,7 @@ fun mediaEgressesToCloud(): Boolean       // media-path honest label
 
 - **On-device by default, cloud on explicit choice.** `SettingsManager.useOnDeviceLlm` defaults `true`. When on-device is selected, `generate` calls `OnDeviceLlmProvider`; on exception (Nano/Gemma unavailable) it falls back to cloud **only if `llmApiKey` is non-blank**, else returns a safe empty payload (`{"items": []}` / `[]` / `{"action":"query"}`) so callers degrade gracefully rather than crash. When cloud is selected, it goes straight to `CloudLlmProvider`.
 - **Honest labels, not hardcoded claims.** `isOnDeviceEffective()` is true only when on-device is selected **and** either the model is present (runs locally) **or** there's no cloud key to fall back to (nothing leaves the phone). This is what the UI reads instead of asserting "on-device".
-- **Pure, testable vision routing.** `supportsVision()`/`generateFromMedia` delegate to the free function `visionRoute(useOnDevice, onDeviceVision, cloudVision, hasCloudKey)` returning `ON_DEVICE`/`CLOUD`/`NONE`. In Phase 0 both engines report `supportsVision()=false`, so it is always `NONE` and the multimodal feature ships dark. `mediaEgressesToCloud()` exists because media currently has no on-device model — so an image/audio capture can egress to cloud even while text extraction is on-device — and callers that label the *extraction* engine (Inbox) must use it to avoid mislabelling.
+- **Pure, testable vision routing.** `supportsVision()`/`generateFromMedia` delegate to the free function `visionRoute(useOnDevice, onDeviceVision, cloudVision, hasCloudKey)` returning `ON_DEVICE`/`CLOUD`/`NONE`. Because `CloudLlmProvider.supportsVision()` returns `true`, this resolves to `CLOUD` whenever a cloud key is set (cloud selected, or on-device selected with a key), so an image capture egresses to Gemini 2.5 Flash vision; only the on-device vision path is still dark (`onDeviceVision=false`). `mediaEgressesToCloud()` exists because media currently has no on-device model — so an image/audio capture can egress to cloud even while text extraction is on-device — and callers that label the *extraction* engine (Inbox) must use it to avoid mislabelling.
 
 **Collaborators (out):** `OnDeviceLlmProvider` (which itself dispatches to `MediaPipeEngine`/`LiteRtLmEngine`/`NanoEngine` per `SettingsManager.onDeviceEngine`, with MediaPipe as the migration safety-net fallback), `CloudLlmProvider` (Gemini over Retrofit/OkHttp), `SettingsManager`. **Data ownership:** none. **Deployment:** `@Singleton`, bound to the `LlmProvider` interface so all callers are engine-agnostic.
 
@@ -1144,7 +1144,7 @@ Response (200) — the useful payload is a JSON *string* nested at `candidates[0
 ```
 The provider navigates that path defensively with `opt*` accessors (`candidates → content → parts → [0] → text`); an empty `candidates` (safety block) or a `parts`-less candidate (MAX_TOKENS truncation) yields the schema-shaped fallback instead of throwing.
 
-**Vision variant.** `generateFromMedia` (built by the pure helper `buildVisionRequestBody`) puts the screenshot first as `{"inline_data":{"mime_type":…,"data":<base64>}}` then the instruction text, sharing the extraction schema. It returns `null` (not empty-items JSON) on a non-image MIME, blank key, unreadable image, or non-2xx reply so `RecentDataScanner` falls back to the Tesseract/ML Kit OCR path.
+**Vision variant.** `generateFromMedia` (built by the pure helper `buildVisionRequestBody`) puts the screenshot first as `{"inline_data":{"mime_type":…,"data":<base64>}}` then the instruction text, sharing the extraction schema. It returns `null` (not empty-items JSON) on a non-image MIME, blank key, unreadable image, or non-2xx reply so `RecentDataScanner` falls back to the Tesseract OCR path.
 
 **Auth / routing note.** `RoutingLlmProvider` decides on-device vs. cloud per request. Cloud is only reached when it is the selected backend, or as a fallback when on-device is selected but unavailable *and* `llmApiKey` is non-blank; a blank key short-circuits to the schema-shaped empty result with **no** network call.
 
@@ -1562,13 +1562,13 @@ The mutex is real concurrency protection: the live `SmsObserver` and the periodi
 
 `OnDeviceLlmProvider` delegates to the user-selected engine and **falls back to `MediaPipeEngine` whenever the chosen engine can't run** (the migration's safety net, doc invariant #1), rethrowing only when even MediaPipe has no model so `RoutingLlmProvider` can take over. Notable engine details: `MediaPipeEngine` caps `setMaxTokens(2048)` (the GPU/OpenCL backend's int4 KV-cache limit) and wraps every call in the Gemma chat-turn template (`<start_of_turn>user … <end_of_turn>\n<start_of_turn>model\n`) under a `Mutex` (not reentrant); it rebuilds the engine if the model path changes. `NanoEngine` caches an async availability flag (starting pessimistic) refreshed by `tryLoad`/`generate`, and clears it on a mid-session AICore failure so the honest label can't report a stale "ready".
 
-`CloudLlmProvider` targets **`gemini-2.5-flash`** over Retrofit/OkHttp with `temperature = 0.1`, `responseMimeType = application/json`, and a per-call **`responseSchema`** that pins the exact output shape (this is far more reliable than asking in prose and is what the on-device model *cannot* enforce). Three schemas exist: the extraction `{items:[…]}` shape (§5.6.8), a bare string-array for Magic Breakdown, and a flat intent object for Ask. Every cloud call first records a metadata-only entry via `EgressLogger.record("generativelanguage.googleapis.com", purpose)` — host + purpose, never content — surfaced in the Data Egress audit screen. `sendForJson`/`sendForJsonOrNull` guard the entire send: a network `IOException` or a 200-with-no-usable-text (safety block / `MAX_TOKENS` truncation) yields the schema-shaped fallback (or `null` on the vision path) rather than propagating and aborting the rest of a source's scan.
+`CloudLlmProvider` targets **`gemini-2.5-flash`** over **raw OkHttp** (hand-built `okhttp3.Request` calls against `generativelanguage.googleapis.com`, no Retrofit — Retrofit is used only for the Gmail stack) with `temperature = 0.1`, `responseMimeType = application/json`, and a per-call **`responseSchema`** that pins the exact output shape (this is far more reliable than asking in prose and is what the on-device model *cannot* enforce). Three schemas exist: the extraction `{items:[…]}` shape (§5.6.8), a bare string-array for Magic Breakdown, and a flat intent object for Ask. Every cloud call first records a metadata-only entry via `EgressLogger.record("generativelanguage.googleapis.com", purpose)` — host + purpose, never content — surfaced in the Data Egress audit screen. `sendForJson`/`sendForJsonOrNull` guard the entire send: a network `IOException` or a 200-with-no-usable-text (safety block / `MAX_TOKENS` truncation) yields the schema-shaped fallback (or `null` on the vision path) rather than propagating and aborting the rest of a source's scan.
 
 **Honest engine labels (#197).** Routing is mirrored by two boolean helpers the UI reads instead of hardcoding "on-device":
 - `isOnDeviceEffective()` — true only when on-device is selected *and* (the model is present *or* there is no cloud key to fall back to). It flips to false whenever text work would actually reach Gemini.
 - `mediaEgressesToCloud()` — true when a screenshot/voice extraction would route to the cloud (on-device has no vision/audio model yet), so image/audio capture isn't mislabelled "on-device" even while text stays local.
 
-The pure `visionRoute(...)` function encodes the multimodal routing decision (on-device vision → cloud-with-key → none) so it is unit-testable without the providers; in Phase 0 it always returns `NONE`.
+The pure `visionRoute(...)` function encodes the multimodal routing decision (on-device vision → cloud-with-key → none) so it is unit-testable without the providers. Because `cloudVision` is `true` (the cloud provider supports vision), it returns `CLOUD` when a cloud key is present and `NONE` only when no key is set and on-device vision is unavailable.
 
 ### 5.6.8 Extraction heuristics & prompt engineering
 
@@ -1605,7 +1605,7 @@ Because the LLM is unreliable at relative-date arithmetic, dates for user-typed 
 
 The semantic layer (`embedding` package) serves two questions that need *meaning* rather than keywords: near-duplicate detection and Ask/Notes search.
 
-- **`Embedder` seam** — the shipped `HashingEmbedder` is a dependency-free, near-instant (microseconds), model-free lexical embedder. It hashes word tokens **and** boundary-padded character trigrams into a fixed **256-dim** signed-feature-hashed vector, then L2-normalises it (`WORD_WEIGHT = 1.0`, `GRAM_WEIGHT = 0.35`, `GRAM = 3`). Single-character alphanumerics are kept ("buy 2" ≠ "buy 4"); multi-char stopwords are dropped. Trigrams give typo/morphology tolerance ("dentist" ≈ "dentists"). It captures *lexical* similarity only — it will not relate "plumber" to "kitchen tap" — and the interface is deliberately swappable for a neural embedder (e.g. EmbeddingGemma) later.
+- **`Embedder` seam** — the shipped `HashingEmbedder` is a dependency-free, near-instant (microseconds), model-free lexical embedder. It hashes word tokens **and** boundary-padded character trigrams into a fixed **256-dim** signed-feature-hashed vector, then L2-normalises it (`WORD_WEIGHT = 1.0`, `GRAM_WEIGHT = 0.35`, `GRAM = 3`). Single-character digits are kept ("buy 2" ≠ "buy 4"), as are most single letters — though `HashingEmbedder.STOPWORDS` also drops the single letters "a" and "i" alongside its multi-character function words. Trigrams give typo/morphology tolerance ("dentist" ≈ "dentists"). It captures *lexical* similarity only — it will not relate "plumber" to "kitchen tap" — and the interface is deliberately swappable for a neural embedder (e.g. EmbeddingGemma) later.
 - **`Vectors`** — pure cosine (dot product for unit vectors), in-place `normalize`, and little-endian `toBytes`/`fromBytes` for the `NoteEmbedding` BLOB column (~1 KB/vector).
 - **`SemanticIndex`** — embeds a note's `title + summary` (`textFor`), stores it (`index`/`backfill`), and answers `scores(query, floor)` returning `noteId → cosine` for notes at/above `SEARCH_FLOOR = 0.35f`.
 
@@ -2267,7 +2267,7 @@ graph TB
             Recv[BroadcastReceivers: Alarm/Boot/Geofence]
         end
         subgraph Store["Storage (encrypted at rest)"]
-            Room[(Room + SQLCipher DB v5)]
+            Room[(Room + SQLCipher DB v18)]
             DS[(DataStore — toggles/ledgers)]
             ESP[(EncryptedSharedPreferences — secrets)]
         end
@@ -2424,7 +2424,10 @@ classDiagram
         +String? dueDate
         +String? dueTime
         +String? recurrence
-        +String? location
+        +Double? locationLat
+        +Double? locationLng
+        +Double? locationRadius
+        +String? locationLabel
         +String priority
         +boolean completed
         +boolean archived
@@ -2447,9 +2450,10 @@ classDiagram
         +byte[] vector
     }
     class RejectedPattern {
-        +int id
-        +String signature
+        +String kind
+        +String value
         +int count
+        +long updatedAt
     }
     class SavedFilter {
         +String name
@@ -2503,7 +2507,7 @@ No real secrets are committed. Configuration is supplied at build time (Gradle /
 | Connected Gmail account(s) | `EncryptedSharedPreferences` (`SettingsManager`) | Which mailboxes are connected; access tokens are fetched on demand, never persisted. | OAuth scope `gmail.readonly`. |
 | SQLCipher DB key | `EncryptedSharedPreferences` (Keystore-backed) | Encrypts the Room database at rest. | Generated on first run; never leaves the device. |
 | Source toggles, `*_enabledAt` watermarks, processed-id ledgers, `scan_frequency_minutes`, `lastScanAt`, `useOnDeviceLlm` | `DataStore` / `EncryptedSharedPreferences` | Per-source enablement, incremental-scan bounds, dedup, scan cadence, engine preference. | See §5.4. |
-| `room.schemaLocation`, `appfunctions:aggregateAppFunctions` | KSP args (`build.gradle.kts`) | Export Room schema v5; aggregate AppFunction metadata at build time. | |
+| `room.schemaLocation`, `appfunctions:aggregateAppFunctions` | KSP args (`build.gradle.kts`) | Export the current Room schema (v18, `schemas/<db>/18.json`); aggregate AppFunction metadata at build time. | |
 | NDK `27.0.12077973`, `abiFilters = arm64-v8a`, `-std=c++17` | `build.gradle.kts` / CMake | Native whisper.cpp toolchain and target ABI. | Single-ABI today (see §12). |
 
 ## Appendix C — References
@@ -2517,7 +2521,7 @@ No real secrets are committed. Configuration is supplied at build time (Gradle /
 | Sideload release pipeline | `.github/workflows/release-apk.yml`, `install-to-phone.yml` |
 | Root build configuration | `apps/taskmind/build.gradle.kts`, `settings.gradle.kts`, `gradle/libs.versions.toml` |
 | Native build | `apps/taskmind/src/main/cpp/CMakeLists.txt` |
-| Room schema baseline | `apps/taskmind/schemas/…/5.json` |
+| Room schema (current export) | `apps/taskmind/schemas/…/18.json` (v5.json is the oldest committed baseline) |
 | Engineering roadmap | GitHub Project "TaskMind Roadmap" (#4), milestone `taskmind-v5` |
 
 ## Appendix D — Architecture Decision Records (ADRs)
