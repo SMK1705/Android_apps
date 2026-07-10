@@ -100,7 +100,7 @@ fun PrivacyScreen(
                 PrivacyStatusRow(
                     icon = Icons.Outlined.Shield,
                     title = "Encryption at rest",
-                    subtitle = "SQLCipher · AES-256-GCM",
+                    subtitle = "SQLCipher · AES-256-CBC",
                     badge = "ON", badgeColor = c.accent, badgeSoft = c.accentGlow
                 )
             }
