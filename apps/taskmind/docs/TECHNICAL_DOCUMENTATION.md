@@ -75,8 +75,8 @@
 | **Title** | TaskMind — Technical Architecture & Design Documentation |
 | **System / Application** | TaskMind (Android app + Wear OS companion) |
 | **Package / Application ID** | `com.rajasudhan.taskmind` |
-| **Version (application)** | versionName `5.0` (versionCode `5`) |
-| **Document Version** | 1.0 |
+| **Version (application)** | versionName `5.1` (versionCode `6`) |
+| **Document Version** | 1.1 |
 | **Status** | Baseline / Approved for internal circulation |
 | **Date** | 2026-07-10 |
 | **Owner** | TaskMind App Owner (GitHub: `SMK1705`) |
@@ -89,6 +89,7 @@
 | Version | Date | Author | Summary of Changes |
 |---------|------|--------|--------------------|
 | 1.0 | 2026-07-10 | TaskMind Engineering | Initial comprehensive baseline: system overview, features, detailed design (components, data, pipeline, APIs, integrations), runtime scenarios, security, deployment/operations, non-functional requirements, reliability/DR, technical debt, glossary, appendices. |
+| 1.1 | 2026-07-10 | TaskMind Engineering | Corrected facts per codebase cross-check (DB cipher AES-256-CBC + HMAC-SHA512, Room schema v18, multimodal vision routing, cloud transport); synced application version references to 5.1 (`versionCode 6`). |
 
 ## 0.2 Audience
 
@@ -121,7 +122,7 @@
 
 # 1. Executive Summary
 
-**TaskMind** is a privacy-first, on-device personal assistant for Android that turns the everyday signals already flowing through a user's own phone — SMS, notifications, call logs, Gmail, app-usage, voice/call recordings, and screenshots — into reviewed, actionable items (tasks, reminders, notes, waiting-on items, and calendar events). Its distinguishing principle is that **all understanding runs locally by default and nothing is ever persisted or scheduled until the user explicitly approves it**. The application is a native Kotlin / Jetpack Compose (Material 3) app built around a single `MainActivity`, packaged as `com.rajasudhan.taskmind` (versionCode 5, versionName "5.0"), targeting Android 15+ (`minSdk 35`, `targetSdk 36`, `compileSdk 37`), with a companion Wear OS module.
+**TaskMind** is a privacy-first, on-device personal assistant for Android that turns the everyday signals already flowing through a user's own phone — SMS, notifications, call logs, Gmail, app-usage, voice/call recordings, and screenshots — into reviewed, actionable items (tasks, reminders, notes, waiting-on items, and calendar events). Its distinguishing principle is that **all understanding runs locally by default and nothing is ever persisted or scheduled until the user explicitly approves it**. The application is a native Kotlin / Jetpack Compose (Material 3) app built around a single `MainActivity`, packaged as `com.rajasudhan.taskmind` (versionCode 6, versionName "5.1"), targeting Android 15+ (`minSdk 35`, `targetSdk 36`, `compileSdk 37`), with a companion Wear OS module.
 
 The core value proposition is **zero-effort capture with full user control**. Rather than requiring the user to manually enter every commitment, TaskMind watches opted-in sources, runs an LLM extraction pass, and surfaces each candidate as a *suggestion* in an Inbox. The user approves, edits, rejects, or snoozes each suggestion; only an approved suggestion becomes a saved Note and, where relevant, an exact-alarm reminder, a geofenced location reminder, or a de-duplicated system-calendar event. This "human-in-the-loop by construction" model is what lets the product access highly sensitive personal data responsibly.
 
@@ -293,7 +294,7 @@ Targets below are engineering objectives for a personal, single-user on-device a
 
 # 4. Functional Requirements & Features
 
-This section enumerates the functional requirements of TaskMind (`com.rajasudhan.taskmind`, versionCode 5). Every requirement is grounded in the shipped Kotlin/Compose implementation. Because TaskMind is a **privacy-first, on-device assistant with no first-party backend**, all "processing" described below runs on the handset (or, for the LLM step only, optionally against Google Gemini when the user selects the cloud engine); there are no server-side components, request queues, or multi-tenant concerns.
+This section enumerates the functional requirements of TaskMind (`com.rajasudhan.taskmind`, versionCode 6). Every requirement is grounded in the shipped Kotlin/Compose implementation. Because TaskMind is a **privacy-first, on-device assistant with no first-party backend**, all "processing" described below runs on the handset (or, for the LLM step only, optionally against Google Gemini when the user selects the cloud engine); there are no server-side components, request queues, or multi-tenant concerns.
 
 ## 4.1 Feature Summary
 
@@ -1208,7 +1209,7 @@ TaskMind is a single-user, on-device application with **no first-party backend**
 | Preferences key-value | Jetpack **DataStore** (`Preferences`) — two files: `source_settings`, `saved_filters` | Source toggles, forward-only enablement stamps, processed-id dedup ledgers, pinned filters | Not separately encrypted (non-secret operational state) |
 | Secure key-value | **EncryptedSharedPreferences** (`secret_shared_prefs`, AES256-SIV keys / AES256-GCM values, Keystore-backed master key) | Secrets and sensitive settings: cloud LLM API key, connected Gmail accounts, DB encryption key, scan/retention/app-lock/theme settings | AES-256-GCM, at rest |
 
-> Assumption: The project shorthand "schema v5" refers to the app's `versionName` "5.0"; the **Room schema version is 18** (`TaskMindDatabase.SCHEMA_VERSION = 18`, verified in code). This section uses the code-accurate value throughout.
+> Assumption: The project shorthand "schema v5" refers to the app's `versionName` "5.1"; the **Room schema version is 18** (`TaskMindDatabase.SCHEMA_VERSION = 18`, verified in code). This section uses the code-accurate value throughout.
 
 ### 5.4.1 Conceptual Data Model
 
@@ -1983,7 +1984,7 @@ Every reachable outbound host is recorded (metadata only) by `EgressLogger` — 
 | `debug` | Committed `apps/taskmind/debug.keystore` (store/key pass `android`, alias `androiddebugkey`), overriding the per-machine `~/.android/debug.keystore` | Debuggable; no shrinking | Rolling `debug-latest` GitHub pre-release; `installDebug` to a connected phone | The stable, shared signature is what lets in-place updates preserve on-device data |
 | `release` | **None configured** — `signingConfigs` only defines `debug`; the release variant is unsigned | `optimization { enable = false }` — R8/shrinking explicitly off | **No channel** — never built for distribution | A hard Play-Store blocker (see §12) |
 
-Key `defaultConfig` facts (from `apps/taskmind/build.gradle.kts`): `applicationId = com.rajasudhan.taskmind`, `versionCode 5` / `versionName "5.0"`, `minSdk 35` (Android 15), `targetSdk 36`, `compileSdk 37`, Java 11 source/target, `ndkVersion 27.0.12077973`, `ndk.abiFilters = ["arm64-v8a"]` only, CMake `-std=c++17`. `buildConfig = true` exposes `VERSION_NAME`/`VERSION_CODE` to the Settings footer.
+Key `defaultConfig` facts (from `apps/taskmind/build.gradle.kts`): `applicationId = com.rajasudhan.taskmind`, `versionCode 6` / `versionName "5.1"`, `minSdk 35` (Android 15), `targetSdk 36`, `compileSdk 37`, Java 11 source/target, `ndkVersion 27.0.12077973`, `ndk.abiFilters = ["arm64-v8a"]` only, CMake `-std=c++17`. `buildConfig = true` exposes `VERSION_NAME`/`VERSION_CODE` to the Settings footer.
 
 ### 8.3 CI/CD pipeline
 
