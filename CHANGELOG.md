@@ -3,6 +3,123 @@
 All notable changes to **TaskMind** — the private, 100% on-device assistant — are documented here.
 Versions follow the in-app `versionName`; release tags use `taskmind-v<update>`.
 
+## [5.1] — Update 5.1 (`taskmind-v5.1`)
+
+The reliability-and-reach release. Update 5.0 rebuilt how TaskMind *looks*; 5.1 rebuilds how much
+it can *do* and how much you can *trust it to actually land the catch*. It can now answer questions
+about your own items, track what other people owe you, run speech-to-text natively on-device, reach
+your wrist, and plug into the system Gemini agent — on top of dozens of capture-, scheduling-, and
+Gmail-reliability fixes so items and reminders stop slipping through the cracks.
+
+### Added — new ways to act on your items
+- **Ask TaskMind** — a private, on-device chat that *retrieves* your saved notes and answers over
+  them ("what am I waiting on from Sam?", "what's due this week?"); a query with no clear slot
+  degrades to a search instead of dumping the whole list.
+- **Waiting-On tracker** — track what other people owe *you*; instead of auto-closing on any contact,
+  it asks "did they deliver?" when that person is next in touch. **Person-context reminders** resurface
+  an item the moment the relevant person is back in contact.
+- **Daily Brief & Weekly Wins** — TaskMind now shows up on a schedule: a morning brief of what's ahead,
+  and a streak-free Sunday recap of what actually got done.
+- **Reliability Doctor** — a one-screen diagnosis of *why a reminder might not reach you* (notification
+  access, battery optimisation, exact-alarm permission) with a fix for each.
+- **Task Fade + bankruptcy** — stale, undated to-dos visually fade over time; one tap archives the
+  whole faded pile so the list never becomes a graveyard.
+- **Magic Breakdown** — split a big task into a checklist, on-device (or via a dedicated cloud schema).
+- **Ramble** — segment a single voice brain-dump into many separate items.
+- **Bounce-Back** — snooze a message back to yourself later as its original text.
+- **Semantic search & safe dedup** — fuzzy, typo-tolerant recall over Notes (lexical word- and
+  character-trigram feature hashing, not neural embeddings), and a *non-destructive* near-duplicate
+  review that never silently merges.
+- **Auto-tags & saved smart filters** — a closed-taxonomy auto-tagger plus saved, reusable filters.
+- **Natural-language editing** — parse dates inline in quick capture, and edit any field of a
+  suggestion (including by natural language) before approving.
+- **"What TaskMind knows about me"** — a dashboard of every learned fact, each reviewable and
+  forgettable, closing audit gaps.
+- **Priority** — low / normal / high flags, an LLM-suggested priority from urgency cues, and priority
+  ordering with Overdue back at the top.
+- **Sharper reminders** — nag mode with alarm-grade escalation and smart snooze; an Inbox schedule chip.
+
+### Added — reach & platforms
+- **Wear OS companion** — capture by voice from your wrist and a **next-due tile**; the review
+  notification is Wear-ready (snooze + voice capture), and the tile re-publishes opportunistically when
+  the next due item changes.
+- **System Gemini agent (AppFunctions)** — TaskMind exposes `createTask`, `getItemsDueToday`, and
+  `snoozeItem` to the OS agent via `androidx.appfunctions`, so the assistant can act on your items.
+- **Capture surface pack** — dynamic shortcuts, Direct Share, a clipboard chip, and a lock-screen widget.
+
+### Added — on-device engines
+- **Native Whisper second pass** — an optional, off-by-default `whisper.cpp` pass (arm64, via JNI)
+  behind a `WhisperEngine` seam, layered on the primary **Vosk** first pass; it adopts Whisper's
+  result only when it materially improves the transcript, and no-ops back to Vosk when unavailable.
+- **System Gemini Nano** — an on-device understanding engine via the **ML Kit GenAI** Prompt API — one
+  of two selectable on-device engines (**MediaPipe Gemma | Gemini Nano**), plus an on-device eval mode.
+  (A LiteRT-LM engine seam is scaffolded for a future migration but not yet wired.)
+- **Multimodal** — a multimodal-ready `LlmProvider` with screenshot/audio bypass routing; with a cloud
+  key, **Gemini reads screenshots directly** (vision), bypassing OCR.
+- **In-app model download** — fetch the Whisper and on-device LLM models from inside the app, no `adb`.
+- **Two-way calendar** — a trustworthy one-way mirror *and* reflecting Google Calendar edits back onto
+  the matching items.
+- **Recurrence 2.0** — completion-based repeats and auto-detected recurring patterns.
+
+### Changed
+- **Honest engine labels** — the UI shows the *effective* route (on-device vs cloud) rather than a
+  hardcoded "on-device"; a screenshot or audio capture that egresses to the cloud is labelled honestly.
+- **Forward-only capture** — enabling a source now captures from that moment onward, not the last 24h
+  of history, so turning on Notifications doesn't dredge up the day.
+- **Gmail reads recent Primary mail whether read or unread**, so an email you open before the next scan
+  isn't dropped (still deduped by message id, understanding stays on-device).
+
+### Fixed — capture reliability & data-loss
+- **Background scan was silently dead** — the `HiltWorkerFactory` wasn't being used; removed the default
+  WorkManager initializer so periodic scans actually run.
+- **SMS** — null-body loss, burst drops, and dedup races hardened; recover messages the 24h window
+  misses via a bounded `_ID` watermark; fix an SMS-replay and a mid-scan loss.
+- **Notifications** — a catch-up sweep plus a crash-guarded listener, MessagingStyle DM capture,
+  re-post dedup, and recording a live notification's repost token only after it's handled.
+- **Never silently delete the database** — an unopenable DB is *quarantined* (renamed aside) for
+  recovery, and a restore refuses a newer-schema backup instead of wiping into an empty DB.
+- Delete a captured **image** only after the pipeline consumes it.
+- Match common **cross-OEM recorder folders** so recording capture isn't Samsung-only.
+- **Wear** capture targets the phone by capability (no silent loss or duplicate items).
+- Re-index a note's **embedding** when its title/summary is edited, so Ask/search stay fresh.
+- Learn **group chats** via a stable rejection key derived from the notification title.
+
+### Fixed — Gmail authentication
+- Sign-in moved to `GoogleAuthUtil` and now **surfaces the real error** with actionable guidance
+  instead of a blanket "cancelled"; **self-heals a 401** mid-scan (invalidate token + retry once);
+  **probes a basic scope** on a hard failure to classify the cause; classifies *needs-consent* as
+  recoverable; paginates and decodes bodies in their declared charset (no dropped mail, no mojibake);
+  and **masks account emails** in scan logs.
+
+### Fixed — scheduling & reminders
+- Recurring-edit drop, lost-on-update, and an exact-alarm fallback in reminder scheduling.
+- Keep **monthly** reminders on their anchor day through reschedule/snooze (no drift to the 28th).
+- **Re-arm** reminders for the new wall-clock time on a timezone/clock change; resume recurring and
+  waiting-on **nag chains after reboot**.
+- Brief/recap fires at the right wall-clock time across **DST** and survives an app relaunch.
+- Parse **"p.m."/"a.m."** (not just "pm"/"am"); date/time hardening (9:30 overdue, calendar-invalid
+  dates, a stronger dedup key); harden model-output parsing against silent data loss.
+
+### Internal
+- **Comprehensive technical documentation** — a ~30k-word architecture & design document (17 Mermaid
+  diagrams, ADRs, a permissions matrix) plus a rendered PDF, cross-checked against the source; the
+  in-app "Encryption at rest" label and the docs were corrected to **AES-256-CBC + HMAC-SHA512**
+  (the SQLCipher-4 default) — AES-256-GCM is used for the backup envelope, the Keystore master key, and
+  EncryptedSharedPreferences values.
+- **Backup** — a daily auto-snapshot JSON safety net (a wipe is never total) and a complete encrypted
+  backup that now includes settings, keys, and source watermarks, plus a Markdown export.
+- **CI** — cache the NDK + native `whisper.cpp` build; stop uploading the debug APK artifact (it was
+  exhausting the Actions storage quota); sign debug builds with a committed keystore so `debug-latest`
+  updates in place; a regression guard for the dead-`@HiltWorker` bug; a device smoke script + P0
+  checklist.
+
+### Privacy
+- Speech-to-text (Vosk, with an optional off-by-default native-Whisper second pass) and screenshot OCR
+  (Tesseract) stay **on-device**; a
+  screenshot is sent to Gemini vision **only** when you've set a cloud key — and that route is labelled
+  honestly and logged in **Data Egress**.
+- **"What TaskMind knows about me"** makes every learned fact reviewable and forgettable.
+
 ## [5.0] — Update 5 (`taskmind-v5`)
 
 A ground-up visual redesign and a much quieter, sharper understanding engine. TaskMind now looks

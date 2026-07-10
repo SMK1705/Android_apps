@@ -8,12 +8,14 @@ them as notes / to-dos or schedules reminders (one-off, recurring, or location-b
 It is a personal app you sideload on your own device (not for the Play Store). All understanding
 runs on-device by default; nothing leaves the phone unless you explicitly enable a cloud provider.
 
-- **Version:** Update 5 — latest release (tag `taskmind-v5`, `versionName` 5.0)
+- **Version:** Update 5.1 — latest release (tag `taskmind-v5.1`, `versionName` 5.1)
 - **Target device:** Samsung Galaxy S25 Ultra, One UI, Android 16
 - **Package:** `com.rajasudhan.taskmind`
 - **Stack:** Kotlin, Jetpack Compose (Material 3), Hilt, Room + SQLCipher (`net.zetetic:sqlcipher-android`,
-  16 KB page-size ready), DataStore, WorkManager, MediaPipe LLM Inference (on-device Gemma),
-  Vosk (on-device speech-to-text), Tesseract (on-device OCR), Retrofit/OkHttp (optional cloud fallback)
+  16 KB page-size ready), DataStore, WorkManager, on-device LLM via MediaPipe LLM Inference (Gemma) or
+  ML Kit GenAI (system Gemini Nano), native whisper.cpp + Vosk (on-device speech-to-text), Tesseract
+  (on-device OCR), AppFunctions (system Gemini agent), a Wear OS companion module, OkHttp (cloud Gemini)
+  and Retrofit (Gmail)
 - **SDK:** compileSdk 37 · minSdk 35 · targetSdk 36
 - **16 KB page size:** all bundled native libraries are aligned for Android 15+/16 16 KB-page devices
 
@@ -30,10 +32,10 @@ On-demand: Inbox 🎤 voice note · ↻ refresh · ＋ manual entry
 Capture:   share-sheet (text + images) · Quick Settings tile · home-screen widget
         │
         ▼
-  Noise pre-filter  ──►  OCR (Tesseract) / STT (Vosk) for images & audio
+  Noise pre-filter  ──►  OCR (Tesseract) / STT (Vosk primary, optional Whisper second pass) for images & audio
         │
         ▼
-  On-device LLM (Gemma via MediaPipe)  ──►  JSON parse + dedup + learned-rejection down-rank
+  On-device LLM (Gemma via MediaPipe, or Gemini Nano via ML Kit GenAI)  ──►  JSON parse + dedup + learned-rejection down-rank
         │                  (cloud only if you choose it)
         ▼
   Pending "suggestion"  ──►  Inbox (Approve / Edit / Reject / Snooze, Undo, filter)  ──►  encrypted Notes DB
@@ -51,8 +53,9 @@ notification, or via quick capture.
   from the background.
 - **Encryption at rest:** Notes/suggestions in a SQLCipher-encrypted Room DB; keys/settings in
   EncryptedSharedPreferences.
-- **On-device by default:** understanding runs locally (Gemma). The cloud LLM is opt-in.
-- **No telemetry:** ML Kit (which phoned usage stats to Google) was removed. No analytics.
+- **On-device by default:** understanding runs locally (Gemma via MediaPipe, or the system Gemini Nano
+  via ML Kit GenAI). The cloud LLM is opt-in, and the app always shows the *effective* route.
+- **No telemetry:** no analytics or usage tracking.
 - **Egress is auditable:** Settings → **Data Egress** logs every time data leaves the device
   (metadata only — host, purpose, time; never content). Normally reads "No data has left this device."
 - **Encrypted backup:** Settings → **Encrypted Backup & Restore** seals your notes, suggestions, and the
@@ -188,7 +191,7 @@ Toggle sources in the **Sources** tab; each requests its permission when enabled
 | Calendar | `READ_CALENDAR` + `WRITE_CALENDAR` | Read to dedup; writes events on approval (no duplicates) |
 | App Usage | Usage access (system settings) | **Daily screen-time digest** (total + top apps) → a note you can approve. Once per day, on-device |
 | Email (Gmail) | Google OAuth (`gmail.readonly`) | Reads **recent Primary** emails (read or unread, so one you open before the next scan isn't missed; deduped by message id). Connect **multiple accounts** via the system account chooser; each gets its own row with a per-account **Disconnect**. Needs a one-time Google Cloud setup (below). Understanding stays on-device — email content never leaves the phone |
-| Voice/Call Recordings | `READ_MEDIA_AUDIO` | **On-device transcription (Vosk)** of recordings → suggestions. New recordings are transcribed **immediately** (live watcher), not just on the periodic scan. Needs a Vosk model pushed (below); audio never leaves the phone |
+| Voice/Call Recordings | `READ_MEDIA_AUDIO` | **On-device transcription (Vosk; optional off-by-default native-Whisper second pass)** of recordings → suggestions. New recordings are transcribed **immediately** (live watcher), not just on the periodic scan. Needs a model (in-app download or pushed, below); audio never leaves the phone |
 | Screenshots (OCR) | `READ_MEDIA_IMAGES` | **On-device OCR (Tesseract)** of new screenshots → suggestions. Needs an `eng.traineddata` model pushed (below); images never leave the phone |
 
 Also needed: `POST_NOTIFICATIONS` (the "N suggestions to review" alert + its Approve/Reject actions),
@@ -231,14 +234,17 @@ circle) plus a **Get directions** button. Drawing the map needs a **Maps SDK for
 4. Rebuild/reinstall. Without a key the app still runs and *Get directions* still works — only the
    embedded map preview stays blank.
 
-### Transcription model setup (on-device Vosk)
+### Transcription model setup (on-device Whisper / Vosk)
 
-Call/voice transcription **and the Inbox voice-note button** run **fully on-device** via
-[Vosk](https://alphacephei.com/vosk/models) — no audio leaves the phone. The model isn't bundled.
+Call/voice transcription **and the Inbox voice-note button** run **fully on-device** — no audio leaves
+the phone. The primary, always-on engine is **[Vosk](https://alphacephei.com/vosk/models)** — the first pass, the
+live-dictation engine, and the one that decides whether transcription is possible at all. Native
+`whisper.cpp` (behind the `WhisperEngine` seam) is an **optional, off-by-default second pass** that
+upgrades the transcript only when it materially improves it, no-opping back to Vosk otherwise. Models aren't bundled.
 
-> **Easiest:** run `python tools/setup_vosk_model.py` (see [`tools/README.md`](../../tools/README.md)) —
-> it downloads a model and installs it into app storage on a connected device. The manual steps below
-> do the same thing by hand.
+> **Easiest:** grab a model from inside the app under **Settings → Transcription** (in-app model download) — or run
+> `python tools/setup_vosk_model.py` (see [`tools/README.md`](../../tools/README.md)) to install a Vosk
+> model onto a connected device. The manual steps below do the same thing by hand.
 
 1. Download a small Vosk model, e.g. **`vosk-model-small-en-in-0.4`** (Indian English, ~36 MB) — or
    `vosk-model-small-en-us-0.15`.
@@ -292,7 +298,15 @@ Screenshot OCR runs **fully on-device** via [Tesseract](https://github.com/tesse
   — arrive as "Call back" suggestions.
 - **Reminders** — one-off, **recurring** (daily / weekly / monthly — extracted from phrases like
   "every Monday" or set by hand, rescheduled when they fire), or **location** (a geofence triggers
-  when you arrive at a saved place).
+  when you arrive at a saved place). **Nag mode** escalates an unmissed reminder; the **Reliability
+  Doctor** (Privacy tab) checks that reminders can actually reach you.
+- **Ask & recall** — the **Ask** tab is a private, on-device chat over your saved items ("what am I
+  waiting on from Sam?", "what's due this week?"), backed by **semantic search**. **Waiting-On** notes
+  track what others owe you and ask "did they deliver?" when that person is next in touch.
+- **Shows up on a schedule** — a morning **Daily Brief** and a Sunday **Weekly Wins** recap. **Task
+  Fade** fades a stale, undated pile so it can be archived in one tap; **Magic Breakdown** splits a
+  task into a checklist; **auto-tags + saved smart filters** keep Notes organised.
+- **On the wrist** — a **Wear OS** companion captures by voice and surfaces the next-due item as a tile.
 - **Capture from anywhere** — share text/images to TaskMind, the **Quick Settings tile**, or the
   **home-screen widget**; captured content feeds the pipeline without being shown (the biometric gate
   on *viewing* stays intact).
@@ -306,6 +320,14 @@ chosen interval (default 30 min) — both it and the manual **↻** scan *since 
 24h) so nothing in the gap is missed; new items raise a single "N suggestions to review" notification.
 
 ---
+
+## Documentation
+
+- **Architecture & design** — [`docs/TECHNICAL_DOCUMENTATION.md`](docs/TECHNICAL_DOCUMENTATION.md)
+  ([PDF](docs/TECHNICAL_DOCUMENTATION.pdf)): the end-to-end technical reference — system overview,
+  component and data design, the ingestion/understanding pipeline, runtime scenarios, security
+  architecture, deployment, ADRs, and a permissions matrix, with 17 diagrams.
+- **Release notes** — [`../../CHANGELOG.md`](../../CHANGELOG.md).
 
 ## Testing
 
