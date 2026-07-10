@@ -98,8 +98,7 @@ fun NotesScreen(
             onOpenGuide = onOpenGuide,
             onLock = onLock,
             listState = listState,
-            hasScrollableContent = notes?.isNotEmpty() == true,
-            resetKey = listOf(showCompleted, kindFilter, tagFilter, query),
+            resetKey = listOf(showCompleted, kindFilter, tagFilter),
             collapsible = {
                 Spacer(Modifier.height(14.dp))
                 BoldSearchField(query, viewModel::setQuery)

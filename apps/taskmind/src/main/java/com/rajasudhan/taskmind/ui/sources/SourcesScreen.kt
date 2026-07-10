@@ -5,7 +5,6 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -117,7 +116,6 @@ fun SourcesScreen(
         onOpenGuide = onOpenGuide,
         onLock = onLock,
         listState = listState,
-        hasScrollableContent = true,
     ) {
         LazyColumn(
             state = listState,
