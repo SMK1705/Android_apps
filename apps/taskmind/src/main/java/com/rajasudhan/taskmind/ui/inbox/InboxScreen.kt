@@ -29,11 +29,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
@@ -41,11 +39,9 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.CleaningServices
-import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Directions
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -256,21 +252,25 @@ fun InboxScreen(
         }
     ) { paddingValues ->
         val current = suggestions
+        val engineTag = if (onDeviceEngine) " · on-device" else " · cloud"
+        // Distinguish the null (still loading, skeleton) state from a genuinely empty inbox, so the header
+        // doesn't claim "All caught up" while data is still loading.
+        val headerSubtitle = when {
+            current == null -> "Loading$engineTag"
+            current.isEmpty() -> "All caught up$engineTag"
+            else -> "${current.size} pending$engineTag"
+        }
         BoldCollapsingHeader(
             title = "Inbox",
-            subtitle = buildString {
-                append(if ((current?.size ?: 0) == 0) "All caught up" else "${current?.size} pending")
-                append(if (onDeviceEngine) " · on-device" else " · cloud")
-            },
+            subtitle = headerSubtitle,
             isDark = isDark,
             onToggleTheme = onToggleTheme,
             onOpenGuide = onOpenGuide,
             onLock = onLock,
             listState = listState,
-            hasScrollableContent = current != null && current.isNotEmpty(),
             modifier = Modifier.padding(paddingValues),
             actions = {
-                HeaderIconButton(
+                BoldHeaderIconButton(
                     onClick = { viewModel.refreshRecentData() },
                     label = if (isRefreshing) "Scanning in progress" else "Scan now"
                 ) {
@@ -278,7 +278,7 @@ fun InboxScreen(
                     else Icon(Icons.Default.Refresh, contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp))
                 }
                 Box {
-                    HeaderIconButton(
+                    BoldHeaderIconButton(
                         onClick = { overflowMenu = true },
                         label = if (overflowMenu) "More actions, menu open" else "More actions"
                     ) {
@@ -426,26 +426,6 @@ fun InboxScreen(
             )
         }
 
-    }
-}
-
-/** 38dp visual chip inside a 48dp touch target — the design's rounded square header buttons. */
-@Composable
-private fun HeaderIconButton(onClick: () -> Unit, label: String, content: @Composable () -> Unit) {
-    val c = BoldTheme.colors
-    Box(
-        Modifier
-            .size(48.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = label; role = Role.Button },
-        contentAlignment = Alignment.Center
-    ) {
-        Box(
-            Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(c.surface)
-                .border(1.dp, c.line, RoundedCornerShape(12.dp)),
-            contentAlignment = Alignment.Center
-        ) { content() }
     }
 }
 

@@ -59,6 +59,11 @@ internal fun collapseFraction(offsetPx: Float, fullPx: Float, pinnedPx: Float): 
     return if (max > 0f) (-offsetPx / max).coerceIn(0f, 1f) else 0f
 }
 
+// The pinned bar's footprint, shared by the pinned Row's layout and the collapse floor (pinnedBarPx) so
+// they can't drift. Height stays >= 48dp so the header buttons keep the accessibility-minimum tap target.
+private val PinnedBarTopInset = 14.dp
+private val PinnedBarHeight = 48.dp
+
 /**
  * The shared collapsing screen header used by the tab screens, so they all behave identically. Expanded, it
  * shows a big serif [title] + [subtitle] (and any [collapsible] content, e.g. a search field) with a row of
@@ -83,7 +88,6 @@ fun BoldCollapsingHeader(
     onToggleTheme: () -> Unit,
     onOpenGuide: () -> Unit,
     listState: LazyListState,
-    hasScrollableContent: Boolean,
     modifier: Modifier = Modifier,
     resetKey: Any? = Unit,
     onLock: (() -> Unit)? = null,
@@ -96,8 +100,8 @@ fun BoldCollapsingHeader(
     val density = LocalDensity.current
     var headerOffsetPx by remember { mutableFloatStateOf(0f) }     // collapse offset, coerced to [-max, 0]
     var collapsibleFullPx by remember { mutableFloatStateOf(0f) }  // measured natural height of the region
-    // Collapsed height the region floors at = the pinned bar's footprint (14dp top inset + 44dp bar).
-    val pinnedBarPx = with(density) { 58.dp.toPx() }
+    // Collapsed height the region floors at = the pinned bar's footprint, kept in lockstep with the Row below.
+    val pinnedBarPx = with(density) { (PinnedBarTopInset + PinnedBarHeight).toPx() }
 
     val headerNsc = remember {
         object : NestedScrollConnection {
@@ -119,7 +123,9 @@ fun BoldCollapsingHeader(
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
                 val max = (collapsibleFullPx - pinnedBarPx).coerceAtLeast(0f)
                 if (max > 0f && headerOffsetPx != 0f && headerOffsetPx != -max) {
-                    val target = if (-headerOffsetPx > max / 2f) -max else 0f  // settle to the nearer end
+                    // Only settle to fully-collapsed when the list can still scroll down; otherwise the fling
+                    // would over-collapse a list that now fits, and the watcher below would bounce it back open.
+                    val target = if (listState.canScrollForward && -headerOffsetPx > max / 2f) -max else 0f
                     animate(headerOffsetPx, target, available.y, spring(stiffness = Spring.StiffnessMediumLow)) { v, _ -> headerOffsetPx = v }
                 }
                 return Velocity.Zero
@@ -130,18 +136,15 @@ fun BoldCollapsingHeader(
     // Re-expand + re-anchor to the top whenever the caller's content identity changes, so a fresh list starts
     // expanded rather than inheriting a stale collapsed offset.
     LaunchedEffect(resetKey) {
-        if (hasScrollableContent) listState.scrollToItem(0)
+        if (listState.firstVisibleItemIndex != 0 || listState.firstVisibleItemScrollOffset != 0) listState.scrollToItem(0)
         animate(headerOffsetPx, 0f) { v, _ -> headerOffsetPx = v }
     }
-    // A branch with no scrollable list (empty / a list shorter than the screen) can't re-expand on its own —
-    // settle it open so the header can never get stuck collapsed with nothing to scroll.
-    LaunchedEffect(hasScrollableContent) {
-        if (!hasScrollableContent) {
-            if (headerOffsetPx != 0f) animate(headerOffsetPx, 0f) { v, _ -> headerOffsetPx = v }
-        } else {
-            snapshotFlow { listState.canScrollForward || listState.canScrollBackward }
-                .collect { scrollable -> if (!scrollable && headerOffsetPx != 0f) animate(headerOffsetPx, 0f) { v, _ -> headerOffsetPx = v } }
-        }
+    // The header can only STAY collapsed while the list actually has room to scroll: whenever the list fits the
+    // viewport (nothing to scroll in either direction), settle it back open. Derived from listState directly, so
+    // it can never get stuck collapsed regardless of how the caller counts its content.
+    LaunchedEffect(Unit) {
+        snapshotFlow { listState.canScrollForward || listState.canScrollBackward }
+            .collect { scrollable -> if (!scrollable && headerOffsetPx != 0f) animate(headerOffsetPx, 0f) { v, _ -> headerOffsetPx = v } }
     }
 
     Box(modifier.fillMaxSize().background(c.screen)) {
@@ -158,15 +161,17 @@ fun BoldCollapsingHeader(
                             val collapse = (-headerOffsetPx).roundToInt().coerceIn(0, full)
                             layout(placeable.width, full - collapse) { placeable.place(0, -collapse) }
                         }
-                        .padding(start = 22.dp, end = 22.dp, top = 14.dp)
+                        .padding(start = 22.dp, end = 22.dp, top = PinnedBarTopInset)
                 ) {
                     Text(
                         title,
                         style = BoldType.screenTitle,
                         color = c.ink,
+                        // Big and compact titles cross-fade over the same [0.15, 0.85] window so their alphas are
+                        // complements (sum to 1) — no mid-collapse dip where both are near-invisible.
                         modifier = Modifier
                             .padding(end = 4.dp)
-                            .graphicsLayer { alpha = 1f - (collapseFraction(headerOffsetPx, collapsibleFullPx, pinnedBarPx) / 0.6f).coerceIn(0f, 1f) }
+                            .graphicsLayer { alpha = 1f - ((collapseFraction(headerOffsetPx, collapsibleFullPx, pinnedBarPx) - 0.15f) / 0.7f).coerceIn(0f, 1f) }
                             .semantics { heading() }
                     )
                     Spacer(Modifier.height(7.dp))
@@ -185,8 +190,8 @@ fun BoldCollapsingHeader(
                         .align(Alignment.TopStart)
                         .fillMaxWidth()
                         .drawBehind { drawRect(color = c.screen, alpha = collapseFraction(headerOffsetPx, collapsibleFullPx, pinnedBarPx)) }
-                        .padding(start = 22.dp, end = 18.dp, top = 14.dp)
-                        .height(44.dp),
+                        .padding(start = 22.dp, end = 18.dp, top = PinnedBarTopInset)
+                        .height(PinnedBarHeight),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -197,7 +202,7 @@ fun BoldCollapsingHeader(
                         // Visual duplicate of the big title (which carries the heading semantic) — keep it out
                         // of the semantics tree so screen readers and tests see a single title node.
                         modifier = Modifier
-                            .graphicsLayer { alpha = ((collapseFraction(headerOffsetPx, collapsibleFullPx, pinnedBarPx) - 0.4f) / 0.6f).coerceIn(0f, 1f) }
+                            .graphicsLayer { alpha = ((collapseFraction(headerOffsetPx, collapsibleFullPx, pinnedBarPx) - 0.15f) / 0.7f).coerceIn(0f, 1f) }
                             .clearAndSetSemantics {}
                     )
                     Row(

@@ -72,7 +72,6 @@ fun PrivacyScreen(
         onOpenGuide = onOpenGuide,
         onLock = onLock,
         listState = listState,
-        hasScrollableContent = true,
         actions = {
             BoldHeaderIconButton(onClick = onOpenSettings, label = "Settings") {
                 Icon(Icons.Outlined.Settings, contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp))
