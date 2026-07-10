@@ -1695,7 +1695,7 @@ sequenceDiagram
         end
     end
     RDS->>SM: lastScanAt = now
-    W->>DAO: retention cleanup (purge actioned suggestions; deleteNotesOlderThan)
+    W->>DAO: retention cleanup (purge actioned suggestions, deleteNotesOlderThan)
     W-->>WM: Result.success()
 ```
 
@@ -1745,7 +1745,7 @@ sequenceDiagram
         end
     end
     SA-->>IVM: noteId (for undo)
-    IVM->>IVM: lastUndo = { re-pend suggestion; deleteNoteById(noteId) }
+    IVM->>IVM: lastUndo = re-pend suggestion, then deleteNoteById(noteId)
 ```
 
 Correctness details: the calendar event is mirrored onto the *same* occurrence the alarm landed on (`schedule()` may advance a recurring reminder past a past-due slot), and `CalendarMirror` gates itself on the Calendar source toggle, so approval never writes to the system calendar unless the user opted that source in. A list-like to-do is decomposed into a persisted checklist (`Checklist.derive`). Geofences are only registered when `ACCESS_BACKGROUND_LOCATION` is granted (see §7).
@@ -1799,7 +1799,7 @@ sequenceDiagram
         RDS->>GA: silentAccessToken(email) -> fresh
         RDS->>GC: fetchRecentPrimary(fresh, since, processedIds) (retry once)
     end
-    RDS->>RDS: pipeline.processText per email; addProcessedEmailId
+    RDS->>RDS: pipeline.processText per email, addProcessedEmailId
 ```
 
 The hard-failure path is a deliberate diagnostic: `probeBasicScope` requests a basic (non-restricted) `userinfo.email` scope for the same account and classifies the result (`OK`/`RECOVERABLE`/`BROKEN`/`UNREACHABLE`) to distinguish "the restricted Gmail scope is blocked for this account" (Advanced Protection / supervised / unverified app) from "the device sign-in is broken." All account identifiers are masked (`GmailAuth.mask`) before logging. `disconnect` best-effort clears the local token and POSTs the Google revoke endpoint (also egress-logged).
@@ -1868,7 +1868,7 @@ sequenceDiagram
         STA->>STA: copy Uri into app-private cache (holds read grant)
         STA->>CW: enqueueImage("Shared image", file)
     end
-    STA-->>OA: Toast "Added to TaskMind for review."; finish()
+    STA-->>OA: Toast "Added to TaskMind for review.", finish()
     CW->>OCR: recognize(image) (image path only, on-device)
     CW->>UP: processText(source, text)
     UP->>LLM: generate(...)  %% on-device or cloud per Settings
@@ -2401,7 +2401,7 @@ sequenceDiagram
     participant RA as ReminderActionReceiver
     AP->>AS: schedule(note, dueDateTime)
     AS->>AM: setExactAndAllowWhileIdle(PendingIntent)
-    Note over AM: survives Doze; re-armed on reboot via BootReceiver
+    Note over AM: survives Doze, re-armed on reboot via BootReceiver
     AM-->>BR: onReceive() at due time
     BR->>N: post reminder (Done / Snooze actions)
     U->>RA: taps Done or Snooze
