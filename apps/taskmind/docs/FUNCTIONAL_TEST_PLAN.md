@@ -1,6 +1,6 @@
 # TaskMind — Comprehensive Functional Test Plan
 
-Manual, on-device functional test plan for **TaskMind** (`com.rajasudhan.taskmind`), Update 4 (`versionName` 4.0). It exercises every user-facing flow and system behavior by hand on a real device. The companion [`AUTOMATED_TEST_PLAN.md`](AUTOMATED_TEST_PLAN.md) specifies the automated regression suite that locks the same behavior down in CI.
+Manual, on-device functional test plan for **TaskMind** (`com.rajasudhan.taskmind`), Update 5.1 (`versionName` 5.1). It exercises every user-facing flow and system behavior by hand on a real device. The companion [`AUTOMATED_TEST_PLAN.md`](AUTOMATED_TEST_PLAN.md) specifies the automated regression suite that locks the same behavior down in CI.
 
 > Cases are **grounded in the current source** — each suite cites its source-of-truth file(s), and a few cases carry a `> Note:` flagging where the code differs from older docs/expectations. Re-verify against code after any refactor.
 
