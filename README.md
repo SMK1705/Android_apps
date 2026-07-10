@@ -38,13 +38,15 @@ pipeline runs locally; the cloud is an explicit, logged opt-in you never have to
 | 📞 **Act** | One tap to **Call** — resolving a named contact ("call Amma") to a number via your Contacts — or **Get directions** to a place named in the message. **Missed calls** (cellular *and* WhatsApp/Telegram) become "Call back" suggestions. Both actions also live on the **widget** and the **review notification**. |
 | 🗂️ **Keep** | Approved items live in **Notes** — Active/Completed split, completion checkboxes, tickable checklists, tappable deep links (phone/URL/email/address), kind filters, and full-text search. |
 | ⏰ **Schedule** | Reminders can **recur** (daily/weekly/monthly — pulled from "every Monday" or set by hand) or fire by **location** (a geofence when you arrive at a saved place). |
+| 🔎 **Ask & recall** | **Ask TaskMind** answers questions over your own saved items *on-device* ("what am I waiting on from Sam?", "what's due this week?"), backed by **semantic search**. **Waiting-On** tracks what others owe you and resurfaces it when they're next in touch. |
+| 📣 **Show up** | A morning **Daily Brief**, a Sunday **Weekly Wins** recap, a **Reliability Doctor** that checks your reminders can actually reach you, and **Task Fade** — a stale list can declare bankruptcy in one tap. Reach your wrist with the **Wear OS** companion. |
 
 ## 🔒 Private by design
 
 | Guarantee | How |
 |---|---|
-| **On-device understanding** | The extraction LLM (MediaPipe Gemma) runs locally; the cloud model (Gemini) is opt-in only. |
-| **Encrypted at rest** | The database is **SQLCipher** (AES-256); secrets live in EncryptedSharedPreferences. |
+| **On-device understanding** | The extraction LLM runs locally — **MediaPipe Gemma** or the system **Gemini Nano** (ML Kit GenAI); the cloud model (Gemini) is opt-in only, and the UI always shows the *effective* route. |
+| **Encrypted at rest** | The database is **SQLCipher** (AES-256-CBC + HMAC-SHA512); secrets live in EncryptedSharedPreferences. |
 | **Locked** | Biometric lock on launch and on every return to the app. |
 | **Auditable** | Every network egress is logged, metadata-only, in **Data Egress** — content never is. |
 | **Portable** | Move to a new phone with an **encrypted, passphrase-sealed backup** (AES-256-GCM, PBKDF2). |
@@ -57,7 +59,7 @@ Every source is **off by default** and asks for its own permission when you turn
 |---|---|---|
 | 💬 SMS | 🔔 Notifications | ☎️ Call log |
 | 👥 Contacts *(for the Call button)* | 📅 Calendar | 📊 App-usage digest |
-| 🎙️ Voice / call recordings *(Vosk)* | 🖼️ Screenshots — OCR *(Tesseract)* | 📧 Gmail *(OAuth, read-only)* |
+| 🎙️ Voice / call recordings *(Vosk; optional Whisper)* | 🖼️ Screenshots — OCR *(Tesseract)* | 📧 Gmail *(OAuth, read-only)* |
 
 ## 📱 Install
 
@@ -77,13 +79,16 @@ adb install -r apps\taskmind\build\outputs\apk\debug\taskmind-debug.apk
 ```
 
 Full setup — permissions, the on-device model files, and the optional `MAPS_API_KEY` — is in the
-[**TaskMind README**](apps/taskmind/README.md).
+[**TaskMind README**](apps/taskmind/README.md). For the architecture, data model, ingestion pipeline,
+and security design, see the [**technical documentation**](apps/taskmind/docs/TECHNICAL_DOCUMENTATION.md)
+([PDF](apps/taskmind/docs/TECHNICAL_DOCUMENTATION.pdf)).
 
 ## 🛠️ Built with
 
 **Kotlin** · **Jetpack Compose** (Material 3) · **Hilt** · **Room + SQLCipher** · **WorkManager** ·
-**DataStore** · **MediaPipe** Gemma (on-device LLM) · **Vosk** (speech) · **Tesseract** (OCR) ·
-**Gemini** 2.5 Flash (opt-in cloud) · biometric + geofencing + calendar.
+**DataStore** · on-device LLM via **MediaPipe** Gemma **or** the system **Gemini Nano** (ML Kit GenAI) ·
+native **whisper.cpp** + **Vosk** (speech) · **Tesseract** (OCR) · **Gemini** 2.5 Flash (opt-in cloud,
+incl. vision) · **AppFunctions** (system agent) · a **Wear OS** companion · biometric + geofencing + calendar.
 
 ## 🧪 Quality
 
@@ -119,7 +124,7 @@ Android_apps/
 
 | Workflow | Runs on | Trigger | What it does |
 |---|---|---|---|
-| **Android CI** (`android.yml`) | `ubuntu-latest` | push / PR to `main` | unit tests + `assembleDebug`, uploads the APK artifact |
+| **Android CI** (`android.yml`) | `ubuntu-latest` | push / PR to `main` | unit tests + `assembleDebug` (test report uploads on failure only; the APK ships via the release workflow, not as a CI artifact) |
 | **Publish debug APK** (`release-apk.yml`) | `ubuntu-latest` | push to `main` + manual | builds and publishes to the rolling **`debug-latest`** pre-release for over-the-air install |
 | **Install to phone** (`install-to-phone.yml`) | **self-hosted** | manual | `installDebug` over `adb` to a phone plugged into that runner |
 
