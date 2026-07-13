@@ -33,14 +33,20 @@ android {
         // Injected into the manifest's com.google.android.geo.API_KEY meta-data.
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
 
-        // Build whisper.cpp only for arm64-v8a for now: it's the real device target and a full whisper.cpp
-        // compile per ABI is slow; armeabi-v7a/x86_64 can be added for a wider release.
+        // Native packaging spans the common device ABIs (see ndk.abiFilters); the whisper.cpp CMake
+        // build stays arm64-only (externalNativeBuild.cmake.abiFilters) because it is an optional second pass.
         ndk {
-            abiFilters += "arm64-v8a"
+            // Package the prebuilt native libs (Vosk / Tesseract / SQLCipher / MediaPipe — all ship every
+            // ABI) so the APK installs beyond arm64: old 32-bit ARM phones and x86_64 emulators / ChromeOS.
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"
+                // Compile whisper.cpp for arm64-v8a only — a per-ABI whisper build is slow, and the second
+                // pass is optional: WhisperEngine.isAvailable() no-ops when libwhisper_jni.so is absent and
+                // Vosk (the primary transcriber) covers every ABI. Non-arm64 ABIs simply omit the whisper lib.
+                abiFilters += "arm64-v8a"
             }
         }
     }
