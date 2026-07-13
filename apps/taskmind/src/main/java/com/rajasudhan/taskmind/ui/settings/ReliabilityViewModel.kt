@@ -1,5 +1,7 @@
 package com.rajasudhan.taskmind.ui.settings
 
+import com.rajasudhan.taskmind.data.source.canScheduleExactAlarmsCompat
+
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
@@ -57,7 +59,7 @@ class ReliabilityViewModel @Inject constructor(
     fun runTestAlarm() {
         if (_test.value == TestAlarmState.Running) return
         val am = context.getSystemService(AlarmManager::class.java)
-        if (am == null || !am.canScheduleExactAlarms()) {
+        if (am == null || !am.canScheduleExactAlarmsCompat()) {
             _test.value = TestAlarmState.CannotSchedule
             return
         }

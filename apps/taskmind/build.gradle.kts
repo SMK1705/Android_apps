@@ -23,7 +23,7 @@ android {
 
     defaultConfig {
         applicationId = "com.rajasudhan.taskmind"
-        minSdk = 35
+        minSdk = 26
         targetSdk = 36
         versionCode = 6
         versionName = "5.1"

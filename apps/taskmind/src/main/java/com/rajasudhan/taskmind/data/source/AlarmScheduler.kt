@@ -69,7 +69,7 @@ class AlarmScheduler @Inject constructor(
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pi = pendingIntent(noteId, title, armDate, dueTime, recurrence)
-        if (alarmManager.canScheduleExactAlarms()) {
+        if (alarmManager.canScheduleExactAlarmsCompat()) {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timeMillis, pi)
         } else {
             // No exact-alarm permission (rare — the app holds USE_EXACT_ALARM): fall back to an
@@ -112,7 +112,7 @@ class AlarmScheduler @Inject constructor(
         val at = System.currentTimeMillis() + minutes * 60_000
         val pi = snoozePendingIntent(noteId, title, nagCount)
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        if (alarmManager.canScheduleExactAlarms()) {
+        if (alarmManager.canScheduleExactAlarmsCompat()) {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
         } else {
             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
