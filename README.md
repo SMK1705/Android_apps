@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/SMK1705/Android_apps/releases"><img src="https://img.shields.io/github/v/release/SMK1705/Android_apps?sort=semver&label=release&color=6C7A2E" alt="Latest release"/></a>
   <img src="https://img.shields.io/badge/platform-Android-3DDC84?logo=android&logoColor=white" alt="Platform: Android"/>
-  <img src="https://img.shields.io/badge/minSdk-35-blue" alt="minSdk 35"/>
+  <img src="https://img.shields.io/badge/minSdk-26-blue" alt="minSdk 26"/>
   <a href="https://github.com/SMK1705/Android_apps/actions/workflows/android.yml"><img src="https://img.shields.io/github/actions/workflow/status/SMK1705/Android_apps/android.yml?branch=main&label=build" alt="Build"/></a>
   <img src="https://img.shields.io/badge/AI-on--device-8A2BE2" alt="On-device AI"/>
   <img src="https://img.shields.io/badge/license-All%20Rights%20Reserved-red" alt="License: All Rights Reserved"/>

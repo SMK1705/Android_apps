@@ -25,8 +25,8 @@ android {
         applicationId = "com.rajasudhan.taskmind"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "5.1"
+        versionCode = 7
+        versionName = "5.1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

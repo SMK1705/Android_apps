@@ -3,6 +3,24 @@
 All notable changes to **TaskMind** — the private, 100% on-device assistant — are documented here.
 Versions follow the in-app `versionName`; release tags use `taskmind-v<update>`.
 
+## [5.1.2] — Update 5.1.2 (`taskmind-v5.1.2`)
+
+The **reach** point release: TaskMind now installs on far more phones — the floor dropped from
+Android 15+ to **Android 8.0+**, and the APK ships **three CPU architectures** instead of one.
+
+### Changed
+- **Wider device support** — `minSdk` lowered from 35 (Android 15) to **26 (Android 8.0)**, and native
+  packaging widened from `arm64-v8a`-only to **`arm64-v8a` + `armeabi-v7a` + `x86_64`** (so it installs
+  on 32-bit ARM phones and x86_64 emulators / ChromeOS too) — roughly the difference between a sliver of
+  devices and ~95%+ of them. The whisper.cpp second pass stays arm64-only and gracefully no-ops
+  elsewhere (Vosk covers every ABI).
+
+### Internal
+- Guarded every post-API-26 platform call surfaced by a `NewApi` lint pass (exact-alarm, Geocoder,
+  TileService, AppOps), with Robolectric tests exercising the fallback branches at API 26–34. Verified
+  on-device on **Android 8.0** (the new floor) and Android 16.
+- Synced the version across the phone and Wear modules and the technical documentation.
+
 ## [5.1] — Update 5.1 (`taskmind-v5.1`)
 
 The reliability-and-reach release. Update 5.0 rebuilt how TaskMind *looks*; 5.1 rebuilds how much

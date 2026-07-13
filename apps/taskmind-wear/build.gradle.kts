@@ -13,8 +13,8 @@ android {
         applicationId = "com.rajasudhan.taskmind"
         minSdk = 30      // Wear OS 3+
         targetSdk = 34   // Wear OS 5
-        versionCode = 6
-        versionName = "5.1"
+        versionCode = 7
+        versionName = "5.1.2"
     }
 
     signingConfigs {
