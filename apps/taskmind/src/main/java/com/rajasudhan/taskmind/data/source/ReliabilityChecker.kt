@@ -105,7 +105,7 @@ class ReliabilityChecker @Inject constructor(
     /** Without exact-alarm permission, reminders fire late (or batched) instead of on the minute. */
     private fun exactAlarms(): HealthCheck {
         val am = context.getSystemService(AlarmManager::class.java)
-        val ok = am?.canScheduleExactAlarms() ?: false
+        val ok = am?.canScheduleExactAlarmsCompat() ?: false
         return HealthCheck(
             id = "exact_alarms",
             title = "Exact alarms",
