@@ -1,7 +1,7 @@
 package com.rajasudhan.taskmind.ui.settings
 
-import android.os.Build
 import com.rajasudhan.taskmind.data.source.canScheduleExactAlarmsCompat
+import com.rajasudhan.taskmind.data.source.checkOpNoThrowCompat
 
 import android.Manifest
 import android.app.AlarmManager
@@ -633,14 +633,9 @@ class SettingsViewModel @Inject constructor(
         val exactAlarms = context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarmsCompat() == true
         val notifAccess = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
         val usageAccess = runCatching {
-            val appOps = context.getSystemService(AppOpsManager::class.java)
-            val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                appOps?.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
-            } else {
-                @Suppress("DEPRECATION")
-                appOps?.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
-            }
-            mode == AppOpsManager.MODE_ALLOWED
+            context.getSystemService(AppOpsManager::class.java)?.checkOpNoThrowCompat(
+                AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName
+            ) == AppOpsManager.MODE_ALLOWED
         }.getOrDefault(false)
 
         _permissions.value = listOf(
