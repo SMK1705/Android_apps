@@ -8,7 +8,7 @@ them as notes / to-dos or schedules reminders (one-off, recurring, or location-b
 It is a personal app you sideload on your own device (not for the Play Store). All understanding
 runs on-device by default; nothing leaves the phone unless you explicitly enable a cloud provider.
 
-- **Version:** Update 5.1 — latest release (tag `taskmind-v5.1`, `versionName` 5.1)
+- **Version:** Update 5.1.2 — latest release (tag `taskmind-v5.1.2`, `versionName` 5.1.2)
 - **Target device:** Samsung Galaxy S25 Ultra, One UI, Android 16
 - **Package:** `com.rajasudhan.taskmind`
 - **Stack:** Kotlin, Jetpack Compose (Material 3), Hilt, Room + SQLCipher (`net.zetetic:sqlcipher-android`,
@@ -16,7 +16,7 @@ runs on-device by default; nothing leaves the phone unless you explicitly enable
   ML Kit GenAI (system Gemini Nano), native whisper.cpp + Vosk (on-device speech-to-text), Tesseract
   (on-device OCR), AppFunctions (system Gemini agent), a Wear OS companion module, OkHttp (cloud Gemini)
   and Retrofit (Gmail)
-- **SDK:** compileSdk 37 · minSdk 35 · targetSdk 36
+- **SDK:** compileSdk 37 · minSdk 26 (Android 8.0) · targetSdk 36 · ABIs arm64-v8a + armeabi-v7a + x86_64
 - **16 KB page size:** all bundled native libraries are aligned for Android 15+/16 16 KB-page devices
 
 ---

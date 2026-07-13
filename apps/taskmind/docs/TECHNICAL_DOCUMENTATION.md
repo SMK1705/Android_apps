@@ -75,8 +75,8 @@
 | **Title** | TaskMind — Technical Architecture & Design Documentation |
 | **System / Application** | TaskMind (Android app + Wear OS companion) |
 | **Package / Application ID** | `com.rajasudhan.taskmind` |
-| **Version (application)** | versionName `5.1` (versionCode `6`) |
-| **Document Version** | 1.1 |
+| **Version (application)** | versionName `5.1.2` (versionCode `7`) |
+| **Document Version** | 1.2 |
 | **Status** | Baseline / Approved for internal circulation |
 | **Date** | 2026-07-10 |
 | **Owner** | TaskMind App Owner (GitHub: `SMK1705`) |
@@ -90,6 +90,7 @@
 |---------|------|--------|--------------------|
 | 1.0 | 2026-07-10 | TaskMind Engineering | Initial comprehensive baseline: system overview, features, detailed design (components, data, pipeline, APIs, integrations), runtime scenarios, security, deployment/operations, non-functional requirements, reliability/DR, technical debt, glossary, appendices. |
 | 1.1 | 2026-07-10 | TaskMind Engineering | Corrected facts per codebase cross-check (DB cipher AES-256-CBC + HMAC-SHA512, Room schema v18, multimodal vision routing, cloud transport); synced application version references to 5.1 (`versionCode 6`). |
+| 1.2 | 2026-07-13 | TaskMind Engineering | v5.1.2: lowered `minSdk` 35 → 26 (Android 8.0) with API guards, widened native ABIs to arm64-v8a + armeabi-v7a + x86_64; updated version and compatibility facts accordingly. |
 
 ## 0.2 Audience
 
@@ -122,7 +123,7 @@
 
 # 1. Executive Summary
 
-**TaskMind** is a privacy-first, on-device personal assistant for Android that turns the everyday signals already flowing through a user's own phone — SMS, notifications, call logs, Gmail, app-usage, voice/call recordings, and screenshots — into reviewed, actionable items (tasks, reminders, notes, waiting-on items, and calendar events). Its distinguishing principle is that **all understanding runs locally by default and nothing is ever persisted or scheduled until the user explicitly approves it**. The application is a native Kotlin / Jetpack Compose (Material 3) app built around a single `MainActivity`, packaged as `com.rajasudhan.taskmind` (versionCode 6, versionName "5.1"), targeting Android 15+ (`minSdk 35`, `targetSdk 36`, `compileSdk 37`), with a companion Wear OS module.
+**TaskMind** is a privacy-first, on-device personal assistant for Android that turns the everyday signals already flowing through a user's own phone — SMS, notifications, call logs, Gmail, app-usage, voice/call recordings, and screenshots — into reviewed, actionable items (tasks, reminders, notes, waiting-on items, and calendar events). Its distinguishing principle is that **all understanding runs locally by default and nothing is ever persisted or scheduled until the user explicitly approves it**. The application is a native Kotlin / Jetpack Compose (Material 3) app built around a single `MainActivity`, packaged as `com.rajasudhan.taskmind` (versionCode 7, versionName "5.1.2"), targeting Android 8.0+ (`minSdk 26`, `targetSdk 36`, `compileSdk 37`), with a companion Wear OS module.
 
 The core value proposition is **zero-effort capture with full user control**. Rather than requiring the user to manually enter every commitment, TaskMind watches opted-in sources, runs an LLM extraction pass, and surfaces each candidate as a *suggestion* in an Inbox. The user approves, edits, rejects, or snoozes each suggestion; only an approved suggestion becomes a saved Note and, where relevant, an exact-alarm reminder, a geofenced location reminder, or a de-duplicated system-calendar event. This "human-in-the-loop by construction" model is what lets the product access highly sensitive personal data responsibly.
 
@@ -284,7 +285,7 @@ Targets below are engineering objectives for a personal, single-user on-device a
 | **Performance (extraction latency)** | Cloud path returns within a few seconds; on-device is slower with a one-time warm-up. | Structured-output Gemini (cloud) vs MediaPipe/Gemma (on-device). **Assumption:** first on-device inference is notably slower (model warm-up), then fast. | Honest labels warn the user of the on-device tradeoff. |
 | **Battery / resource efficiency** | Background work must not run on low battery; scans are incremental. | `DataCollectionWorker` with `requiresBatteryNotLow`; watermark + processed-id dedup avoids re-work; scan interval user-tunable 15 min–6 h (default ~30 min). | — |
 | **Scalability (on-device equivalent)** | Handles a single user's realistic signal volume on one device. | Incremental forward-only scans, capped look-back (≤24 h) on manual/periodic refresh, on-device semantic index for Ask. **Assumption:** not designed for multi-user or unbounded corpora. | Horizontal scaling / autoscaling not applicable. |
-| **Compatibility** | Runs on Android 15+ with 16 KB memory pages. | `minSdk 35` / `targetSdk 36` / `compileSdk 37`; all bundled native libs 16 KB-page-aligned (whisper.cpp arm64-v8a). | — |
+| **Compatibility** | Runs on **Android 8.0+** across three ABIs. | `minSdk 26` / `targetSdk 36` / `compileSdk 37`; native libs for `arm64-v8a` + `armeabi-v7a` + `x86_64` (whisper.cpp is arm64-only, an optional second pass), 16 KB-page-aligned. | — |
 | **Maintainability / testability** | Regressions caught by JVM tests in CI on every push. | ~707 JVM unit tests (JUnit4 + Robolectric + mockk + Turbine + Compose UI test on JVM); GitHub Actions (`android.yml`, JDK 21) runs `testDebugUnitTest` + `assembleDebug`. | Distribution via committed debug keystore + rolling `debug-latest` release. |
 | **Interoperability** | Discoverable by the system agent; reachable from many entry points. | AppFunctions (`createTask` / `getItemsDueToday` / `snoozeItem`); share-sheet, Quick Settings tile, widget, launcher shortcuts, Wear capture. | — |
 
@@ -294,7 +295,7 @@ Targets below are engineering objectives for a personal, single-user on-device a
 
 # 4. Functional Requirements & Features
 
-This section enumerates the functional requirements of TaskMind (`com.rajasudhan.taskmind`, versionCode 6). Every requirement is grounded in the shipped Kotlin/Compose implementation. Because TaskMind is a **privacy-first, on-device assistant with no first-party backend**, all "processing" described below runs on the handset (or, for the LLM step only, optionally against Google Gemini when the user selects the cloud engine); there are no server-side components, request queues, or multi-tenant concerns.
+This section enumerates the functional requirements of TaskMind (`com.rajasudhan.taskmind`, versionCode 7). Every requirement is grounded in the shipped Kotlin/Compose implementation. Because TaskMind is a **privacy-first, on-device assistant with no first-party backend**, all "processing" described below runs on the handset (or, for the LLM step only, optionally against Google Gemini when the user selects the cloud engine); there are no server-side components, request queues, or multi-tenant concerns.
 
 ## 4.1 Feature Summary
 
@@ -1984,7 +1985,7 @@ Every reachable outbound host is recorded (metadata only) by `EgressLogger` — 
 | `debug` | Committed `apps/taskmind/debug.keystore` (store/key pass `android`, alias `androiddebugkey`), overriding the per-machine `~/.android/debug.keystore` | Debuggable; no shrinking | Rolling `debug-latest` GitHub pre-release; `installDebug` to a connected phone | The stable, shared signature is what lets in-place updates preserve on-device data |
 | `release` | **None configured** — `signingConfigs` only defines `debug`; the release variant is unsigned | `optimization { enable = false }` — R8/shrinking explicitly off | **No channel** — never built for distribution | A hard Play-Store blocker (see §12) |
 
-Key `defaultConfig` facts (from `apps/taskmind/build.gradle.kts`): `applicationId = com.rajasudhan.taskmind`, `versionCode 6` / `versionName "5.1"`, `minSdk 35` (Android 15), `targetSdk 36`, `compileSdk 37`, Java 11 source/target, `ndkVersion 27.0.12077973`, `ndk.abiFilters = ["arm64-v8a"]` only, CMake `-std=c++17`. `buildConfig = true` exposes `VERSION_NAME`/`VERSION_CODE` to the Settings footer.
+Key `defaultConfig` facts (from `apps/taskmind/build.gradle.kts`): `applicationId = com.rajasudhan.taskmind`, `versionCode 7` / `versionName "5.1.2"`, `minSdk 26` (Android 8.0), `targetSdk 36`, `compileSdk 37`, Java 11 source/target, `ndkVersion 27.0.12077973`, `ndk.abiFilters = ["arm64-v8a", "armeabi-v7a", "x86_64"]` (the whisper.cpp CMake build stays arm64-only via `externalNativeBuild.cmake.abiFilters`), CMake `-std=c++17`. `buildConfig = true` exposes `VERSION_NAME`/`VERSION_CODE` to the Settings footer.
 
 ### 8.3 CI/CD pipeline
 
@@ -2165,8 +2166,8 @@ Severity reflects impact if unaddressed; likelihood reflects how likely it is to
 | R1 | **Leaked cloud Gemini key** — an express-style token (`AQ.Ab8…`) was once hardcoded in `SettingsManager.kt` and committed; the default is now `""`, but the same key persists in **git history** and in on-device `EncryptedSharedPreferences` | **High** | High (key is public in history) | **Revoke/rotate in Google Cloud** (not yet done); move to per-user key entry only; consider history rewrite. Runtime already reads the key from encrypted prefs, never a constant |
 | R2 | **Restricted permissions** — `READ_SMS` / `READ_CALL_LOG` are default-handler-only for public Play distribution | **High** | High (blocks Play release) | Gate SMS/call sources behind default-handler eligibility, or ship these sources disabled for a Play build; sources are already individually opt-in |
 | R3 | **No release signing config** — the `release` variant defines no `signingConfig` and is never built for distribution | **High** | High (blocks any prod release) | Add a real release keystore in a secured secret store + a `release`/Play workflow |
-| R4 | **16 KB page alignment unverified** — `libwhisper_jni.so` must be 16 KB-aligned for Android 15+ devices; no `packaging`/`jniLibs` alignment option is set in `build.gradle.kts` | **Medium** | Medium (target is Android 15+) | Verify with `check-elf-alignment`; set NDK/AGP 16 KB packaging; add a CI alignment check |
-| R5 | **Single native ABI** — `abiFilters = ["arm64-v8a"]` only; no `armeabi-v7a`/`x86_64` | **Medium** | Medium | Add ABIs for wider device + emulator coverage before a public release (per-ABI whisper.cpp compile is the cost being deferred) |
+| R4 | **16 KB page alignment unverified** — `libwhisper_jni.so` must be 16 KB-aligned for Android 15+ devices; no `packaging`/`jniLibs` alignment option is set in `build.gradle.kts` | **Medium** | Medium (Android 15+ devices only) | Verify with `check-elf-alignment`; set NDK/AGP 16 KB packaging; add a CI alignment check |
+| R5 | **Native ABIs** — packaged for `arm64-v8a` + `armeabi-v7a` + `x86_64`; whisper.cpp compiles arm64-only (optional second pass, no-ops elsewhere) | Low | **Resolved (v5.1.2, #297)** | — |
 | R6 | **Committed debug keystore drives distribution** — the shared `debug.keystore` (non-secret, passwords `android`) is what all install/OTA paths trust | **Medium** | Medium | Acceptable for sideload; must not carry into a Play/release identity — a device on the debug signature can't be updated by a differently-signed release without a data-wiping reinstall |
 | R7 | **No central crash/telemetry** — field failures are invisible until a user reports them | **Medium** | Medium | Documented trade-off of the privacy posture; consider an opt-in, on-device-scrubbed diagnostic export |
 | R8 | **OEM background suppression** — aggressive battery managers freeze the foreground watcher and drop alarms | **Medium** | High on IN-market devices | Reliability Doctor surfaces + deep-links the battery-exemption and exact-alarm fixes; exact alarms + `START_STICKY` + `BootReceiver` re-arm |
@@ -2509,7 +2510,7 @@ No real secrets are committed. Configuration is supplied at build time (Gradle /
 | SQLCipher DB key | `EncryptedSharedPreferences` (Keystore-backed) | Encrypts the Room database at rest. | Generated on first run; never leaves the device. |
 | Source toggles, `*_enabledAt` watermarks, processed-id ledgers, `scan_frequency_minutes`, `lastScanAt`, `useOnDeviceLlm` | `DataStore` / `EncryptedSharedPreferences` | Per-source enablement, incremental-scan bounds, dedup, scan cadence, engine preference. | See §5.4. |
 | `room.schemaLocation`, `appfunctions:aggregateAppFunctions` | KSP args (`build.gradle.kts`) | Export the current Room schema (v18, `schemas/<db>/18.json`); aggregate AppFunction metadata at build time. | |
-| NDK `27.0.12077973`, `abiFilters = arm64-v8a`, `-std=c++17` | `build.gradle.kts` / CMake | Native whisper.cpp toolchain and target ABI. | Single-ABI today (see §12). |
+| NDK `27.0.12077973`, `abiFilters = arm64-v8a + armeabi-v7a + x86_64`, `-std=c++17` | `build.gradle.kts` / CMake | Native toolchain and packaged ABIs. | whisper.cpp compiles arm64-only (optional); other ABIs use the prebuilt libs. |
 
 ## Appendix C — References
 
