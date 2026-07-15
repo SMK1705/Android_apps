@@ -54,7 +54,7 @@ TYPE_CLASSES = ["reminder", "todo", "note", "waiting_on", "none"]
 
 # The priority confusion matrix classes. Extraction only ever produces normal/high; "none" = nothing
 # extracted. Only cases whose primary expectation pins a `priority` are scored here.
-PRIORITY_CLASSES = ["normal", "high", "none"]
+PRIORITY_CLASSES = ["normal", "high", "low", "none"]
 
 # Mirrors CloudLlmProvider.responseSchema() — keep in sync.
 RESPONSE_SCHEMA = {
@@ -461,7 +461,23 @@ def main() -> int:
         help="score a report the on-device engine produced (JSONL of {name, items}) instead of calling "
              "Gemini — no key/network needed (#212 migration gate)",
     )
+    ap.add_argument(
+        "--golden", metavar="PATH", default=None,
+        help="path to the golden JSONL to run (default golden_set.jsonl)",
+    )
+    ap.add_argument(
+        "--model", metavar="NAME", default=None,
+        help="Gemini model id to test (default gemini-2.5-flash)",
+    )
+    ap.add_argument(
+        "--jsonl-out", metavar="PATH", default=None,
+        help="dump per-observation results (name, items, expect, ok) as JSONL for downstream grading",
+    )
     args = ap.parse_args()
+    if args.model:
+        global MODEL, ENDPOINT
+        MODEL = args.model
+        ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
     runs = max(1, args.runs)
 
     # On-device mode reads pre-computed items from a device report; the cloud path calls Gemini live.
@@ -473,12 +489,13 @@ def main() -> int:
         model_label = MODEL
     key = None if device_report is not None else api_key()
     instruction = load_instruction()
-    cases = [json.loads(l) for l in GOLDEN.read_text(encoding="utf-8").splitlines() if l.strip()]
+    golden_path = Path(args.golden) if args.golden else GOLDEN
+    cases = [json.loads(l) for l in golden_path.read_text(encoding="utf-8").splitlines() if l.strip()]
     if args.only:
         cases = [c for c in cases if args.only in c["name"]]
 
     edit_instruction = None  # loaded lazily, only if an edit-mode case appears (cloud path only)
-    results, passed = [], 0
+    results, raw, passed = [], [], 0
     for c in cases:
         if device_report is None:
             if c.get("mode") == "edit":
@@ -516,6 +533,11 @@ def main() -> int:
                 "reason": reason,
                 "fields": field_scores(c["expect"], items),
             })
+            raw.append({
+                "name": c["name"], "category": c.get("category", ""),
+                "source": c["source"], "text": c["text"], "now": c["now"],
+                "expect": c["expect"], "items": items, "ok": ok, "reason": reason,
+            })
             if args.verbose:
                 print("         items: " + json.dumps(items, ensure_ascii=False))
             if device_report is None:
@@ -530,6 +552,11 @@ def main() -> int:
 
     total = len(results)
     print(f"\n{passed}/{total} passed ({len(cases)} cases × {runs} run(s)).")
+    if args.jsonl_out:
+        with open(args.jsonl_out, "w", encoding="utf-8", newline="\n") as f:
+            for r in raw:
+                f.write(json.dumps(r, ensure_ascii=False) + "\n")
+        print(f"Wrote per-case results: {args.jsonl_out}")
 
     if args.report is not None:
         Path(args.report).write_text(
