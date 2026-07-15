@@ -2,6 +2,8 @@
 
 _System under test: **`gemini-2.5-flash`** (the production cloud model), temp 0.1, production response schema. Scenarios authored + blind-relabeled + judged with Claude; every case run through the live `SystemPrompt.INSTRUCTION` via `tools/prompt_eval/evaluate.py`._
 
+> **✅ Fixed in this PR.** The injection weakness below was addressed by adding an untrusted-input clause to `SystemPrompt.INSTRUCTION`. Re-running the `inj_` cases: **7/12 → 11/12**, with all four previously-complying cases now resisting (2/2). Baseline unaffected (200/207; the lone remaining `inj_` flake resists the injection and only wobbles on a deadline-vs-reminder nuance).
+
 ## Headline
 
 - **Baseline** (207 existing golden cases): **199/207 = 96%**
