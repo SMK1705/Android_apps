@@ -28,6 +28,8 @@ import com.rajasudhan.taskmind.data.source.dataStore
 import com.rajasudhan.taskmind.data.source.ocr.OcrEngine
 import com.rajasudhan.taskmind.data.source.transcription.VoskTranscriber
 import com.rajasudhan.taskmind.data.source.transcription.WhisperTranscriber
+import com.rajasudhan.taskmind.data.source.understanding.CloudKeyCheck
+import com.rajasudhan.taskmind.data.source.understanding.CloudLlmProvider
 import com.rajasudhan.taskmind.data.source.understanding.OnDeviceEngineOption
 import com.rajasudhan.taskmind.data.source.understanding.OnDeviceLlmProvider
 import com.rajasudhan.taskmind.data.source.understanding.UnderstandingPipeline
@@ -54,6 +56,7 @@ class SettingsViewModel @Inject constructor(
     private val settingsManager: SettingsManager,
     private val dao: TaskMindDao,
     private val onDeviceLlm: OnDeviceLlmProvider,
+    private val cloudLlm: CloudLlmProvider,
     private val understandingPipeline: UnderstandingPipeline,
     private val egressLogger: EgressLogger,
     private val voskTranscriber: VoskTranscriber,
@@ -197,6 +200,21 @@ class SettingsViewModel @Inject constructor(
     fun updateLlmApiKey(key: String) {
         settingsManager.llmApiKey = key
         _llmApiKey.value = key
+    }
+
+    // ---- Cloud API health check (the cloud counterpart to "Check on-device model") ----
+    private val _cloudApiStatus = MutableStateFlow<String?>(null)
+    val cloudApiStatus: StateFlow<String?> = _cloudApiStatus
+
+    fun checkCloudApi() {
+        viewModelScope.launch {
+            _cloudApiStatus.value = "Checking cloud API…"
+            _cloudApiStatus.value = when (val result = cloudLlm.checkKey()) {
+                is CloudKeyCheck.Ok -> "✓ Cloud API reachable — gemini-2.5-flash responded to your key."
+                is CloudKeyCheck.NoKey -> "No cloud API key set — paste a Gemini key above first."
+                is CloudKeyCheck.Failed -> "✗ ${result.reason}"
+            }
+        }
     }
 
     fun setWhisperSecondPass(enabled: Boolean) {

@@ -58,6 +58,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val llmApiKey by viewModel.llmApiKey.collectAsState()
+    val cloudApiStatus by viewModel.cloudApiStatus.collectAsState()
     val whisperSecondPass by viewModel.whisperSecondPass.collectAsState()
     val whisperModelPresent by viewModel.whisperModelPresent.collectAsState()
     val transcriptionStatus by viewModel.transcriptionStatus.collectAsState()
@@ -308,6 +309,16 @@ fun SettingsScreen(
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth()
                 )
+                OutlinedButton(onClick = { viewModel.checkCloudApi() }) {
+                    Text("Check cloud API")
+                }
+                cloudApiStatus?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 

@@ -59,6 +59,7 @@ class SettingsScreenTest {
             settingsManager,
             mockk<TaskMindDao>(relaxed = true),
             mockk<OnDeviceLlmProvider>(relaxed = true),
+            mockk<com.rajasudhan.taskmind.data.source.understanding.CloudLlmProvider>(relaxed = true),
             mockk<UnderstandingPipeline>(relaxed = true),
             egressLogger,
             mockk<VoskTranscriber>(relaxed = true),
