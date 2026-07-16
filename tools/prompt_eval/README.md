@@ -97,3 +97,22 @@ model-computed relative dates.
 
 `RESPONSE_SCHEMA` in `evaluate.py` mirrors `CloudLlmProvider.responseSchema()`. If you change the
 item shape in one, change it in the other.
+
+## Extended comprehensive suite
+
+`golden_set_ext.jsonl` (329 cases) is a harder, adversarial-weighted companion corpus that probes the
+gaps the base set thins out: prompt-injection, non-English/code-switching, recurrence variety,
+waiting-on vs commitment, long inputs, OCR noise, and noise-rejection traps. Authored + blind-relabeled
++ judged with a capable model, then gold-validated by `validate_ext.py` (schema lint + never-past-date
+invariant + author-vs-relabeler agreement).
+
+```bash
+python evaluate.py --golden golden_set_ext.jsonl --jsonl-out ext_raw.jsonl --report EVAL_EXT.md
+python analyze_comprehensive.py --ext ext_raw.jsonl --baseline base_raw.jsonl --judge judge_verdicts.json \
+       --md EVAL_COMPREHENSIVE.md --html EVAL_dashboard.html
+```
+
+New `evaluate.py` flags: `--golden PATH` (run an alternate corpus), `--model NAME` (SUT model override),
+`--jsonl-out PATH` (dump per-case raw results for downstream grading). The generation + judge harnesses
+are `gen_scenarios.wf.js` / `judge.wf.js`. See `EVAL_COMPREHENSIVE.md` for the latest run (baseline 96%,
+extended 93% gold-adjusted, with a documented prompt-injection weakness).
