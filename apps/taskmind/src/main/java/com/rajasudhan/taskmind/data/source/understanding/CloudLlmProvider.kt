@@ -77,6 +77,57 @@ class CloudLlmProvider @Inject constructor(
         }
 
     /**
+     * Verifies the configured cloud key actually works — a tiny `generateContent` ping to the same
+     * model/endpoint the extraction uses, surfacing the REAL outcome (unlike [generate], which masks
+     * every failure into an empty-items fallback). Backs the Settings "Check cloud API" button — the
+     * cloud counterpart to "Check on-device model".
+     */
+    suspend fun checkKey(): CloudKeyCheck = withContext(Dispatchers.IO) {
+        val apiKey = settingsManager.llmApiKey
+        if (apiKey.isBlank()) return@withContext CloudKeyCheck.NoKey
+
+        // A key check still leaves the device — log it like any other egress.
+        egressLogger.record("generativelanguage.googleapis.com", "Cloud LLM key check")
+
+        val body = JSONObject()
+            .put(
+                "contents",
+                JSONArray().put(
+                    JSONObject().put("role", "user")
+                        .put("parts", JSONArray().put(JSONObject().put("text", "ping")))
+                )
+            )
+            .put("generationConfig", JSONObject().put("temperature", 0).put("maxOutputTokens", 1))
+
+        val request = Request.Builder()
+            .url("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+
+        runCatching {
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful) CloudKeyCheck.Ok
+                else CloudKeyCheck.Failed(describeError(response.code, response.body?.string().orEmpty()))
+            }
+        }.getOrElse { e -> CloudKeyCheck.Failed(e.message?.take(140) ?: "network error") }
+    }
+
+    /** Turns a Gemini error reply into a short, human-readable reason for the check button. */
+    private fun describeError(code: Int, body: String): String {
+        val msg = runCatching { JSONObject(body).optJSONObject("error")?.optString("message") }
+            .getOrNull()?.takeIf { it.isNotBlank() }
+        return when {
+            code == 400 && msg?.contains("API key", ignoreCase = true) == true -> "Invalid API key"
+            code == 400 -> msg ?: "Bad request (400)"
+            code == 401 || code == 403 -> "Key rejected or lacks permission ($code)"
+            code == 404 -> "Model not available for this key (404)"
+            code == 429 -> "Rate limit / quota reached — the key is valid but throttled"
+            code in 500..599 -> "Google server error ($code) — try again shortly"
+            else -> msg ?: "HTTP $code"
+        }
+    }
+
+    /**
      * Posts a Gemini generateContent request whose output is pinned to [schema], returning the
      * model's raw JSON text. [purpose] is what gets written to the egress ledger; [fallback] is
      * returned (without any network call) on a blank key, and (after a call) on a non-2xx response
@@ -253,6 +304,16 @@ class CloudLlmProvider @Inject constructor(
         private const val EMPTY_ARRAY = "[]"
         private const val EMPTY_INTENT = "{\"action\": \"query\"}"
     }
+}
+
+/** Outcome of [CloudLlmProvider.checkKey] — backs the Settings "Check cloud API" button. */
+sealed interface CloudKeyCheck {
+    /** The key + model responded (HTTP 2xx). */
+    data object Ok : CloudKeyCheck
+    /** No cloud key is configured yet. */
+    data object NoKey : CloudKeyCheck
+    /** The call reached Google but failed; [reason] is a short human-readable cause. */
+    data class Failed(val reason: String) : CloudKeyCheck
 }
 
 /**

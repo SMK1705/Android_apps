@@ -39,6 +39,7 @@ class SettingsViewModelTest {
         settingsManager,
         mockk<TaskMindDao>(relaxed = true),
         mockk<OnDeviceLlmProvider>(relaxed = true),
+        mockk<com.rajasudhan.taskmind.data.source.understanding.CloudLlmProvider>(relaxed = true),
         mockk<UnderstandingPipeline>(relaxed = true),
         mockk<EgressLogger>(relaxed = true),
         mockk<VoskTranscriber>(relaxed = true),
