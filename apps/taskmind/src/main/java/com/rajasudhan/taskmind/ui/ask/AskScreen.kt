@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -107,13 +108,19 @@ fun AskScreen(
             if (messages.isEmpty() && !thinking) {
                 AskEmptyState(onDevice = onDeviceEngine, onExample = { viewModel.ask(it) })
             } else {
+                val actions = AskCardActions(
+                    onOpen = onNoteClick,
+                    onComplete = viewModel::completeResult,
+                    onReschedule = viewModel::rescheduleResult,
+                    onAddToCalendar = viewModel::addResultToCalendar,
+                )
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(messages) { msg -> AskBubble(msg, onNoteClick) }
+                    items(messages) { msg -> AskBubble(msg, actions) }
                     if (thinking) item { ThinkingBubble() }
                 }
             }
@@ -128,8 +135,16 @@ fun AskScreen(
     }
 }
 
+/** The things a result card can do, wired to the ViewModel once and threaded down to each card (#319). */
+private class AskCardActions(
+    val onOpen: (Int) -> Unit,
+    val onComplete: (Note) -> Unit,
+    val onReschedule: (Note, Long) -> Unit,
+    val onAddToCalendar: (Note) -> Unit,
+)
+
 @Composable
-private fun AskBubble(msg: AskMessage, onNoteClick: (Int) -> Unit) {
+private fun AskBubble(msg: AskMessage, actions: AskCardActions) {
     val c = BoldTheme.colors
     if (msg.fromUser) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -161,37 +176,83 @@ private fun AskBubble(msg: AskMessage, onNoteClick: (Int) -> Unit) {
                 )
             }
             msg.result?.notes?.forEach { note ->
-                AskResultCard(note) { onNoteClick(note.id) }
+                AskResultCard(note, actions)
             }
         }
     }
 }
 
-/** A compact result card for the chat — a self-contained citation the user can tap to open. */
+/** A compact result card for the chat — a self-contained citation the user can tap to open, and now
+ *  act on in place (#319): mark it done, push it out a day/week, or put it on the calendar. */
 @Composable
-private fun AskResultCard(note: Note, onClick: () -> Unit) {
+private fun AskResultCard(note: Note, actions: AskCardActions) {
     val c = BoldTheme.colors
     val due = listOfNotNull(note.dueDate, note.dueTime).joinToString(" · ")
+    val actionable = note.type == "todo" || note.type == "reminder" || note.type == "waiting_on"
+    val dated = !note.dueDate.isNullOrBlank()
+    val canCalendar = dated && note.calendarEventId == null && (note.type == "todo" || note.type == "reminder")
     Column(
         Modifier.fillMaxWidth().clip(ShapeCard).background(c.surface).border(1.dp, c.line, ShapeCard)
-            .clickable(onClick = onClick, onClickLabel = "Open note", role = Role.Button)
+            .clickable(onClick = { actions.onOpen(note.id) }, onClickLabel = "Open note", role = Role.Button)
             .padding(horizontal = 13.dp, vertical = 11.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    note.type.replace('_', ' ').uppercase(),
+                    style = BoldType.detailMeta.copy(fontSize = 9.sp, letterSpacing = 0.5.sp), color = c.accent
+                )
+                if (due.isNotBlank()) Text(due, style = BoldType.detailMeta.copy(fontSize = 10.sp), color = c.muted)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    note.source, style = BoldType.detailMeta.copy(fontSize = 9.5.sp), color = c.ink3,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+            }
             Text(
-                note.type.replace('_', ' ').uppercase(),
-                style = BoldType.detailMeta.copy(fontSize = 9.sp, letterSpacing = 0.5.sp), color = c.accent
-            )
-            if (due.isNotBlank()) Text(due, style = BoldType.detailMeta.copy(fontSize = 10.sp), color = c.muted)
-            Spacer(Modifier.weight(1f))
-            Text(
-                note.source, style = BoldType.detailMeta.copy(fontSize = 9.5.sp), color = c.ink3,
-                maxLines = 1, overflow = TextOverflow.Ellipsis
+                note.title,
+                style = BoldType.sugTitle.copy(
+                    fontSize = 14.5.sp, lineHeight = 19.sp,
+                    textDecoration = if (note.completed) TextDecoration.LineThrough else null,
+                ),
+                color = if (note.completed) c.muted else c.ink,
             )
         }
-        Text(note.title, style = BoldType.sugTitle.copy(fontSize = 14.5.sp, lineHeight = 19.sp), color = c.ink)
+        // Once done, the card just states so — no actions to offer. Otherwise show only the ones that apply
+        // to this item: done for anything actionable, reschedule for a dated item, calendar for a dated
+        // to-do/reminder not already mirrored.
+        when {
+            note.completed ->
+                Text("✓ Done", style = BoldType.detailMeta.copy(fontSize = 11.sp), color = c.accent)
+            actionable || dated -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (actionable) AskActionChip("Done") { actions.onComplete(note) }
+                if (dated) {
+                    AskActionChip("Tomorrow") { actions.onReschedule(note, 1) }
+                    AskActionChip("Next week") { actions.onReschedule(note, 7) }
+                }
+                if (canCalendar) AskActionChip("Calendar") { actions.onAddToCalendar(note) }
+            }
+            note.calendarEventId != null && dated ->
+                Text("On calendar", style = BoldType.detailMeta.copy(fontSize = 10.sp), color = c.muted)
+        }
     }
+}
+
+/** A small bordered pill action on a result card. Stops the tap from also opening the note. */
+@Composable
+private fun AskActionChip(label: String, onClick: () -> Unit) {
+    val c = BoldTheme.colors
+    Text(
+        label,
+        style = BoldType.detailMeta.copy(fontSize = 11.sp),
+        color = c.ink,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .border(1.dp, c.line, RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick, onClickLabel = label, role = Role.Button)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    )
 }
 
 @Composable

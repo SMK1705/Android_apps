@@ -2,6 +2,8 @@ package com.rajasudhan.taskmind.ui.ask
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.rajasudhan.taskmind.data.model.Note
+import com.rajasudhan.taskmind.data.source.NoteActions
 import com.rajasudhan.taskmind.data.source.embedding.SemanticIndex
 import com.rajasudhan.taskmind.data.source.understanding.AskEngine
 import com.rajasudhan.taskmind.data.source.understanding.AskIntent
@@ -12,6 +14,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import javax.inject.Inject
 
 /** One turn in the Ask conversation: the user's line, or the assistant's answer + result cards. */
@@ -22,6 +25,7 @@ class AskViewModel @Inject constructor(
     private val engine: AskEngine,
     private val routing: RoutingLlmProvider,
     private val semanticIndex: SemanticIndex,
+    private val noteActions: NoteActions,
 ) : ViewModel() {
 
     init {
@@ -65,6 +69,51 @@ class AskViewModel @Inject constructor(
             lastIntent = result.intent
             _messages.value = _messages.value + AskMessage(fromUser = false, text = result.answer, result = result)
             _thinking.value = false
+        }
+    }
+
+    // ---- act on a result card, in-place (#319) ----
+    // Ask is a place you DO things, not just look them up: complete, reschedule and add-to-calendar on the
+    // card itself. Each reuses NoteActions — the exact path Notes uses — so there's no second, drifting copy
+    // of the alarm/calendar/recurrence side effects. The acted card is patched in the thread so it reflects
+    // the new state immediately (done, moved, on-calendar) without re-asking the model.
+
+    /** Mark a result done. Reference notes have nothing to complete; only actionable, not-yet-done items. */
+    fun completeResult(note: Note) {
+        if (!isActionable(note) || note.completed) return
+        viewModelScope.launch {
+            noteActions.setCompleted(note, true)
+            patchNote(note.id) { it.copy(completed = true, completedDate = System.currentTimeMillis()) }
+        }
+    }
+
+    /** Push a dated result out by [days] (Tomorrow / Next week), reflecting the date the alarm landed on. */
+    fun rescheduleResult(note: Note, days: Long) {
+        if (note.dueDate.isNullOrBlank() || note.completed) return
+        val target = LocalDate.now().plusDays(days).toString()
+        viewModelScope.launch {
+            val landed = noteActions.reschedule(note, target)
+            patchNote(note.id) { it.copy(dueDate = landed) }
+        }
+    }
+
+    /** Put a dated to-do/reminder on the calendar; the card then shows it's mirrored. */
+    fun addResultToCalendar(note: Note) {
+        if (!noteActions.canAddToCalendar(note)) return
+        viewModelScope.launch {
+            val eventId = noteActions.addToCalendar(note)
+            if (eventId != null) patchNote(note.id) { it.copy(calendarEventId = eventId) }
+        }
+    }
+
+    private fun isActionable(note: Note) = note.type == "todo" || note.type == "reminder" || note.type == "waiting_on"
+
+    /** Replace a note (by id) everywhere it appears in the thread so its card re-renders with the new state. */
+    private fun patchNote(id: Int, transform: (Note) -> Note) {
+        _messages.value = _messages.value.map { m ->
+            val r = m.result ?: return@map m
+            if (r.notes.none { it.id == id }) m
+            else m.copy(result = r.copy(notes = r.notes.map { if (it.id == id) transform(it) else it }))
         }
     }
 }
