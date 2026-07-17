@@ -101,28 +101,63 @@ item shape in one, change it in the other.
 `ask_eval.py`'s `context_for` mirrors `AskAnswerPrompt.contextFor`, and its `call_gemini` mirrors
 `CloudLlmProvider.generateAnswer`'s `generationConfig` (including `thinkingBudget: 0`). Same rule.
 
-## Ask answer layer (`ask_eval.py`, #313)
+## Ask answer layer (`ask_eval.py`, #313 / #315)
 
 A second harness, for a different prompt with a different risk. Extraction can be judged against a
 gold label; the Ask answer layer has to be judged against *the notes it was given* — its failure mode
 is a fluent sentence that isn't in them.
 
 ```bash
-python ask_eval.py                              # all 57 cases
-python ask_eval.py --only inj_ -v               # one category, print raw answers
-python ask_eval.py --runs 3 --report ASK_EVAL_REPORT.md
+python ask_eval.py                                              # matchers only, all cases
+python ask_eval.py --only inj_ -v                               # one category, print raw answers
+python ask_eval.py --runs 3 --judge --report ASK_EVAL_REPORT.md # the full run: matchers + judge + report
 ```
 
-Cases live in `ask_golden.jsonl`: `notes` + `question` + `expect`. Categories are chosen for the ways
-a grounded-answer layer actually fails — `fact` (states the detail), `absent` (refuses when the notes
-are silent), `outside` (refuses rather than answering from world knowledge), `distract` (picks the
-right note among near-identical ones), `multi`, `inj` (note text is content, never instructions),
-`partial` (doesn't over-claim), `fmt`.
+Cases live in `ask_golden.jsonl` (~124): `notes` + `question` + `expect`. Categories are chosen for the
+ways a grounded-answer layer actually fails, and the set is weighted toward the traps a deterministic
+check can't see — `fact` (states the detail), `absent` (refuses when the notes are silent), `outside`
+(refuses rather than answering from world knowledge), **`distract`** (picks the right note among
+near-identical ones, i.e. leaks no *other* note's name/place), **`multi`** (combines two notes without
+inventing a link), **`partial`** (doesn't over-claim from a related-but-silent note), `inj` (note text
+is content, never instructions), `fmt`.
 
-Matchers are `contains_any` / `contains_all` / `not_contains` / `refuse` / `max_chars`. **On top of
-those, every non-refusal answer fails if it contains a number that appears in neither the notes nor
-the question** — this domain's hallucinations are prices, gate codes, seat numbers and dates, so an
-invented figure is caught without anyone having to anticipate the specific case.
+### Three grading layers
+
+1. **Matchers** (the gate) — `contains_any` / `contains_all` / `not_contains` / `refuse` / `max_chars`.
+2. **Number grounding** — every non-refusal answer fails if it contains a number absent from the notes
+   *and* the question. Prices, gate codes, seat numbers, dates: an invented figure is caught without
+   anyone anticipating the case.
+3. **LLM-judge panel** (`--judge`) — a gold-blind panel re-reads `(question, notes, answer)` and votes
+   on whether every claim is grounded. This is the only layer that catches a **non-numeric**
+   hallucination: a wrong name, a wrong place, an invented link. Advisory, not the gate. Its highest-
+   value output is the **disagreement**: a case the matchers PASS but the judge calls ungrounded is a
+   hole the deterministic checks missed; the reverse flags an over-strict matcher or a bad gold label.
+   The report has a dedicated section for both.
+
+### Judge independence
+
+`gemini-2.5-pro` is **gone on the express key** (404), so `--judge` defaults to `gemini-2.5-flash` —
+the same family as the system under test, which shares its blind spots. Two ways to get a genuinely
+independent judge:
+
+- pass `--judge-model <model>` if a fuller key is available, or
+- run the **cross-family Claude Workflow** `ask_judge.wf.js` (preferred — a different model family
+  doesn't inherit the SUT's blind spots). It emits the same verdict JSONL that `--judge-in` consumes:
+
+```bash
+# in-harness (same-family) judge, self-contained:
+python ask_eval.py --judge --judge-out ask_judge_verdicts.jsonl --report ASK_EVAL_REPORT.md
+# or feed verdicts produced by ask_judge.wf.js (Claude) instead of calling Gemini:
+python ask_eval.py --judge-in ask_judge_verdicts.jsonl --report ASK_EVAL_REPORT.md
+```
+
+### CI wiring — deliberately manual
+
+Like `evaluate.py`, this makes **real paid API calls** (~124 answers + ~370 judge calls per full run),
+so it is **not wired into CI** — a per-PR gate would bill on every push and flake at `temperature 0.1`.
+It's a **manual pre-merge / periodic run**; the fresh numbers get committed in `ASK_EVAL_REPORT.md`. If
+this is ever automated it should be a **scheduled `workflow_dispatch`** with the key as a secret, not a
+`pull_request` trigger. The `AskEngineTest` unit suite is the fast gate that *does* run on every push.
 
 ## Extended comprehensive suite
 
