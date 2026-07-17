@@ -32,10 +32,18 @@ class AskEngine @Inject constructor(
 ) {
     private val adapter by lazy { moshi.adapter(AskIntent::class.java) }
 
-    /** [now] is injectable so date-window resolution is testable. */
-    suspend fun ask(utterance: String, now: LocalDateTime = LocalDateTime.now()): AskResult {
+    /**
+     * [now] is injectable so date-window resolution is testable. [previous] is the intent behind the
+     * last answer, if any — handed to the classifier as context so a short follow-up ("what about next
+     * week?") refines that query instead of being classified blind.
+     */
+    suspend fun ask(
+        utterance: String,
+        now: LocalDateTime = LocalDateTime.now(),
+        previous: AskIntent? = null,
+    ): AskResult {
         if (utterance.isBlank()) return AskResult("Ask me about your tasks and notes.", kind = AskResultKind.EMPTY)
-        val intent = classify(utterance, now)
+        val intent = classify(utterance, now, previous)
         return when {
             intent?.action == "create" && !intent.text.isNullOrBlank() -> create(intent.text)
             // A real query intent. A "create" with no text is a failed classification, NOT a match-all
@@ -45,10 +53,16 @@ class AskEngine @Inject constructor(
         }
     }
 
-    private suspend fun classify(utterance: String, now: LocalDateTime): AskIntent? {
+    private suspend fun classify(utterance: String, now: LocalDateTime, previous: AskIntent?): AskIntent? {
         val system = AskPrompt.INSTRUCTION.replace("{{CURRENT_DATETIME}}", datetimeLine(now))
+        // A follow-up only means anything against the last question, so give the model that intent as
+        // context. The prompt decides whether to refine it or treat the new line as a fresh topic —
+        // merging here deterministically couldn't tell those apart.
+        val user =
+            if (previous == null) utterance
+            else "Previous question intent: ${adapter.toJson(previous)}\nNew question: $utterance"
         return runCatching {
-            val json = ExtractionHeuristics.stripJsonFences(llmProvider.generateIntent(system, utterance))
+            val json = ExtractionHeuristics.stripJsonFences(llmProvider.generateIntent(system, user))
             val obj = JSONObject(json)
             // Cloud pins the flat intent schema; on-device is free-form. Tolerate an accidental {items:[…]} wrap.
             val flat = obj.optJSONArray("items")?.optJSONObject(0) ?: obj
@@ -74,12 +88,15 @@ class AskEngine @Inject constructor(
             return AskResult(
                 answerFor(intent, matched.size) + truncationNote(matched.size),
                 order(intent, matched).take(RESULT_LIMIT),
+                intent = intent,
             )
         }
         // Nothing matched. If the ask leaned on structured slots, say so plainly ("nothing due today");
         // if it was essentially a content/keyword ask, fall through to search rather than a false "clear".
         val structured = intent.type != null || intent.tag != null || intent.window != null || intent.status != null
-        return if (structured) AskResult(emptyAnswerFor(intent), kind = AskResultKind.EMPTY) else search(utterance)
+        // Carry the intent even on a miss — "nothing due today" -> "what about tomorrow?" must refine it.
+        return if (structured) AskResult(emptyAnswerFor(intent), kind = AskResultKind.EMPTY, intent = intent)
+        else search(utterance)
     }
 
     private suspend fun search(utterance: String): AskResult {

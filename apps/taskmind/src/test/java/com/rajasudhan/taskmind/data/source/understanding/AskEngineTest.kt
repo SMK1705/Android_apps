@@ -83,6 +83,44 @@ class AskEngineTest {
     }
 
     @Test
+    fun followUp_handsThePreviousIntentToTheClassifierAndReturnsTheResolvedOne() = runTest {
+        dao.insertNote(aNote(title = "Ship the deck", type = "todo", dueDate = "2026-07-14"))
+        val llm = FakeLlmProvider("""{"action":"query","type":"todo","window":"upcoming"}""")
+        val previous = AskIntent(action = "query", type = "todo", window = "overdue")
+
+        val r = engine(llm).ask("what about next week?", now, previous = previous)
+
+        // The model can't resolve a bare "what about next week?" without the last question's slots.
+        val sent = llm.userMessages.single()
+        assertTrue(sent.contains("Previous question intent"))
+        assertTrue(sent.contains("\"window\":\"overdue\""))
+        assertTrue(sent.contains("New question: what about next week?"))
+        // The resolved intent comes back so the NEXT turn can refine this one in turn.
+        assertEquals("upcoming", r.intent?.window)
+    }
+
+    @Test
+    fun firstTurn_sendsTheBareUtterance_withNoPreviousIntentLine() = runTest {
+        dao.insertNote(aNote(title = "Buy milk", type = "todo"))
+        val llm = FakeLlmProvider("""{"action":"query","type":"todo"}""")
+
+        engine(llm).ask("show my tasks", now)
+
+        assertEquals("show my tasks", llm.userMessages.single())
+    }
+
+    @Test
+    fun emptyStructuredResult_stillCarriesItsIntent_soAFollowUpCanRefineIt() = runTest {
+        dao.insertNote(aNote(title = "Buy milk", type = "todo")) // undated -> not "due today"
+
+        val r = engine(FakeLlmProvider("""{"action":"query","window":"today"}""")).ask("what's due today", now)
+
+        // "Nothing due today" -> "what about tomorrow?" must be able to refine the window.
+        assertEquals(AskResultKind.EMPTY, r.kind)
+        assertEquals("today", r.intent?.window)
+    }
+
+    @Test
     fun structuredQuery_overTheCardLimit_saysItIsShowingOnlyTheFirstSlice() = runTest {
         repeat(15) { dao.insertNote(aNote(title = "Task $it", type = "todo")) }
 

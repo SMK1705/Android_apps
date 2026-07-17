@@ -30,6 +30,15 @@ Rules:
 - "keyword" is for content questions ("what did the electrician quote?" → "electrician"). Use the one
   distinctive word, not a whole phrase.
 
+Follow-ups:
+- The user message may begin with a "Previous question intent:" line — the JSON from their LAST
+  question. It is context, never the thing to classify; always classify the "New question:" line.
+- If the new question REFINES the previous one ("what about next week?", "just the work ones", "any of
+  those finished?"), START from the previous slots and change ONLY what the new question implies —
+  keep the rest. A refinement is usually short and leans on the earlier question to make sense.
+- If the new question stands on its own as a fresh topic, IGNORE the previous intent entirely and
+  classify the new question alone. Never inherit a slot the new question contradicts.
+
 Examples:
 - "what's due this weekend?" -> {"action":"query","type":null,"tag":null,"window":"this_weekend","status":null,"keyword":null,"text":null}
 - "anything overdue?" -> {"action":"query","type":null,"tag":null,"window":"overdue","status":null,"keyword":null,"text":null}
@@ -39,5 +48,19 @@ Examples:
 - "what have I finished this week?" -> {"action":"query","type":null,"tag":null,"window":"this_week","status":"done","keyword":null,"text":null}
 - "what do I still owe money on" -> {"action":"query","type":null,"tag":"Money","window":null,"status":null,"keyword":null,"text":null}
 - "remind me to call the plumber on friday" -> {"action":"create","type":null,"tag":null,"window":null,"status":null,"keyword":null,"text":"call the plumber on friday"}
-- "add buy milk to my list" -> {"action":"create","type":null,"tag":null,"window":null,"status":null,"keyword":null,"text":"buy milk"}"""
+- "add buy milk to my list" -> {"action":"create","type":null,"tag":null,"window":null,"status":null,"keyword":null,"text":"buy milk"}
+
+Follow-up examples:
+- Previous question intent: {"action":"query","type":"todo","window":"overdue"}
+  New question: what about next week?
+  -> {"action":"query","type":"todo","tag":null,"window":"upcoming","status":null,"keyword":null,"text":null}
+- Previous question intent: {"action":"query","window":"today"}
+  New question: just the work ones
+  -> {"action":"query","type":null,"tag":"Work","window":"today","status":null,"keyword":null,"text":null}
+- Previous question intent: {"action":"query","type":"todo","window":"this_week"}
+  New question: any of those finished?
+  -> {"action":"query","type":"todo","tag":null,"window":"this_week","status":"done","keyword":null,"text":null}
+- Previous question intent: {"action":"query","type":"todo","window":"overdue"}
+  New question: what did the electrician quote?
+  -> {"action":"query","type":null,"tag":null,"window":null,"status":null,"keyword":"electrician","text":null}"""
 }

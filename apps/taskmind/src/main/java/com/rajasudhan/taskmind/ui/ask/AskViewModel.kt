@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rajasudhan.taskmind.data.source.embedding.SemanticIndex
 import com.rajasudhan.taskmind.data.source.understanding.AskEngine
+import com.rajasudhan.taskmind.data.source.understanding.AskIntent
 import com.rajasudhan.taskmind.data.source.understanding.AskResult
 import com.rajasudhan.taskmind.data.source.understanding.AskResultKind
 import com.rajasudhan.taskmind.data.source.understanding.RoutingLlmProvider
@@ -43,6 +44,13 @@ class AskViewModel @Inject constructor(
 
     fun refreshEngine() { _onDeviceEngine.value = routing.isOnDeviceEffective() }
 
+    /**
+     * The intent behind the last answer, so a short follow-up ("what about next week?") refines that
+     * query instead of being classified blind. Null after a search/create — nothing worth inheriting,
+     * and stale slots would silently skew the next question.
+     */
+    private var lastIntent: AskIntent? = null
+
     fun ask(utterance: String) {
         val text = utterance.trim()
         if (text.isBlank() || _thinking.value) return
@@ -50,10 +58,11 @@ class AskViewModel @Inject constructor(
         _thinking.value = true
         viewModelScope.launch {
             val result = try {
-                engine.ask(text)
+                engine.ask(text, previous = lastIntent)
             } catch (e: Exception) {
                 AskResult("Something went wrong — try rephrasing.", kind = AskResultKind.EMPTY)
             }
+            lastIntent = result.intent
             _messages.value = _messages.value + AskMessage(fromUser = false, text = result.answer, result = result)
             _thinking.value = false
         }
