@@ -32,6 +32,13 @@ data class AskResult(
      * are no slots worth inheriting, and a stale carry-over would silently skew an unrelated question.
      */
     val intent: AskIntent? = null,
+    /**
+     * True when [answer] was written by the cloud model FROM the note content (the opt-in answer
+     * layer) rather than composed deterministically here. Surfaced in the chat so the user always
+     * knows when a sentence came from a model reading their notes — the same honesty rule as the
+     * engine label (#197).
+     */
+    val answeredFromNotes: Boolean = false,
 )
 
 enum class AskResultKind { RESULTS, CREATED, EMPTY }

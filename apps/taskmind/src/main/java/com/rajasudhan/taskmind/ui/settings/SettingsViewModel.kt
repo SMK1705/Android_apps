@@ -217,6 +217,15 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    // ---- Ask answer layer (opt-in, cloud-only) ----
+    private val _askAnswersEnabled = MutableStateFlow(settingsManager.askAnswersEnabled)
+    val askAnswersEnabled: StateFlow<Boolean> = _askAnswersEnabled
+
+    fun setAskAnswersEnabled(enabled: Boolean) {
+        settingsManager.askAnswersEnabled = enabled
+        _askAnswersEnabled.value = enabled
+    }
+
     fun setWhisperSecondPass(enabled: Boolean) {
         settingsManager.whisperSecondPassEnabled = enabled
         _whisperSecondPass.value = enabled

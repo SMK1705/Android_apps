@@ -77,6 +77,39 @@ class CloudLlmProvider @Inject constructor(
         }
 
     /**
+     * Ask's answer layer: a plain-prose answer grounded in the notes the caller supplies. Unlike every
+     * other cloud call here the reply is NOT schema-pinned — the answer is a sentence, not JSON.
+     *
+     * Returns **null** on a blank key or any failure, so the caller keeps its deterministic answer and
+     * the worst case is simply today's behaviour (cards with a generic lead-in), never an error.
+     */
+    suspend fun generateAnswer(systemMessage: String, userMessage: String): String? =
+        withContext(Dispatchers.IO) {
+            val apiKey = settingsManager.llmApiKey
+            if (apiKey.isBlank()) return@withContext null
+
+            // Audit: this is the one call that carries saved note CONTENT off the device.
+            egressLogger.record("generativelanguage.googleapis.com", "Cloud LLM ask answer")
+
+            val body = JSONObject().apply {
+                put("systemInstruction", JSONObject().put("parts", JSONObject().put("text", systemMessage)))
+                put(
+                    "contents",
+                    JSONArray().put(
+                        JSONObject().put("role", "user")
+                            .put("parts", JSONArray().put(JSONObject().put("text", userMessage)))
+                    )
+                )
+                put("generationConfig", JSONObject().put("temperature", 0.1).put("maxOutputTokens", 200))
+            }
+            val request = Request.Builder()
+                .url("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey")
+                .post(body.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            sendForJsonOrNull(request)?.trim()?.takeIf { it.isNotBlank() }
+        }
+
+    /**
      * Verifies the configured cloud key actually works — a tiny `generateContent` ping to the same
      * model/endpoint the extraction uses, surfacing the REAL outcome (unlike [generate], which masks
      * every failure into an empty-items fallback). Backs the Settings "Check cloud API" button — the

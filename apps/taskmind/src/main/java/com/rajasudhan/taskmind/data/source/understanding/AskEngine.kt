@@ -2,6 +2,7 @@ package com.rajasudhan.taskmind.data.source.understanding
 
 import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
+import com.rajasudhan.taskmind.data.source.SettingsManager
 import com.rajasudhan.taskmind.data.source.embedding.SemanticIndex
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.flow.first
@@ -29,6 +30,8 @@ class AskEngine @Inject constructor(
     private val dao: TaskMindDao,
     private val pipeline: UnderstandingPipeline,
     private val semanticIndex: SemanticIndex,
+    private val cloudLlm: CloudLlmProvider,
+    private val settingsManager: SettingsManager,
 ) {
     private val adapter by lazy { moshi.adapter(AskIntent::class.java) }
 
@@ -44,13 +47,38 @@ class AskEngine @Inject constructor(
     ): AskResult {
         if (utterance.isBlank()) return AskResult("Ask me about your tasks and notes.", kind = AskResultKind.EMPTY)
         val intent = classify(utterance, now, previous)
-        return when {
+        val result = when {
             intent?.action == "create" && !intent.text.isNullOrBlank() -> create(intent.text)
             // A real query intent. A "create" with no text is a failed classification, NOT a match-all
             // query — fall through to search so we never answer "here's everything" to a dropped slot.
             intent != null && intent.action != "create" -> query(intent, now.toLocalDate(), utterance)
             else -> search(utterance) // unparseable reply, model unavailable, or a textless create
         }
+        // Only a CONTENT ask wants prose. A structured count ("3 tasks due today") is already the best
+        // possible answer and a create just confirms — but a keyword (or no intent at all) means the
+        // user asked about the SUBSTANCE of an item, which is the one thing the cards can't tell them.
+        val contentAsk =
+            result.kind == AskResultKind.RESULTS && (intent == null || !intent.keyword.isNullOrBlank())
+        return if (contentAsk) answered(result, utterance) else result
+    }
+
+    /**
+     * The opt-in answer layer: turn "Here's what I found" + cards into an actual answer to a content
+     * question, grounded in those same cards (which stay on as citations).
+     *
+     * Off by default and cloud-only — this is the only path that hands saved note CONTENT to a model,
+     * so it trades Ask's structural no-hallucination guarantee and the user must ask for that. Any
+     * failure (no key, network, empty reply) keeps the deterministic answer, so the floor is exactly
+     * today's behaviour.
+     */
+    private suspend fun answered(result: AskResult, question: String): AskResult {
+        if (!settingsManager.askAnswersEnabled || result.notes.isEmpty()) return result
+        if (settingsManager.llmApiKey.isBlank()) return result // cloud-only: the 1B model can't ground reliably
+        val prose = cloudLlm.generateAnswer(
+            AskAnswerPrompt.INSTRUCTION,
+            AskAnswerPrompt.contextFor(question, result.notes),
+        ) ?: return result
+        return result.copy(answer = prose, answeredFromNotes = true)
     }
 
     private suspend fun classify(utterance: String, now: LocalDateTime, previous: AskIntent?): AskIntent? {
