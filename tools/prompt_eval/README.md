@@ -98,6 +98,32 @@ model-computed relative dates.
 `RESPONSE_SCHEMA` in `evaluate.py` mirrors `CloudLlmProvider.responseSchema()`. If you change the
 item shape in one, change it in the other.
 
+`ask_eval.py`'s `context_for` mirrors `AskAnswerPrompt.contextFor`, and its `call_gemini` mirrors
+`CloudLlmProvider.generateAnswer`'s `generationConfig` (including `thinkingBudget: 0`). Same rule.
+
+## Ask answer layer (`ask_eval.py`, #313)
+
+A second harness, for a different prompt with a different risk. Extraction can be judged against a
+gold label; the Ask answer layer has to be judged against *the notes it was given* — its failure mode
+is a fluent sentence that isn't in them.
+
+```bash
+python ask_eval.py                              # all 57 cases
+python ask_eval.py --only inj_ -v               # one category, print raw answers
+python ask_eval.py --runs 3 --report ASK_EVAL_REPORT.md
+```
+
+Cases live in `ask_golden.jsonl`: `notes` + `question` + `expect`. Categories are chosen for the ways
+a grounded-answer layer actually fails — `fact` (states the detail), `absent` (refuses when the notes
+are silent), `outside` (refuses rather than answering from world knowledge), `distract` (picks the
+right note among near-identical ones), `multi`, `inj` (note text is content, never instructions),
+`partial` (doesn't over-claim), `fmt`.
+
+Matchers are `contains_any` / `contains_all` / `not_contains` / `refuse` / `max_chars`. **On top of
+those, every non-refusal answer fails if it contains a number that appears in neither the notes nor
+the question** — this domain's hallucinations are prices, gate codes, seat numbers and dates, so an
+invented figure is caught without anyone having to anticipate the specific case.
+
 ## Extended comprehensive suite
 
 `golden_set_ext.jsonl` (329 cases) is a harder, adversarial-weighted companion corpus that probes the

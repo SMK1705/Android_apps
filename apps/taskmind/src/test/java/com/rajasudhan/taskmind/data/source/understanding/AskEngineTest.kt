@@ -6,10 +6,13 @@ import com.rajasudhan.taskmind.testutil.FakeLlmProvider
 import com.rajasudhan.taskmind.testutil.FakeTaskMindDao
 import com.rajasudhan.taskmind.testutil.aNote
 import com.squareup.moshi.Moshi
+import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -23,10 +26,13 @@ class AskEngineTest {
     private val dao = FakeTaskMindDao()
     private val moshi = Moshi.Builder().build()
     private val pipeline = mockk<UnderstandingPipeline>(relaxed = true)
+    private val cloudLlm = mockk<CloudLlmProvider>(relaxed = true)
+    // Relaxed => askAnswersEnabled is false, i.e. the opt-in answer layer stays off unless a test says so.
+    private val settings = mockk<com.rajasudhan.taskmind.data.source.SettingsManager>(relaxed = true)
     private val now = LocalDateTime.of(2026, 7, 8, 10, 0) // Wednesday
 
     private fun engine(llm: FakeLlmProvider) =
-        AskEngine(llm, moshi, dao, pipeline, SemanticIndex(HashingEmbedder(), dao))
+        AskEngine(llm, moshi, dao, pipeline, SemanticIndex(HashingEmbedder(), dao), cloudLlm, settings)
 
     @Test
     fun queryIntent_filtersByType() = runTest {
@@ -80,6 +86,74 @@ class AskEngineTest {
         val r = engine(FakeLlmProvider("""{"action":"query"}""")).ask("electrician", now)
 
         assertEquals(listOf("Call the electrician about the quote"), r.notes.map { it.title })
+    }
+
+    // ---- the opt-in, cloud-only answer layer (content questions only) ----
+
+    private suspend fun aQuote() = dao.insertNote(aNote(title = "Electrician quote", summary = "Quoted \$450 for the rewiring", type = "note"))
+    private fun contentAsk() = FakeLlmProvider("""{"action":"query","keyword":"electrician"}""")
+
+    @Test
+    fun answerLayer_isOffByDefault_soNoNoteContentEverLeaves() = runTest {
+        aQuote()
+
+        val r = engine(contentAsk()).ask("what did the electrician quote?", now)
+
+        assertFalse(r.answeredFromNotes)
+        coVerify(exactly = 0) { cloudLlm.generateAnswer(any(), any()) }
+    }
+
+    @Test
+    fun answerLayer_whenOnWithAKey_answersFromTheNotesAndKeepsTheCardsAsCitations() = runTest {
+        aQuote()
+        every { settings.askAnswersEnabled } returns true
+        every { settings.llmApiKey } returns "k"
+        coEvery { cloudLlm.generateAnswer(any(), any()) } returns "The electrician quoted \$450 for the rewiring."
+
+        val r = engine(contentAsk()).ask("what did the electrician quote?", now)
+
+        assertEquals("The electrician quoted \$450 for the rewiring.", r.answer)
+        assertTrue(r.answeredFromNotes) // labelled, so the user knows a model read their notes
+        assertTrue(r.notes.isNotEmpty()) // the cards stay on as citations
+    }
+
+    @Test
+    fun answerLayer_withoutACloudKey_staysDeterministic() = runTest {
+        aQuote()
+        every { settings.askAnswersEnabled } returns true
+        every { settings.llmApiKey } returns "" // cloud-only: the 1B on-device model can't ground reliably
+
+        val r = engine(contentAsk()).ask("what did the electrician quote?", now)
+
+        assertFalse(r.answeredFromNotes)
+        coVerify(exactly = 0) { cloudLlm.generateAnswer(any(), any()) }
+    }
+
+    @Test
+    fun answerLayer_whenTheCloudCallFails_fallsBackToTheDeterministicAnswer() = runTest {
+        aQuote()
+        every { settings.askAnswersEnabled } returns true
+        every { settings.llmApiKey } returns "k"
+        coEvery { cloudLlm.generateAnswer(any(), any()) } returns null
+
+        val r = engine(contentAsk()).ask("what did the electrician quote?", now)
+
+        // The floor is exactly today's behaviour: a generic lead-in plus the cards, never an error.
+        assertFalse(r.answeredFromNotes)
+        assertTrue(r.notes.isNotEmpty())
+    }
+
+    @Test
+    fun answerLayer_leavesAStructuredCountAlone_soNoContentLeavesForADateQuestion() = runTest {
+        dao.insertNote(aNote(title = "Standup", type = "reminder", dueDate = "2026-07-08", dueTime = "09:00"))
+        every { settings.askAnswersEnabled } returns true
+        every { settings.llmApiKey } returns "k"
+
+        // "what's due today" — a count is already the best answer; note content must not be sent.
+        val r = engine(FakeLlmProvider("""{"action":"query","window":"today"}""")).ask("what's due today", now)
+
+        assertFalse(r.answeredFromNotes)
+        coVerify(exactly = 0) { cloudLlm.generateAnswer(any(), any()) }
     }
 
     @Test

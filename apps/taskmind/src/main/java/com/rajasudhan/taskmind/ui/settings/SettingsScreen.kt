@@ -59,6 +59,7 @@ fun SettingsScreen(
 ) {
     val llmApiKey by viewModel.llmApiKey.collectAsState()
     val cloudApiStatus by viewModel.cloudApiStatus.collectAsState()
+    val askAnswersEnabled by viewModel.askAnswersEnabled.collectAsState()
     val whisperSecondPass by viewModel.whisperSecondPass.collectAsState()
     val whisperModelPresent by viewModel.whisperModelPresent.collectAsState()
     val transcriptionStatus by viewModel.transcriptionStatus.collectAsState()
@@ -319,6 +320,36 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            }
+            // Shown under either engine: the answer layer keys off the cloud API key, not the engine
+            // choice, so it can be on while extraction runs on-device. Say that plainly here rather
+            // than hiding a switch that would silently do nothing.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Let Ask answer from your notes", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Ask normally only shows matching cards — the model never sees what's in them. Turn " +
+                            "this on and the items matching your question are sent to the cloud model so it can " +
+                            "answer in words. Needs a cloud API key; answers are labelled in the chat.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                com.rajasudhan.taskmind.ui.bold.BoldSwitch(
+                    checked = askAnswersEnabled,
+                    onCheckedChange = { viewModel.setAskAnswersEnabled(it) }
+                )
+            }
+            if (askAnswersEnabled && llmApiKey.isBlank()) {
+                Text(
+                    "No cloud API key yet — Ask keeps showing cards only until you add one.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
             }
         }
 

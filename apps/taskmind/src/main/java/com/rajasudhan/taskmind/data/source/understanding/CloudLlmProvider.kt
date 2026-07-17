@@ -77,6 +77,71 @@ class CloudLlmProvider @Inject constructor(
         }
 
     /**
+     * Ask's answer layer: a plain-prose answer grounded in the notes the caller supplies. Unlike every
+     * other cloud call here the reply is NOT schema-pinned — the answer is a sentence, not JSON.
+     *
+     * Returns **null** on a blank key or any failure, so the caller keeps its deterministic answer and
+     * the worst case is simply today's behaviour (cards with a generic lead-in), never an error.
+     */
+    suspend fun generateAnswer(systemMessage: String, userMessage: String): String? =
+        withContext(Dispatchers.IO) {
+            val apiKey = settingsManager.llmApiKey
+            if (apiKey.isBlank()) return@withContext null
+
+            // Audit: this is the one call that carries saved note CONTENT off the device.
+            egressLogger.record("generativelanguage.googleapis.com", "Cloud LLM ask answer")
+
+            val body = JSONObject().apply {
+                put("systemInstruction", JSONObject().put("parts", JSONObject().put("text", systemMessage)))
+                put(
+                    "contents",
+                    JSONArray().put(
+                        JSONObject().put("role", "user")
+                            .put("parts", JSONArray().put(JSONObject().put("text", userMessage)))
+                    )
+                )
+                put(
+                    "generationConfig",
+                    JSONObject()
+                        .put("temperature", 0.1)
+                        .put("maxOutputTokens", 200)
+                        // gemini-2.5-flash is a THINKING model and its thought tokens are billed against
+                        // maxOutputTokens. Left on, ~190 of the 200 went to thinking and the answer was
+                        // truncated mid-word — "The gate code is 447" for a real code of 4471 (#313 eval).
+                        // Worse, the harder the question the longer it thinks, so truncation hit hardest
+                        // exactly where being right matters. Reading a fact back out of supplied text
+                        // needs no chain of thought; off is also faster, cheaper and deterministic.
+                        .put("thinkingConfig", JSONObject().put("thinkingBudget", 0))
+                )
+            }
+            val request = Request.Builder()
+                .url("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey")
+                .post(body.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            sendForAnswerOrNull(request)?.trim()?.takeIf { it.isNotBlank() }
+        }
+
+    /**
+     * Like [sendForJsonOrNull] but also rejects a **truncated** candidate. A half-sentence is the one
+     * failure mode this layer must never surface: "The gate code is 447" reads like a complete answer
+     * and is a wrong code. Belt-and-braces behind `thinkingBudget = 0` — null just falls the caller
+     * back to the deterministic answer, which costs the user nothing.
+     */
+    private fun sendForAnswerOrNull(request: Request): String? = runCatching {
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@runCatching null
+            val bodyStr = response.body?.string() ?: return@runCatching null
+            val candidate = JSONObject(bodyStr).optJSONArray("candidates")?.optJSONObject(0)
+                ?: return@runCatching null
+            if (candidate.optString("finishReason") == "MAX_TOKENS") return@runCatching null
+            candidate.optJSONObject("content")
+                ?.optJSONArray("parts")
+                ?.optJSONObject(0)
+                ?.optString("text")
+        }
+    }.getOrNull()?.takeIf { it.isNotBlank() }
+
+    /**
      * Verifies the configured cloud key actually works — a tiny `generateContent` ping to the same
      * model/endpoint the extraction uses, surfacing the REAL outcome (unlike [generate], which masks
      * every failure into an empty-items fallback). Backs the Settings "Check cloud API" button — the

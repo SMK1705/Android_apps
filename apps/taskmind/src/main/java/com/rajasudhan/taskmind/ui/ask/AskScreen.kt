@@ -150,6 +150,16 @@ private fun AskBubble(msg: AskMessage, onNoteClick: (Int) -> Unit) {
                     Text(msg.text, style = BoldType.body.copy(fontSize = 14.5.sp, lineHeight = 20.sp), color = c.ink)
                 }
             }
+            // Every other Ask answer is composed here from real rows and CAN'T be wrong about content.
+            // This one was written by the cloud model reading the notes below, so say so — the user
+            // should know which sentences to check against the cards (#197's honesty rule).
+            if (msg.result?.answeredFromNotes == true) {
+                Text(
+                    "Written by the cloud model from the items below — tap one to check it.",
+                    style = BoldType.detailMeta.copy(fontSize = 10.sp),
+                    color = c.muted
+                )
+            }
             msg.result?.notes?.forEach { note ->
                 AskResultCard(note) { onNoteClick(note.id) }
             }

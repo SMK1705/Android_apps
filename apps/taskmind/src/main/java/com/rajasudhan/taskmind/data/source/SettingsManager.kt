@@ -16,6 +16,7 @@ class SettingsManager @Inject constructor(
         private const val KEY_LLM_API_KEY = "llm_api_key"
         private const val KEY_WHISPER_SECOND_PASS = "whisper_second_pass"
         private const val KEY_USE_ON_DEVICE_LLM = "use_on_device_llm"
+        private const val KEY_ASK_ANSWERS = "ask_answers_enabled"
         private const val KEY_EVENT_DURATION_MINUTES = "event_duration_minutes"
         private const val KEY_CALENDAR_ID = "calendar_id"
         private const val KEY_ON_DEVICE_MODEL_PATH = "on_device_model_path"
@@ -58,6 +59,19 @@ class SettingsManager @Inject constructor(
         // On-device is the privacy-preserving default.
         get() = encryptedPrefs.getBoolean(KEY_USE_ON_DEVICE_LLM, true)
         set(value) = encryptedPrefs.edit().putBoolean(KEY_USE_ON_DEVICE_LLM, value).apply()
+
+    /**
+     * Ask's answer layer: when on, a content question ("what did the electrician quote?") is answered
+     * in prose FROM the matched notes instead of only listing their cards.
+     *
+     * OFF by default, and deliberately so. Everywhere else the model is handed a single incoming
+     * message; this is the one path that hands it your SAVED note content — trading Ask's structural
+     * no-hallucination guarantee (today the model literally never sees a note) for a real answer. It
+     * is cloud-only: the 1B on-device model is not reliable enough for grounded synthesis.
+     */
+    var askAnswersEnabled: Boolean
+        get() = encryptedPrefs.getBoolean(KEY_ASK_ANSWERS, false)
+        set(value) = encryptedPrefs.edit().putBoolean(KEY_ASK_ANSWERS, value).apply()
 
     /** Length (in minutes) of timed calendar events created on approve. */
     var eventDurationMinutes: Int
