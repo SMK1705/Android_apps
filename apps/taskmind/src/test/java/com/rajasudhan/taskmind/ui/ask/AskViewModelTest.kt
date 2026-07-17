@@ -2,6 +2,7 @@ package com.rajasudhan.taskmind.ui.ask
 
 import com.rajasudhan.taskmind.data.source.embedding.SemanticIndex
 import com.rajasudhan.taskmind.data.source.understanding.AskEngine
+import com.rajasudhan.taskmind.data.source.understanding.AskIntent
 import com.rajasudhan.taskmind.data.source.understanding.AskResult
 import com.rajasudhan.taskmind.data.source.understanding.AskResultKind
 import com.rajasudhan.taskmind.data.source.understanding.RoutingLlmProvider
@@ -38,7 +39,7 @@ class AskViewModelTest {
 
     @Test
     fun ask_appendsTheUserTurnThenTheAnswer() = runTest {
-        coEvery { engine.ask(any(), any()) } returns AskResult("Found 2 tasks due today.", emptyList())
+        coEvery { engine.ask(any(), any(), any()) } returns AskResult("Found 2 tasks due today.", emptyList())
 
         val vm = vm()
         vm.ask("what's due today?")
@@ -65,7 +66,7 @@ class AskViewModelTest {
 
     @Test
     fun ask_whenTheEngineThrows_stillAnswersAndReleasesThinking() = runTest {
-        coEvery { engine.ask(any(), any()) } throws IllegalStateException("db unavailable")
+        coEvery { engine.ask(any(), any(), any()) } throws IllegalStateException("db unavailable")
 
         val vm = vm()
         vm.ask("anything overdue?")
@@ -76,6 +77,38 @@ class AskViewModelTest {
         assertEquals(AskResultKind.EMPTY, last.result?.kind)
         // The latch MUST clear, otherwise the input box stays disabled and Ask is bricked.
         assertFalse(vm.thinking.value)
+    }
+
+    @Test
+    fun secondTurn_carriesTheFirstAnswersIntentAsContext() = runTest {
+        val first = AskIntent(action = "query", type = "todo", window = "overdue")
+        coEvery { engine.ask(any(), any(), any()) } returns AskResult("Found 2.", emptyList(), intent = first)
+
+        val vm = vm()
+        vm.ask("anything overdue?")
+        advanceUntilIdle()
+        vm.ask("what about next week?")
+        advanceUntilIdle()
+
+        // The opening question classifies blind; the follow-up MUST carry the previous slots, or
+        // "what about next week?" is meaningless on its own.
+        coVerify { engine.ask("anything overdue?", any(), null) }
+        coVerify { engine.ask("what about next week?", any(), first) }
+    }
+
+    @Test
+    fun aSearchTurn_clearsTheCarriedIntent_soStaleSlotsDoNotSkewTheNext() = runTest {
+        // A keyword search resolves no structured intent (result.intent == null) — the next question
+        // must start clean rather than inherit slots from two turns ago.
+        coEvery { engine.ask(any(), any(), any()) } returns AskResult("Here's what I found:", emptyList())
+
+        val vm = vm()
+        vm.ask("electrician")
+        advanceUntilIdle()
+        vm.ask("what's due today?")
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { engine.ask(any(), any(), null) }
     }
 
     @Test

@@ -26,6 +26,12 @@ data class AskResult(
     val answer: String,
     val notes: List<Note> = emptyList(),
     val kind: AskResultKind = AskResultKind.RESULTS,
+    /**
+     * The structured intent this answer was built from, handed back so the NEXT turn can refine it
+     * ("anything overdue?" -> "what about next week?"). Null for a keyword search or a create — there
+     * are no slots worth inheriting, and a stale carry-over would silently skew an unrelated question.
+     */
+    val intent: AskIntent? = null,
 )
 
 enum class AskResultKind { RESULTS, CREATED, EMPTY }
