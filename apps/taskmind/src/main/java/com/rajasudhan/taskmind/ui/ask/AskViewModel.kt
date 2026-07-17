@@ -2,6 +2,7 @@ package com.rajasudhan.taskmind.ui.ask
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.rajasudhan.taskmind.data.source.embedding.SemanticIndex
 import com.rajasudhan.taskmind.data.source.understanding.AskEngine
 import com.rajasudhan.taskmind.data.source.understanding.AskResult
 import com.rajasudhan.taskmind.data.source.understanding.AskResultKind
@@ -19,7 +20,15 @@ data class AskMessage(val fromUser: Boolean, val text: String, val result: AskRe
 class AskViewModel @Inject constructor(
     private val engine: AskEngine,
     private val routing: RoutingLlmProvider,
+    private val semanticIndex: SemanticIndex,
 ) : ViewModel() {
+
+    init {
+        // Ask is often the first screen a user opens, and a note without a vector is invisible to
+        // semantic recall — search silently degrades to lexical-only. Notes backfills on its side, but
+        // a user who never opens Notes would otherwise query a half-empty index.
+        viewModelScope.launch { semanticIndex.backfill() }
+    }
 
     private val _messages = MutableStateFlow<List<AskMessage>>(emptyList())
     val messages: StateFlow<List<AskMessage>> = _messages
