@@ -83,6 +83,32 @@ class AskEngineTest {
     }
 
     @Test
+    fun structuredQuery_overTheCardLimit_saysItIsShowingOnlyTheFirstSlice() = runTest {
+        repeat(15) { dao.insertNote(aNote(title = "Task $it", type = "todo")) }
+
+        val r = engine(FakeLlmProvider("""{"action":"query","type":"todo"}""")).ask("show my tasks", now)
+
+        // The count must stay truthful (15) while the cards are capped — and say so, rather than
+        // silently dropping 3 items the user asked for.
+        assertTrue(r.answer.contains("Found 15"))
+        assertTrue(r.answer.contains("Showing the first 12"))
+        assertEquals(12, r.notes.size)
+    }
+
+    @Test
+    fun structuredQuery_ordersChronologically_withUndatedLast() = runTest {
+        dao.insertNote(aNote(title = "Later", type = "todo", dueDate = "2026-07-10"))
+        dao.insertNote(aNote(title = "Undated", type = "todo"))
+        dao.insertNote(aNote(title = "Sooner", type = "todo", dueDate = "2026-07-09"))
+
+        val r = engine(FakeLlmProvider("""{"action":"query","type":"todo"}""")).ask("show my tasks", now)
+
+        // Insertion (DAO) order would be Later, Undated, Sooner — meaningless to the user. A date-shaped
+        // ask reads soonest-first, with undated items trailing.
+        assertEquals(listOf("Sooner", "Later", "Undated"), r.notes.map { it.title })
+    }
+
+    @Test
     fun structuredQueryWithNoMatch_reportsClear_ratherThanFuzzyResults() = runTest {
         dao.insertNote(aNote(title = "Buy milk", type = "todo")) // undated -> not "due today"
 

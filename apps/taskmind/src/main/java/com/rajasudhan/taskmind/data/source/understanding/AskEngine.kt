@@ -70,7 +70,12 @@ class AskEngine @Inject constructor(
         if (!AskQuery.hasAnySlot(intent)) return search(utterance)
         val base = if (isDone(intent)) dao.getCompletedNotes().first() else dao.getActiveNotes().first()
         val matched = base.filter { AskQuery.matches(it, intent, today) }
-        if (matched.isNotEmpty()) return AskResult(answerFor(intent, matched.size), matched.take(RESULT_LIMIT))
+        if (matched.isNotEmpty()) {
+            return AskResult(
+                answerFor(intent, matched.size) + truncationNote(matched.size),
+                order(intent, matched).take(RESULT_LIMIT),
+            )
+        }
         // Nothing matched. If the ask leaned on structured slots, say so plainly ("nothing due today");
         // if it was essentially a content/keyword ask, fall through to search rather than a false "clear".
         val structured = intent.type != null || intent.tag != null || intent.window != null || intent.status != null
@@ -79,9 +84,36 @@ class AskEngine @Inject constructor(
 
     private suspend fun search(utterance: String): AskResult {
         val results = rank(utterance, dao.getActiveNotes().first())
-        return if (results.isEmpty()) AskResult("I couldn't find anything matching that.", kind = AskResultKind.EMPTY)
-        else AskResult("Here's what I found:", results.take(RESULT_LIMIT))
+        return when {
+            results.isEmpty() -> AskResult("I couldn't find anything matching that.", kind = AskResultKind.EMPTY)
+            results.size > RESULT_LIMIT ->
+                AskResult("Found ${results.size} matches — showing the closest $RESULT_LIMIT:", results.take(RESULT_LIMIT))
+            else -> AskResult("Here's what I found:", results)
+        }
     }
+
+    /**
+     * Structured hits arrive in DAO (insertion) order, which is meaningless to the user. A content
+     * keyword means relevance should win — that's what fuses the slots with ranking, so "overdue Work
+     * tasks about the electrician" leads with the electrician. Otherwise a date-shaped ask reads best
+     * chronologically, with undated items last.
+     */
+    private suspend fun order(intent: AskIntent, matched: List<Note>): List<Note> {
+        val keyword = intent.keyword?.trim()
+        if (!keyword.isNullOrBlank()) {
+            // Every row already contains the keyword (AskQuery.matches), so rank() keeps them all and
+            // simply sorts by semantic closeness on top of the lexical hit.
+            val ranked = rank(keyword, matched)
+            if (ranked.size == matched.size) return ranked
+        }
+        return matched.sortedWith(
+            compareBy({ it.dueDate.isNullOrBlank() }, { it.dueDate ?: "" }, { it.title.lowercase() })
+        )
+    }
+
+    /** The answer states the true count, so say plainly when the cards below are only the first slice. */
+    private fun truncationNote(total: Int): String =
+        if (total > RESULT_LIMIT) " Showing the first $RESULT_LIMIT." else ""
 
     /** Keyword (lexical) hits first, then semantically-close notes — the same recipe as Notes search. */
     private suspend fun rank(query: String, base: List<Note>): List<Note> {
