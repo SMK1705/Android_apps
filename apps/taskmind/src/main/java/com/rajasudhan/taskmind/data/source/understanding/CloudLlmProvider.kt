@@ -100,14 +100,46 @@ class CloudLlmProvider @Inject constructor(
                             .put("parts", JSONArray().put(JSONObject().put("text", userMessage)))
                     )
                 )
-                put("generationConfig", JSONObject().put("temperature", 0.1).put("maxOutputTokens", 200))
+                put(
+                    "generationConfig",
+                    JSONObject()
+                        .put("temperature", 0.1)
+                        .put("maxOutputTokens", 200)
+                        // gemini-2.5-flash is a THINKING model and its thought tokens are billed against
+                        // maxOutputTokens. Left on, ~190 of the 200 went to thinking and the answer was
+                        // truncated mid-word — "The gate code is 447" for a real code of 4471 (#313 eval).
+                        // Worse, the harder the question the longer it thinks, so truncation hit hardest
+                        // exactly where being right matters. Reading a fact back out of supplied text
+                        // needs no chain of thought; off is also faster, cheaper and deterministic.
+                        .put("thinkingConfig", JSONObject().put("thinkingBudget", 0))
+                )
             }
             val request = Request.Builder()
                 .url("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey")
                 .post(body.toString().toRequestBody("application/json".toMediaType()))
                 .build()
-            sendForJsonOrNull(request)?.trim()?.takeIf { it.isNotBlank() }
+            sendForAnswerOrNull(request)?.trim()?.takeIf { it.isNotBlank() }
         }
+
+    /**
+     * Like [sendForJsonOrNull] but also rejects a **truncated** candidate. A half-sentence is the one
+     * failure mode this layer must never surface: "The gate code is 447" reads like a complete answer
+     * and is a wrong code. Belt-and-braces behind `thinkingBudget = 0` — null just falls the caller
+     * back to the deterministic answer, which costs the user nothing.
+     */
+    private fun sendForAnswerOrNull(request: Request): String? = runCatching {
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@runCatching null
+            val bodyStr = response.body?.string() ?: return@runCatching null
+            val candidate = JSONObject(bodyStr).optJSONArray("candidates")?.optJSONObject(0)
+                ?: return@runCatching null
+            if (candidate.optString("finishReason") == "MAX_TOKENS") return@runCatching null
+            candidate.optJSONObject("content")
+                ?.optJSONArray("parts")
+                ?.optJSONObject(0)
+                ?.optString("text")
+        }
+    }.getOrNull()?.takeIf { it.isNotBlank() }
 
     /**
      * Verifies the configured cloud key actually works — a tiny `generateContent` ping to the same
