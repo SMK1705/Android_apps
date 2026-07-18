@@ -40,13 +40,17 @@ class NotesScreenTest {
 
     private val dao = FakeTaskMindDao()
     private fun viewModel() = NotesViewModel(
-        dao, mockk<AlarmScheduler>(relaxed = true),
+        dao,
         com.rajasudhan.taskmind.data.source.embedding.SemanticIndex(
             com.rajasudhan.taskmind.data.source.embedding.HashingEmbedder(), dao
         ),
         mockk<SavedFilterStore>(relaxed = true).also { every { it.filters } returns flowOf(emptyList()) },
-        com.rajasudhan.taskmind.data.source.CompletionRecurrence(dao, mockk(relaxed = true), mockk(relaxed = true)),
-        mockk<com.rajasudhan.taskmind.data.source.CalendarMirror>(relaxed = true)
+        com.rajasudhan.taskmind.data.source.NoteActions(
+            dao, mockk<AlarmScheduler>(relaxed = true),
+            mockk<com.rajasudhan.taskmind.data.source.CalendarMirror>(relaxed = true),
+            com.rajasudhan.taskmind.data.source.CompletionRecurrence(dao, mockk(relaxed = true), mockk(relaxed = true)),
+            mockk<com.rajasudhan.taskmind.data.source.SettingsManager>(relaxed = true),
+        ),
     )
 
     @Test

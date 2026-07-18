@@ -38,14 +38,22 @@ class NotesViewModelTest {
 
     @Before
     fun setUp() {
+        // NoteActions now owns the complete/reschedule side effects; build a real one from the same mocked
+        // calendarMirror/alarm so the calendar-mirror assertions below still exercise the real path.
+        val noteActions = com.rajasudhan.taskmind.data.source.NoteActions(
+            dao,
+            mockk<AlarmScheduler>(relaxed = true),
+            calendarMirror,
+            com.rajasudhan.taskmind.data.source.CompletionRecurrence(dao, mockk(relaxed = true), calendarMirror),
+            mockk<com.rajasudhan.taskmind.data.source.SettingsManager>(relaxed = true),
+        )
         vm = NotesViewModel(
-            dao, mockk<AlarmScheduler>(relaxed = true),
+            dao,
             com.rajasudhan.taskmind.data.source.embedding.SemanticIndex(
                 com.rajasudhan.taskmind.data.source.embedding.HashingEmbedder(), dao
             ),
             savedFilterStore,
-            com.rajasudhan.taskmind.data.source.CompletionRecurrence(dao, mockk(relaxed = true), calendarMirror),
-            calendarMirror
+            noteActions,
         )
     }
 
