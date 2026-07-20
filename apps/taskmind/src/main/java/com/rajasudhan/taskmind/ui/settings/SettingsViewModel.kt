@@ -68,6 +68,7 @@ class SettingsViewModel @Inject constructor(
     private val moshi: Moshi,
     private val dailyBriefScheduler: com.rajasudhan.taskmind.data.source.DailyBriefScheduler,
     private val weeklyWinsScheduler: com.rajasudhan.taskmind.data.source.WeeklyWinsScheduler,
+    private val askConversationStore: com.rajasudhan.taskmind.data.source.AskConversationStore,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -403,6 +404,7 @@ class SettingsViewModel @Inject constructor(
             dao.deleteAllSuggestions()
             dao.deleteAllRejectedPatterns() // also forget the on-device rejection learning
             settingsManager.clearSettings()
+            askConversationStore.clear() // the saved Ask thread is user content too (#317)
             context.dataStore.edit { it.clear() }
 
             // Reflect the reset in the UI immediately.

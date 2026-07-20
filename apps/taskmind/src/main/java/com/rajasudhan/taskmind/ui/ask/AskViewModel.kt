@@ -2,11 +2,13 @@ package com.rajasudhan.taskmind.ui.ask
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.rajasudhan.taskmind.data.local.TaskMindDao
 import com.rajasudhan.taskmind.data.model.Note
+import com.rajasudhan.taskmind.data.source.AskConversationStore
 import com.rajasudhan.taskmind.data.source.NoteActions
 import com.rajasudhan.taskmind.data.source.embedding.SemanticIndex
+import com.rajasudhan.taskmind.data.source.understanding.AskConversation
 import com.rajasudhan.taskmind.data.source.understanding.AskEngine
-import com.rajasudhan.taskmind.data.source.understanding.AskIntent
 import com.rajasudhan.taskmind.data.source.understanding.AskResult
 import com.rajasudhan.taskmind.data.source.understanding.AskResultKind
 import com.rajasudhan.taskmind.data.source.understanding.RoutingLlmProvider
@@ -26,14 +28,14 @@ class AskViewModel @Inject constructor(
     private val routing: RoutingLlmProvider,
     private val semanticIndex: SemanticIndex,
     private val noteActions: NoteActions,
+    private val conversationStore: AskConversationStore,
+    private val dao: TaskMindDao,
 ) : ViewModel() {
 
-    init {
-        // Ask is often the first screen a user opens, and a note without a vector is invisible to
-        // semantic recall — search silently degrades to lexical-only. Notes backfills on its side, but
-        // a user who never opens Notes would otherwise query a half-empty index.
-        viewModelScope.launch { semanticIndex.backfill() }
-    }
+    // The running multi-turn context (#318): a bounded fold of prior query intents, so a short follow-up
+    // ("what about next week?") refines the accumulated question instead of being classified blind, and a
+    // 3-step refinement keeps the earliest slots. Resets itself on a search/create or a topic change.
+    private val conversation = AskConversation()
 
     private val _messages = MutableStateFlow<List<AskMessage>>(emptyList())
     val messages: StateFlow<List<AskMessage>> = _messages
@@ -46,14 +48,17 @@ class AskViewModel @Inject constructor(
     private val _onDeviceEngine = MutableStateFlow(routing.isOnDeviceEffective())
     val onDeviceEngine: StateFlow<Boolean> = _onDeviceEngine
 
-    fun refreshEngine() { _onDeviceEngine.value = routing.isOnDeviceEffective() }
+    // After the state above is initialised: restoreConversation() touches _messages, and an unconfined
+    // dispatcher runs its coroutine eagerly, so this init MUST sit below those declarations.
+    init {
+        // Ask is often the first screen a user opens, and a note without a vector is invisible to
+        // semantic recall — search silently degrades to lexical-only. Notes backfills on its side, but
+        // a user who never opens Notes would otherwise query a half-empty index.
+        viewModelScope.launch { semanticIndex.backfill() }
+        restoreConversation()
+    }
 
-    /**
-     * The intent behind the last answer, so a short follow-up ("what about next week?") refines that
-     * query instead of being classified blind. Null after a search/create — nothing worth inheriting,
-     * and stale slots would silently skew the next question.
-     */
-    private var lastIntent: AskIntent? = null
+    fun refreshEngine() { _onDeviceEngine.value = routing.isOnDeviceEffective() }
 
     fun ask(utterance: String) {
         val text = utterance.trim()
@@ -62,14 +67,60 @@ class AskViewModel @Inject constructor(
         _thinking.value = true
         viewModelScope.launch {
             val result = try {
-                engine.ask(text, previous = lastIntent)
+                engine.ask(text, previous = conversation.context())
             } catch (e: Exception) {
                 AskResult("Something went wrong — try rephrasing.", kind = AskResultKind.EMPTY)
             }
-            lastIntent = result.intent
+            conversation.record(result.intent)
             _messages.value = _messages.value + AskMessage(fromUser = false, text = result.answer, result = result)
             _thinking.value = false
+            persist()
         }
+    }
+
+    /** Wipe the thread and the running context — the header's "clear conversation" affordance. */
+    fun clearConversation() {
+        _messages.value = emptyList()
+        conversation.clear()
+        conversationStore.clear()
+    }
+
+    // ---- persistence (#317): keep the thread across process death, purely on-device ----
+
+    /**
+     * Restore the last thread on launch. Cards are stored by note id, so re-read the notes from Room — a
+     * note the user has since deleted simply drops out, and an edited one shows its current state rather
+     * than a stale copy. The fold window (#318) restores too, so a follow-up still works after a restart.
+     */
+    private fun restoreConversation() {
+        viewModelScope.launch {
+            val stored = conversationStore.load()
+            if (stored.turns.isEmpty()) return@launch
+            conversation.restore(stored.intentHistory)
+            _messages.value = stored.turns.map { t ->
+                val notes = t.noteIds.mapNotNull { dao.getNoteByIdNow(it) }
+                val result = if (t.fromUser) null else AskResult(
+                    answer = t.text,
+                    notes = notes,
+                    kind = runCatching { AskResultKind.valueOf(t.kind ?: "RESULTS") }.getOrDefault(AskResultKind.RESULTS),
+                    answeredFromNotes = t.answeredFromNotes,
+                )
+                AskMessage(fromUser = t.fromUser, text = t.text, result = result)
+            }
+        }
+    }
+
+    private fun persist() {
+        val turns = _messages.value.map { m ->
+            AskConversationStore.StoredTurn(
+                fromUser = m.fromUser,
+                text = m.text,
+                kind = m.result?.kind?.name,
+                answeredFromNotes = m.result?.answeredFromNotes == true,
+                noteIds = m.result?.notes?.map { it.id } ?: emptyList(),
+            )
+        }
+        conversationStore.save(AskConversationStore.StoredConversation(turns, conversation.snapshot()))
     }
 
     // ---- act on a result card, in-place (#319) ----
