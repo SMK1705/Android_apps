@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -91,6 +92,13 @@ fun AskScreen(
                 isDark = isDark,
                 onToggleTheme = onToggleTheme,
                 trailing = {
+                    // Only offer to clear once there's a thread to clear. Wipes the transcript and the
+                    // running follow-up context (#317) — the saved notes it cited are untouched.
+                    if (messages.isNotEmpty()) {
+                        BoldHeaderIconButton(onClick = { viewModel.clearConversation() }, label = "Clear conversation") {
+                            Icon(Icons.Outlined.DeleteSweep, contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp))
+                        }
+                    }
                     BoldHeaderIconButton(onClick = onOpenGuide, label = "How to use TaskMind") {
                         Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null, tint = c.ink, modifier = Modifier.size(18.dp))
                     }
