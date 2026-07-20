@@ -110,17 +110,29 @@ class AskEngine @Inject constructor(
         // AskQuery.matches and dump the whole list. It's really a content ask — degrade to keyword+semantic
         // search on the utterance (this is the fall-through RoutingLlmProvider's EMPTY_INTENT relies on).
         if (!AskQuery.hasAnySlot(intent)) return search(utterance)
-        val base = if (isDone(intent)) dao.getCompletedNotes().first() else dao.getActiveNotes().first()
+        // A CONTENT ask (a keyword, no date window) is recall — span DONE from the start, so a thing closed
+        // by mistake is still findable even when an unrelated ACTIVE note also matches the keyword. A date/
+        // planning ask ("what's due today") stays active-only: done items shouldn't clutter your plate, and a
+        // completed item with a past due date isn't really "overdue" any more.
+        val contentRecall = !intent.keyword.isNullOrBlank() && intent.window == null && !isDone(intent)
+        val base = when {
+            isDone(intent) -> dao.getCompletedNotes().first()
+            contentRecall -> dao.getActiveNotes().first() + dao.getCompletedNotes().first()
+            else -> dao.getActiveNotes().first()
+        }
         val matched = base.filter { AskQuery.matches(it, intent, today) }
         if (matched.isNotEmpty()) {
+            val ordered = order(intent, matched).take(RESULT_LIMIT)
+            // Cards label each done item; when the WHOLE answer is done, say so up front too.
+            val doneNote = if (ordered.all { it.completed }) " — marked done" else ""
             return AskResult(
-                answerFor(intent, matched.size) + truncationNote(matched.size),
-                order(intent, matched).take(RESULT_LIMIT),
+                answerFor(intent, matched.size).removeSuffix(".") + doneNote + "." + truncationNote(matched.size),
+                ordered,
                 intent = intent,
             )
         }
-        // Nothing matched. If the ask leaned on structured slots, say so plainly ("nothing due today");
-        // if it was essentially a content/keyword ask, fall through to search rather than a false "clear".
+        // Nothing matched. If the ask leaned on structured slots, say so plainly ("nothing due today"); if it
+        // was essentially a content/keyword ask, fall through to search rather than a false "clear".
         val structured = intent.type != null || intent.tag != null || intent.window != null || intent.status != null
         // Carry the intent even on a miss — "nothing due today" -> "what about tomorrow?" must refine it.
         return if (structured) AskResult(emptyAnswerFor(intent), kind = AskResultKind.EMPTY, intent = intent)
@@ -128,11 +140,16 @@ class AskEngine @Inject constructor(
     }
 
     private suspend fun search(utterance: String): AskResult {
-        val results = rank(utterance, dao.getActiveNotes().first())
+        // Recall spans DONE items too — information ("what did the electrician quote?") doesn't stop being
+        // true when a task is checked off, and a thing closed by mistake must still be findable. Active
+        // notes rank ahead of completed at equal relevance, and a completed hit renders as "✓ Done".
+        val results = rank(utterance, dao.getActiveNotes().first() + dao.getCompletedNotes().first())
         return when {
             results.isEmpty() -> AskResult("I couldn't find anything matching that.", kind = AskResultKind.EMPTY)
             results.size > RESULT_LIMIT ->
                 AskResult("Found ${results.size} matches — showing the closest $RESULT_LIMIT:", results.take(RESULT_LIMIT))
+            results.all { it.completed } ->
+                AskResult("Here's what I found — marked done:", results)
             else -> AskResult("Here's what I found:", results)
         }
     }
@@ -173,7 +190,8 @@ class AskEngine @Inject constructor(
                 sem >= SemanticIndex.SEARCH_FLOOR -> n to sem
                 else -> null
             }
-        }.sortedByDescending { it.second }.map { it.first }
+            // Score first; at equal relevance a live note beats a completed one (recall still favours the plate).
+        }.sortedWith(compareByDescending<Pair<Note, Float>> { it.second }.thenBy { it.first.completed }).map { it.first }
     }
 
     // ---- answer phrasing (deterministic; never invents content, only counts + the slot labels) ----
