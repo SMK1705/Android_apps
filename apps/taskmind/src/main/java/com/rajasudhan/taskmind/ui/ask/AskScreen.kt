@@ -119,6 +119,7 @@ fun AskScreen(
                 val actions = AskCardActions(
                     onOpen = onNoteClick,
                     onComplete = viewModel::completeResult,
+                    onReopen = viewModel::reopenResult,
                     onReschedule = viewModel::rescheduleResult,
                     onAddToCalendar = viewModel::addResultToCalendar,
                 )
@@ -147,6 +148,7 @@ fun AskScreen(
 private class AskCardActions(
     val onOpen: (Int) -> Unit,
     val onComplete: (Note) -> Unit,
+    val onReopen: (Note) -> Unit,
     val onReschedule: (Note, Long) -> Unit,
     val onAddToCalendar: (Note) -> Unit,
 )
@@ -231,8 +233,12 @@ private fun AskResultCard(note: Note, actions: AskCardActions) {
         // to this item: done for anything actionable, reschedule for a dated item, calendar for a dated
         // to-do/reminder not already mirrored.
         when {
-            note.completed ->
+            // A Done item can surface in recall now (asking about something closed by mistake) — say so,
+            // and offer one-tap Reopen for the actionable kinds so the mistake is fixable right here.
+            note.completed -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("✓ Done", style = BoldType.detailMeta.copy(fontSize = 11.sp), color = c.accent)
+                if (actionable) AskActionChip("Reopen") { actions.onReopen(note) }
+            }
             actionable || dated -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (actionable) AskActionChip("Done") { actions.onComplete(note) }
                 if (dated) {

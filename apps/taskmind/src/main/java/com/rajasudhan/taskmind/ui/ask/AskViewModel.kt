@@ -138,6 +138,15 @@ class AskViewModel @Inject constructor(
         }
     }
 
+    /** Reopen a result closed by mistake — Ask now surfaces Done items, so undo is one tap from here. */
+    fun reopenResult(note: Note) {
+        if (!note.completed) return
+        viewModelScope.launch {
+            noteActions.setCompleted(note, false)
+            patchNote(note.id) { it.copy(completed = false, completedDate = null) }
+        }
+    }
+
     /** Push a dated result out by [days] (Tomorrow / Next week), reflecting the date the alarm landed on. */
     fun rescheduleResult(note: Note, days: Long) {
         if (note.dueDate.isNullOrBlank() || note.completed) return

@@ -156,6 +156,74 @@ class AskEngineTest {
         coVerify(exactly = 0) { cloudLlm.generateAnswer(any(), any()) }
     }
 
+    // ---- recall spans DONE items (a thing closed by mistake must still be findable) ----
+
+    @Test
+    fun search_findsACompletedNote_soRecallSurvivesCompletion() = runTest {
+        dao.insertNote(aNote(title = "Electrician quote for rewiring", type = "todo", completed = true, completedDate = 100))
+
+        // Content recall via the unparseable/search path — the note is done, but the info is still true.
+        val r = engine(FakeLlmProvider("sorry, can't help")).ask("electrician", now)
+
+        assertEquals(listOf("Electrician quote for rewiring"), r.notes.map { it.title })
+        assertTrue(r.answer.contains("marked done", ignoreCase = true)) // labelled, not silently returned
+    }
+
+    @Test
+    fun search_ranksAnActiveHitAboveACompletedOne_atEqualRelevance() = runTest {
+        dao.insertNote(aNote(title = "Call the electrician back", type = "todo", completed = true, completedDate = 100))
+        dao.insertNote(aNote(title = "Call the electrician today", type = "todo")) // active
+
+        val r = engine(FakeLlmProvider("{}")).ask("electrician", now)
+
+        assertEquals("Call the electrician today", r.notes.first().title) // the live one leads
+    }
+
+    @Test
+    fun contentQuery_withOnlyADoneMatch_recallsItLabelled_notAFalseAllClear() = runTest {
+        dao.insertNote(aNote(title = "Buy the air filter", type = "todo", completed = true, completedDate = 100))
+
+        // A keyword query whose only match is completed — must recall it labelled, not "all clear".
+        val r = engine(FakeLlmProvider("""{"action":"query","type":"todo","keyword":"filter"}""")).ask("did I get the air filter?", now)
+
+        assertEquals(listOf("Buy the air filter"), r.notes.map { it.title })
+        assertTrue(r.answer.contains("marked done", ignoreCase = true))
+        assertEquals(AskResultKind.RESULTS, r.kind)
+    }
+
+    @Test
+    fun contentQuery_surfacesADoneItem_evenWhenAnUnrelatedActiveNoteAlsoMatchesTheKeyword() = runTest {
+        // The real bug found on-device: "water bill" matched the active "Split Google Fi bill" on the word
+        // "bill" and returned early, hiding the completed water bill. Recall must span done from the start.
+        dao.insertNote(aNote(title = "Split Google Fi bill", type = "todo"))
+        dao.insertNote(aNote(title = "Pay the water bill", type = "todo", completed = true, completedDate = 100))
+
+        val r = engine(FakeLlmProvider("""{"action":"query","type":"todo","keyword":"bill"}""")).ask("water bill", now)
+
+        assertTrue(r.notes.any { it.title == "Pay the water bill" && it.completed }) // the done one is no longer masked
+    }
+
+    @Test
+    fun contentQuery_withAWindow_staysActiveOnly_soADoneItemIsNotShownAsOverdue() = runTest {
+        // "overdue electrician" is time-scoped; a completed note with a past date isn't overdue any more.
+        dao.insertNote(aNote(title = "Call the electrician", type = "todo", dueDate = "2026-07-01", completed = true, completedDate = 100))
+
+        val r = engine(FakeLlmProvider("""{"action":"query","keyword":"electrician","window":"overdue"}""")).ask("overdue electrician", now)
+
+        assertTrue(r.notes.none { it.completed })
+    }
+
+    @Test
+    fun structuredDateQuery_staysActiveOnly_soDoneItemsDoNotClutterWhatsDue() = runTest {
+        dao.insertNote(aNote(title = "Standup", type = "reminder", dueDate = "2026-07-08", dueTime = "09:00", completed = true, completedDate = 100))
+
+        // "what's due today" is planning, not recall — a completed item must NOT resurface here.
+        val r = engine(FakeLlmProvider("""{"action":"query","window":"today"}""")).ask("what's due today", now)
+
+        assertEquals(AskResultKind.EMPTY, r.kind)
+        assertTrue(r.notes.isEmpty())
+    }
+
     @Test
     fun followUp_handsThePreviousIntentToTheClassifierAndReturnsTheResolvedOne() = runTest {
         dao.insertNote(aNote(title = "Ship the deck", type = "todo", dueDate = "2026-07-14"))

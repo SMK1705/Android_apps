@@ -154,6 +154,27 @@ class AskViewModelTest {
     }
 
     @Test
+    fun reopenResult_undoesACompletion_andPatchesTheCard() = runTest {
+        val vm = vmWithResult(aNote(id = 8, title = "Pay rent", type = "todo", completed = true, completedDate = 1))
+
+        vm.reopenResult(vm.card())
+        advanceUntilIdle()
+
+        coVerify { noteActions.setCompleted(match { it.id == 8 }, false) }
+        assertFalse(vm.card().completed) // back to active, so the card offers its normal actions again
+    }
+
+    @Test
+    fun reopenResult_onAnAlreadyActiveNote_isANoOp() = runTest {
+        val vm = vmWithResult(aNote(id = 2, title = "Buy milk", type = "todo")) // not completed
+
+        vm.reopenResult(vm.card())
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { noteActions.setCompleted(any(), false) }
+    }
+
+    @Test
     fun completeResult_onAReferenceNote_isANoOp_soThereIsNothingToComplete() = runTest {
         val vm = vmWithResult(aNote(id = 3, title = "Gate code 4471", type = "note"))
 
