@@ -29,5 +29,9 @@ FetchContent_MakeAvailable(whisper)
 
 add_library(whisper_jni SHARED whisper_jni.cpp)
 
+# 16 KB page-size support: align the .so's ELF LOAD segments to 16 KB so it loads on 16 KB-page devices
+# (Android 15+). NDK r28 defaults to this; r27 (used here) still defaults to 4 KB, so set it explicitly.
+target_link_options(whisper_jni PRIVATE "-Wl,-z,max-page-size=16384")
+
 find_library(log-lib log)
 target_link_libraries(whisper_jni whisper ${log-lib})
