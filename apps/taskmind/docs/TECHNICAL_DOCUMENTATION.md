@@ -26,7 +26,7 @@
   - [4.1 Feature Summary](#41-feature-summary)
   - [4.2 FR-01 — Inbox / Suggestion Review](#42-fr-01--inbox--suggestion-review)
   - [4.3 FR-02 — Notes](#43-fr-02--notes)
-  - [4.4 FR-03 — Ask (Retrieval-Augmented Q&A)](#44-fr-03--ask-retrieval-augmented-qa)
+  - [4.4 FR-03 — Ask (recall over your own items)](#44-fr-03--ask-recall-over-your-own-items)
   - [4.5 FR-04 — Sources & Permissions](#45-fr-04--sources--permissions)
   - [4.6 FR-05 — Privacy & Data Egress](#46-fr-05--privacy--data-egress)
   - [4.7 FR-06 — Quick Capture, Share Target, Tile & Widget](#47-fr-06--quick-capture-share-target-tile--widget)
@@ -45,7 +45,7 @@
   - [6.1 Scenario 1 — Background scan produces an Inbox suggestion](#61-scenario-1--background-scan-produces-an-inbox-suggestion)
   - [6.2 Scenario 2 — Approve a suggestion → Note + reminder + calendar](#62-scenario-2--approve-a-suggestion--note--reminder--calendar)
   - [6.3 Scenario 3 — Connect Gmail (OAuth) and scan mail](#63-scenario-3--connect-gmail-oauth-and-scan-mail)
-  - [6.4 Scenario 4 — Ask a question (on-device RAG over saved Notes)](#64-scenario-4--ask-a-question-on-device-rag-over-saved-notes)
+  - [6.4 Scenario 4 — Ask a question (intent-classified recall over saved Notes)](#64-scenario-4--ask-a-question-intent-classified-recall-over-saved-notes)
   - [6.5 Scenario 5 — Share text (or an image) from another app](#65-scenario-5--share-text-or-an-image-from-another-app)
 - [7. Security Architecture](#7-security-architecture)
   - [7.1 Threat model](#71-threat-model)
@@ -76,7 +76,7 @@
 | **System / Application** | TaskMind (Android app + Wear OS companion) |
 | **Package / Application ID** | `com.rajasudhan.taskmind` |
 | **Version (application)** | versionName `5.1.2` (versionCode `7`) |
-| **Document Version** | 1.2 |
+| **Document Version** | 1.3 |
 | **Status** | Baseline / Approved for internal circulation |
 | **Date** | 2026-07-10 |
 | **Owner** | TaskMind App Owner (GitHub: `SMK1705`) |
@@ -91,6 +91,7 @@
 | 1.0 | 2026-07-10 | TaskMind Engineering | Initial comprehensive baseline: system overview, features, detailed design (components, data, pipeline, APIs, integrations), runtime scenarios, security, deployment/operations, non-functional requirements, reliability/DR, technical debt, glossary, appendices. |
 | 1.1 | 2026-07-10 | TaskMind Engineering | Corrected facts per codebase cross-check (DB cipher AES-256-CBC + HMAC-SHA512, Room schema v18, multimodal vision routing, cloud transport); synced application version references to 5.1 (`versionCode 6`). |
 | 1.2 | 2026-07-13 | TaskMind Engineering | v5.1.2: lowered `minSdk` 35 → 26 (Android 8.0) with API guards, widened native ABIs to arm64-v8a + armeabi-v7a + x86_64; updated version and compatibility facts accordingly. |
+| 1.3 | 2026-07-23 | TaskMind Engineering | Rewrote the Ask section (§4.4) to reflect the shipped architecture: intent-classification (not open RAG) with structural no-hallucination, multi-turn fold (`AskConversation`, #318), encrypted thread persistence (`AskConversationStore`, #317), in-place result actions via shared `NoteActions` (#319), recall spanning completed items (#324), and the opt-in cloud answer layer (`AskAnswerPrompt`, #313); corrected the semantic-index consumer description accordingly. |
 
 ## 0.2 Audience
 
@@ -251,7 +252,7 @@ Because TaskMind is backend-less, its "containers" are the major runtime compone
 | **Understanding pipeline** | Noise pre-filter → OCR/STT → LLM extraction → JSON parse, dedup, learned-rejection down-rank → Suggestion. | `UnderstandingPipeline`, OCR (Tesseract / ML Kit GenAI), STT (whisper.cpp JNI / Vosk). |
 | **LLM routing** | Choose on-device vs cloud per request; expose honest route label. | `RoutingLlmProvider`, on-device MediaPipe / ML Kit GenAI engine, cloud Gemini (Retrofit/OkHttp). |
 | **Persistence** | Encrypted structured storage + settings/ledgers. | Room + SQLCipher DB (schema v18: `Note`, `Suggestion`, `NoteEmbedding`, `RejectedPattern`, `SavedFilter`, Tags), `SettingsManager` (EncryptedSharedPreferences), `SourceManager` (DataStore). |
-| **Retrieval (Ask)** | RAG Q&A over saved Notes. | `HashingEmbedder` → `NoteEmbedding` cosine similarity + LLM answer. |
+| **Recall (Ask)** | Intent-classified recall over saved Notes (deterministic answers over Room rows; optional grounded cloud answer). | `HashingEmbedder` → `note_embeddings` cosine similarity for search/ranking; `AskEngine`/`AskQuery`. |
 | **Scheduling & reliability** | Background scans, exact reminders, geofences, mirroring, self-test, backup. | `WorkManager` (`DataCollectionWorker`, DailyBrief/WeeklyWins/RecurrenceDetector/AutoSnapshot), `AlarmScheduler` + `AlarmReceiver` + `BootReceiver`, `GeofenceManager`, `CalendarMirror`, `ReliabilityChecker`, `BackupManager`/`BackupCrypto`. |
 | **Integration / egress** | Outbound Google calls + system-agent surface + audit. | Retrofit/OkHttp client, `EgressLogger`, AppFunctions (`AgentFunctions`), Google OAuth (`GoogleAuthUtil`). |
 | **Wear companion** (separate module) | Wrist capture + next-due tile. | `:apps:taskmind-wear`, `WearSyncScheduler`. |
@@ -264,7 +265,7 @@ Because TaskMind is backend-less, its "containers" are the major runtime compone
 4. **Understand.** The `UnderstandingPipeline` prompts the LLM via `RoutingLlmProvider`, which selects the on-device or cloud engine; cloud calls are logged by `EgressLogger`.
 5. **Stage.** The parsed result becomes a `Suggestion` (typed, confidence-scored) written to the encrypted DB and raised as a single "N suggestions to review" notification.
 6. **Approve.** In the Inbox (or from the notification, or quick capture) the user approves / edits / rejects / snoozes. **Only on approval** does the suggestion become a `Note`, and — where applicable — an exact `AlarmManager` reminder, a geofence, and/or a de-duplicated calendar event.
-7. **Retrieve.** Approved Notes are embedded (`HashingEmbedder`) for the Ask tab's on-device RAG.
+7. **Retrieve.** Approved Notes are embedded (`HashingEmbedder`) for the Ask tab's on-device semantic search / recall ranking (Ask itself is intent-classification over Room rows, not open RAG — see §4.4).
 
 **Application wiring.** `TaskMindApp` (`@HiltAndroidApp`) is the Hilt root and the `WorkManager` `Configuration.Provider` (it installs the `HiltWorkerFactory`; the manifest deliberately removes the default `androidx.startup` WorkManager initializer so every `@HiltWorker` can be constructed). On `onCreate` it eagerly creates the notification channel, publishes capture shortcuts, and (re)schedules the periodic scan and the brief/recap/snapshot/recurrence/Wear-sync jobs with `KEEP` semantics so Doze-deferred runs survive launch. It also implements `AppFunctionConfiguration.Provider` to hand the Hilt-managed `AgentFunctions` to the system agent.
 
@@ -286,7 +287,7 @@ Targets below are engineering objectives for a personal, single-user on-device a
 | **Battery / resource efficiency** | Background work must not run on low battery; scans are incremental. | `DataCollectionWorker` with `requiresBatteryNotLow`; watermark + processed-id dedup avoids re-work; scan interval user-tunable 15 min–6 h (default ~30 min). | — |
 | **Scalability (on-device equivalent)** | Handles a single user's realistic signal volume on one device. | Incremental forward-only scans, capped look-back (≤24 h) on manual/periodic refresh, on-device semantic index for Ask. **Assumption:** not designed for multi-user or unbounded corpora. | Horizontal scaling / autoscaling not applicable. |
 | **Compatibility** | Runs on **Android 8.0+** across three ABIs. | `minSdk 26` / `targetSdk 36` / `compileSdk 37`; native libs for `arm64-v8a` + `armeabi-v7a` + `x86_64` (whisper.cpp is arm64-only, an optional second pass), 16 KB-page-aligned. | — |
-| **Maintainability / testability** | Regressions caught by JVM tests in CI on every push. | ~707 JVM unit tests (JUnit4 + Robolectric + mockk + Turbine + Compose UI test on JVM); GitHub Actions (`android.yml`, JDK 21) runs `testDebugUnitTest` + `assembleDebug`. | Distribution via committed debug keystore + rolling `debug-latest` release. |
+| **Maintainability / testability** | Regressions caught by JVM tests in CI on every push. | ~773 JVM unit tests (JUnit4 + Robolectric + mockk + Turbine + Compose UI test on JVM); GitHub Actions (`android.yml`, JDK 21) runs `testDebugUnitTest` + `assembleDebug`. | Distribution via committed debug keystore + rolling `debug-latest` release. |
 | **Interoperability** | Discoverable by the system agent; reachable from many entry points. | AppFunctions (`createTask` / `getItemsDueToday` / `snoozeItem`); share-sheet, Quick Settings tile, widget, launcher shortcuts, Wear capture. | — |
 
 **Known constraints affecting quality attributes:** public Play distribution is blocked by restricted permissions (`READ_SMS` / `READ_CALL_LOG` are default-handler-only), the absence of a release signing config, and a cloud LLM key currently sourced from an "express"-style credential; the native `libwhisper_jni.so` must remain 16 KB-page-aligned. These are tracked as tech debt and do not affect the on-device architecture's correctness for personal use.
@@ -305,7 +306,7 @@ Priority key: **P0** = core value proposition (the app is not viable without it)
 |---|---|---|---|---|
 | **FR-01** | Inbox / Suggestion Review | Human-in-the-loop review queue of LLM-extracted suggestions; approve, edit, reject, snooze, sweep, before anything is saved. | End User | P0 |
 | **FR-02** | Notes | The library of approved items (task / reminder / note / waiting-on) with kind/tag/saved filters, search, completion, reschedule, and lifecycle (Fade/Archive). | End User | P0 |
-| **FR-03** | Ask (RAG Q&A) | Conversational retrieval-augmented Q&A over the user's own saved Notes with tappable citations. | End User | P1 |
+| **FR-03** | Ask (recall) | Conversational recall over the user's own saved Notes — intent-classified over Room rows (deterministic, structurally grounded), with multi-turn follow-ups, a persistent thread, actionable result cards, and tappable citations. | End User | P1 |
 | **FR-04** | Sources & Permissions | Per-source opt-in toggles (Notifications, SMS, Call Log, Contacts, App Usage, Gmail, Calendar, Audio, Screenshots) each gated by their runtime permission. | End User | P0 |
 | **FR-05** | Privacy & Data Egress | Auditable privacy status board — egress log, encryption/app-lock/engine status, "what it knows," and destructive delete-all. | End User / Auditor | P0 |
 | **FR-06** | Quick Capture, Share, Tile & Widget | Lock-free manual capture from a bottom sheet, the Android share sheet, a Quick Settings tile, a home-screen widget, and launcher shortcuts. | End User | P1 |
@@ -409,37 +410,45 @@ Notable behaviors:
 
 ---
 
-## 4.4 FR-03 — Ask (Retrieval-Augmented Q&A)
+## 4.4 FR-03 — Ask (recall over your own items)
 
 ### 4.4.1 Description
-Ask (`AskScreen` / `AskViewModel`) is a conversational interface for recall over the user's own saved Notes. It answers questions like "What's due this weekend?" using an on-device semantic index for retrieval and the routed LLM for the answer, returning tappable result cards as citations.
+Ask (`AskScreen` / `AskViewModel`) is a conversational interface for recall over the user's own saved Notes. Critically, it is **intent-classification, not open RAG**: the LLM's only job is to map the utterance to a small, closed `AskIntent` (an `action` of `query`/`create` plus slots `type`/`tag`/`window`/`status`/`keyword`/`text`); the answer is then composed **deterministically** by `AskEngine` from real Room rows. Because the model never sees a note's contents on this path, it *structurally cannot* invent an item — the no-hallucination guarantee is a property of the architecture, not a prompt instruction. A low-confidence or unparseable classification degrades to a keyword + semantic search so the user always gets an answer built from real rows.
 
 ### 4.4.2 User Stories
 - As a **user with a full second brain**, I want to ask questions in natural language so that I can recall commitments without manually filtering.
 - As a **user who distrusts black boxes**, I want each answer backed by tappable source notes so that I can verify what it drew on.
 - As a **privacy-conscious user**, I want to know whether my question is read locally or in the cloud so that I understand where my words go.
+- As a **user mid-thought**, I want a short follow-up ("just the Work ones?") to refine my last question rather than be read blind, and I want the conversation to still be there when I reopen the app.
+- As a **user who found the item**, I want to act on it — mark it done, push it out, add it to my calendar — without leaving the chat.
 
 ### 4.4.3 Functional Behavior
 
 | Aspect | Detail |
 |---|---|
 | **Inputs** | A free-text utterance (typed or via an example chip). |
-| **Processing** | `AskEngine.ask(text)` retrieves relevant notes from the semantic index and composes an answer via the routed LLM. UI tracks a `thinking` state and auto-scrolls to the latest turn. |
-| **Outputs** | An `AskResult` (`answer` + `notes`) rendered as an assistant bubble plus a citation card per note; each card is tappable to open the note. |
-| **Errors** | Any exception yields a graceful "Something went wrong — try rephrasing." with `EMPTY` kind; input is ignored while a request is in flight. |
+| **Processing** | `AskEngine.ask(text, previous)` classifies the utterance into an `AskIntent`, then routes: a `create` with text → the capture pipeline (lands in the Inbox); a real `query` → deterministic filter + phrasing over Room rows; anything else → keyword + semantic search. `previous` is the running multi-turn context (see 4.4.4). UI tracks a `thinking` state and auto-scrolls to the latest turn. |
+| **Outputs** | An `AskResult` (`answer` + `notes` + `intent` + `answeredFromNotes`) rendered as an assistant bubble plus a citation card per note. Each card is tappable to open the note **and actionable in place** (see 4.4.4). |
+| **Errors** | Any exception yields a graceful "Something went wrong — try rephrasing." with `EMPTY` kind; input is ignored while a request is in flight. A garbled persisted thread restores as empty rather than crashing on launch. |
 
 ### 4.4.4 Business Rules
-1. Answers are grounded **only** in the user's saved Notes — never external knowledge.
-2. The empty-state copy is honest about interpretation locus (#197): "nothing leaves the device" on-device, versus "your question is read by your cloud engine (Gemini)" on cloud. Re-read on `ON_RESUME`.
-3. The stored corpus is always local; only the utterance is subject to routing.
+1. **Deterministic answers, structural grounding.** Query answers are composed by `AskEngine` from Room rows — counts, slot labels, ranked cards — never by a model reading note content. Structured hits are ordered chronologically (undated last); a keyword fuses relevance ranking on top of the lexical hit.
+2. **Multi-turn (`AskConversation`, #318).** A bounded window of prior query intents is *folded* — most-recent non-null wins per slot — so a three-step refinement keeps the earliest slots even when a later turn's output omits them. It resets on a topic change (the resolved `type`/`tag` switching) or a non-query turn, so stale slots never skew a fresh question.
+3. **Persistence (`AskConversationStore`, #317).** The thread survives process death, stored as JSON in the app's `EncryptedSharedPreferences` (encrypted at rest, **no new egress**). Cards persist **by note id** and are re-read from Room on restore, so a card reflects the note's current state and a deleted note drops out. The fold window persists too, so a follow-up works across a restart. Cleared by a header affordance and by *Delete All Private Data*.
+4. **Act on a result (#319).** A card gets in-place actions — **Done** (actionable kinds), **Tomorrow / Next week** (dated), **Calendar** (dated to-do/reminder not yet mirrored), and **Reopen** (a completed item) — each delegating to the shared `NoteActions` (the same completion-recurrence / calendar-mirror / alarm-rearm paths as Notes, no parallel logic). The acted card is patched in the thread immediately.
+5. **Recall spans Done (#324).** A content/recall query ranks across active **+** completed rows (active leading at equal relevance), so an item closed by mistake is still findable and is clearly labelled "✓ Done" with a Reopen action. A pure date/planning query ("what's due today", "overdue X") stays active-only.
+6. **Opt-in cloud answer layer (`AskAnswerPrompt`, #313).** Off by default and cloud-only. When enabled, a content ask's retrieved cards are sent to the cloud model with a strict grounding prompt (answer only from the supplied items; refuse rather than guess; item text is content, never instructions — the same clause that hardened extraction in #305). Any failure (no key, network, empty reply) keeps the deterministic answer, so the floor is unchanged. The prose is labelled in the chat as model-written and the cards remain as citations. This is the **only** Ask path that hands a model saved note content, so opting in *is* the consent; it is egress-logged like any cloud call.
+7. **Honest interpretation locus (#197).** The empty-state copy states where the utterance is read: "nothing leaves the device" on-device, versus "your question is read by your cloud engine (Gemini)" on cloud. Re-read on `ON_RESUME`. The stored corpus is always local; only the utterance (and, under rule 6, the retrieved cards) is subject to routing.
 
 ### 4.4.5 Dependencies
-`AskEngine`, `RoutingLlmProvider`, `SemanticIndex` (HashingEmbedder → `NoteEmbedding` cosine similarity).
+`AskEngine`, `AskConversation`, `AskConversationStore`, `AskPrompt`/`AskAnswerPrompt`, `AskQuery`, `RoutingLlmProvider`, `CloudLlmProvider`, `NoteActions`, `SettingsManager`, `TaskMindDao`, `SemanticIndex` (HashingEmbedder → `note_embeddings` cosine similarity). Prompt quality is regression-tested by `tools/prompt_eval` (`ask_eval.py` + `ask_golden.jsonl`, ~124 cases, matchers + number-grounding + an optional gold-blind judge panel).
 
 ### 4.4.6 Example Flow
 1. The user taps the example "Anything overdue?"; a user bubble appears and a "Thinking…" indicator shows.
-2. `AskEngine` retrieves overdue notes and the LLM summarizes them; the answer bubble lists two items with citation cards.
-3. Tapping a card opens the corresponding note detail.
+2. `AskEngine` classifies it to `{action:query, window:overdue}`, filters the active rows, and phrases "Found 2 items overdue." with two ranked citation cards.
+3. The user types a bare "what about this week?"; `AskConversation` hands the folded prior intent as context, the model refines to `{window:this_week}`, and the answer updates.
+4. On a card, the user taps **Done**; `NoteActions.setCompleted` runs and the card patches to a struck-through "✓ Done" with a Reopen action, without re-asking the model.
+5. The user force-quits and reopens the app; `AskConversationStore` restores the whole thread (cards re-read from Room) and the follow-up context, so the conversation continues.
 
 ---
 
@@ -785,7 +794,7 @@ The diagram below reads top-to-bottom as the data-flow spine (raw OS signal → 
 | Attribute | Detail |
 |---|---|
 | **Purpose** | Render app state and collect user actions (approve/edit/reject, ask, toggle sources, adjust settings). |
-| **Responsibilities** | One Compose screen + `@HiltViewModel` per feature: `ui.inbox` (pending suggestion triage), `ui.notes` (`NotesScreen`, `NoteDetailScreen`, `Checklist`), `ui.ask` (RAG Q&A), `ui.sources` (per-source opt-in), `ui.settings` (`PrivacyScreen`, `SettingsScreen`, `ReliabilityScreen`, `KnowsScreen`), `ui.guide` (first-run overlay). `ui.capture` holds the non-navigation capture entry points. `ui.common`/`ui.bold`/`ui.theme` provide the design system (cards, motion, the "Bold" dark-editorial kit, Material3 theming). |
+| **Responsibilities** | One Compose screen + `@HiltViewModel` per feature: `ui.inbox` (pending suggestion triage), `ui.notes` (`NotesScreen`, `NoteDetailScreen`, `Checklist`), `ui.ask` (recall chat: multi-turn, persistent, actionable cards), `ui.sources` (per-source opt-in), `ui.settings` (`PrivacyScreen`, `SettingsScreen`, `ReliabilityScreen`, `KnowsScreen`), `ui.guide` (first-run overlay). `ui.capture` holds the non-navigation capture entry points. `ui.common`/`ui.bold`/`ui.theme` provide the design system (cards, motion, the "Bold" dark-editorial kit, Material3 theming). |
 | **Key interfaces (in)** | ViewModels inject domain singletons (`SuggestionApprover`, `TaskMindDao`, `SettingsManager`, `SourceManager`, `AskEngine`, `RoutingLlmProvider`). Screens receive DB state as Kotlin `Flow`/`StateFlow`. |
 | **Dependencies (out)** | Data layer (DAO Flows), `data.source` orchestration singletons. No component depends on `ui.*` — it is a strict sink. |
 | **Data ownership** | None durable. Owns only transient UI state (Compose `remember`, ViewModel `StateFlow`). |
@@ -814,7 +823,7 @@ The diagram below reads top-to-bottom as the data-flow spine (raw OS signal → 
 | Attribute | Detail |
 |---|---|
 | **Purpose** | Turn raw text/media into structured, scored action items via an LLM, and answer "Ask" queries. |
-| **Responsibilities** | Prompt assembly + parsing (`UnderstandingPipeline`, `SystemPrompt`, `LlmModels`), engine routing (`RoutingLlmProvider` → `OnDeviceLlmProvider`{`MediaPipeEngine`, `LiteRtLmEngine`, `NanoEngine`} / `CloudLlmProvider`), pure filtering (`ExtractionHeuristics`, `NearDuplicate`), and the Ask stack (`AskEngine`, `AskPrompt`, `AskQuery`, `MagicBreakdown`, `SuggestionEditor`). |
+| **Responsibilities** | Prompt assembly + parsing (`UnderstandingPipeline`, `SystemPrompt`, `LlmModels`), engine routing (`RoutingLlmProvider` → `OnDeviceLlmProvider`{`MediaPipeEngine`, `LiteRtLmEngine`, `NanoEngine`} / `CloudLlmProvider`), pure filtering (`ExtractionHeuristics`, `NearDuplicate`), and the Ask stack (`AskEngine`, `AskConversation`, `AskPrompt`, `AskAnswerPrompt`, `AskQuery`, `MagicBreakdown`, `SuggestionEditor`; conversation persistence via `data.source.AskConversationStore`, result mutations via `data.source.NoteActions`). |
 | **Key interfaces** | `LlmProvider` (in: `generate`/`generateList`/`generateIntent`/`generateFromMedia`/`supportsVision`) bound to `RoutingLlmProvider` in `NetworkModule`. `MediaInput` carries a `content://` URI + MIME type for the multimodal seam (#211, currently dark). |
 | **Dependencies (out)** | `SettingsManager` (route/key), on-device runtimes (MediaPipe/LiteRT/AICore), cloud Gemini over Retrofit/OkHttp, `embedding.SemanticIndex` (dedup), `data.local` (insert pending), `SuggestionNotifier`. |
 | **Data ownership** | None durable; produces pending `Suggestion` rows owned by `data.local`. |
@@ -986,7 +995,7 @@ suspend fun scores(query, floor): Map<Int, Float>     // noteId → cosine ≥ f
 
 - **Derivation, not storage.** It computes vectors via `Embedder` (bound to `HashingEmbedder`) and persists them as `NoteEmbedding(noteId, Vectors.toBytes(vec))` through `TaskMindDao.upsertEmbedding`; the rows are owned by `data.local`.
 - **Cosine ranking.** `scores()` embeds the query, iterates `dao.getAllEmbeddings()`, and returns `noteId → cosine` for those at/above `floor`. Returns empty when the query can't be embedded or nothing is indexed — a safe degrade.
-- **Two consumers.** `UnderstandingPipeline.possibleDuplicateOf` uses `scores(candidate, SEARCH_FLOOR)` as a semantic pre-filter that `NearDuplicate` then lexically confirms; `AskEngine` uses it for retrieval-augmented answers. Because `HashingEmbedder` is deterministic and fast, the dedup lookup is cheap enough to run under the pipeline's `insertMutex` (the code notes a slower neural embedder should move outside the lock).
+- **Two consumers.** `UnderstandingPipeline.possibleDuplicateOf` uses `scores(candidate, SEARCH_FLOOR)` as a semantic pre-filter that `NearDuplicate` then lexically confirms; `AskEngine` uses it for its keyword + semantic **search / recall ranking** (the fall-through when a query isn't structurally classified, and the ordering of keyword hits) — *not* for composing query answers, which are deterministic over Room rows. Because `HashingEmbedder` is deterministic and fast, the dedup lookup is cheap enough to run under the pipeline's `insertMutex` (the code notes a slower neural embedder should move outside the lock).
 
 **Collaborators (out):** `Embedder`, `TaskMindDao`, `Vectors`. **Data ownership:** derives `NoteEmbedding` (stored in the encrypted DB). **Deployment:** `@Singleton`; `backfill()` is a catch-up for notes saved before embedding existed.
 
@@ -1613,15 +1622,25 @@ The semantic layer (`embedding` package) serves two questions that need *meaning
 
 **Non-destructive dedup (#145).** Similarity alone is too broad to *drop* a capture, so the pipeline never does. `possibleDuplicateOf` runs a two-stage confirm: `SemanticIndex.scores` pre-filters candidate notes, then the strict lexical guard `NearDuplicate.isLikelyDuplicate` confirms — requiring content-token Jaccard overlap **≥ `TOKEN_OVERLAP = 0.6`** *and* compatible dates (identical, or at least one side undated). Pending suggestions are checked with a pure lexical pass (they aren't embedded). The result is only ever an in-Inbox advisory flag (one tap to dismiss); a false negative just means "no flag". It runs only on items that already cleared the exact `(title, date)` dedup, so a true re-scan is dropped and only a *variant* is ever flagged.
 
-### 5.6.11 Ask TaskMind (retrieval-augmented Q&A)
+### 5.6.11 Ask TaskMind (intent-classified recall)
 
 `AskEngine` answers a natural-language question/command about saved items **fully on-device and safely**: the LLM is used *only* to classify the utterance into a small closed `AskIntent` (`generateIntent`, cloud-pinned to a flat schema; on-device free-form and tolerated even if wrapped in `{items:[…]}`). Everything else — running the intent against Room, ranking, phrasing — is deterministic (`AskQuery`), so a Gemma-class model cannot hallucinate items:
 
 - `action == "create"` with text → reuses `UnderstandingPipeline.processText(..., seedSchedule = true)`, landing the item in the Inbox.
-- A real `query` intent → `AskQuery.matches` filters active/completed notes by the set slots (type/tag/`window`/keyword). If the model set **no** slot (`hasAnySlot == false`), the query would match every note, so it degrades to keyword+semantic **search**. Structured misses answer plainly ("No tasks due today — you're all clear"); content misses fall through to search.
+- A real `query` intent → `AskQuery.matches` filters notes by the set slots (type/tag/`window`/`status`/keyword). If the model set **no** slot (`hasAnySlot == false`), the query would match every note, so it degrades to keyword+semantic **search**. Structured misses answer plainly ("No tasks due today — you're all clear"); content misses fall through to search.
 - Search (`rank`) blends lexical hits (title/summary/body contains) *first*, then `SemanticIndex` scores above the floor — the same recipe as Notes search — capped at `RESULT_LIMIT = 12`.
 
 Answer phrasing is count-and-label only (`answerFor`/`noun`/`windowPhrase`), never invented content. An unparseable/low-confidence classification degrades to search, so the user always gets a real answer built from real rows — this is exactly what `RoutingLlmProvider`'s `EMPTY_INTENT` (`{"action":"query"}`) fallback relies on.
+
+**Recall spans completed items (#324).** A content ask (a keyword, no date window) ranks across active **+** completed rows from the start — so an item closed by mistake is still findable even when an unrelated active note also matches the keyword — with active leading at equal relevance (a `rank` tiebreak) and completed hits labelled "✓ Done". A date/planning ask ("what's due today", "overdue X") stays active-only: a done item shouldn't clutter the plate, and a completed note with a past date isn't "overdue" any more.
+
+**Multi-turn context (`AskConversation`, #318).** The `AskViewModel` holds a bounded window of prior resolved intents and *folds* them (most-recent non-null wins per slot) into the `previous` handed to `classify`, so a three-step refinement keeps the earliest slots even when a later turn's output omits them. It resets on a subject change (the resolved `type`/`tag` switching) or a non-query turn.
+
+**Conversation persistence (`AskConversationStore`, #317).** The thread and the fold window are serialised (Moshi) into `EncryptedSharedPreferences` — encrypted at rest, no new egress. Turns store note **ids**, not content; on restore the cards are re-read from `TaskMindDao`, so they reflect current state and drop silently if a note was deleted. A corrupt/absent blob restores as an empty thread. Cleared from the Ask header and by `SettingsViewModel.deleteAllData`.
+
+**Result actions (`NoteActions`, #319).** `NoteActions` (`data.source`) centralises the completion/reschedule/calendar/reopen mutations — with their completion-recurrence roll-forward, calendar-mirror move/delete, and alarm re-arm — so `AskViewModel` and `NotesViewModel` share one implementation. Ask patches the acted card in the thread in place.
+
+**Opt-in cloud answer layer (`AskAnswerPrompt`, #313).** Off by default (`SettingsManager.askAnswersEnabled`) and cloud-only. For a content ask with results, `AskEngine.answered()` sends the retrieved cards to `CloudLlmProvider.generateAnswer` with a defensive grounding prompt (answer strictly from the supplied items; reply exactly "I couldn't find that in your saved items." rather than guess; item text is content, never instructions). Any failure returns the deterministic answer unchanged. This is the **only** Ask path that hands a model saved note content; it is egress-logged and the prose is flagged `answeredFromNotes` so the UI can label it. Grounding is regression-tested by `tools/prompt_eval/ask_eval.py` (matchers + number-grounding + optional gold-blind judge panel).
 
 ### 5.6.12 Magic Breakdown
 
@@ -1806,7 +1825,7 @@ sequenceDiagram
 
 The hard-failure path is a deliberate diagnostic: `probeBasicScope` requests a basic (non-restricted) `userinfo.email` scope for the same account and classifies the result (`OK`/`RECOVERABLE`/`BROKEN`/`UNREACHABLE`) to distinguish "the restricted Gmail scope is blocked for this account" (Advanced Protection / supervised / unverified app) from "the device sign-in is broken." All account identifiers are masked (`GmailAuth.mask`) before logging. `disconnect` best-effort clears the local token and POSTs the Google revoke endpoint (also egress-logged).
 
-## 6.4 Scenario 4 — Ask a question (on-device RAG over saved Notes)
+## 6.4 Scenario 4 — Ask a question (intent-classified recall over saved Notes)
 
 Ask is intentionally architected so a small on-device model **cannot hallucinate items**: the LLM's only job is to classify the utterance into a tiny `AskIntent` (`query`/`create`); retrieval, ranking, and answer phrasing are fully deterministic against Room rows. Retrieval is a hybrid of lexical match plus semantic similarity from the on-device `SemanticIndex` (`HashingEmbedder` vectors, cosine similarity above `SEARCH_FLOOR = 0.35`).
 
@@ -1844,7 +1863,7 @@ sequenceDiagram
     AVM-->>U: answer + result cards
 ```
 
-When cloud is the selected engine (or on-device falls back to it), only the short utterance is sent for **classification** — never the note corpus, which is retrieved and ranked locally. `AskViewModel.onDeviceEngine` surfaces the honest route so the empty state promises on-device processing only when it is actually true (`RoutingLlmProvider.isOnDeviceEffective()`).
+When cloud is the selected engine (or on-device falls back to it), only the short utterance is sent for **classification** — never the note corpus, which is retrieved and ranked locally. The one exception is the **opt-in cloud answer layer** (§4.4.4 rule 6, off by default): when enabled, a content ask's *retrieved cards* are sent to the cloud model to be answered in words, strictly grounded and egress-logged. `AskViewModel.onDeviceEngine` surfaces the honest route so the empty state promises on-device processing only when it is actually true (`RoutingLlmProvider.isOnDeviceEffective()`).
 
 ## 6.5 Scenario 5 — Share text (or an image) from another app
 
@@ -2002,7 +2021,7 @@ CI/CD is **GitHub Actions**; there is no server deploy step — "deploy" means p
 | 5 | Cache NDK | key `ndk-${os}-27.0.12077973` (~1 GB first-configure cost) |
 | 6 | Cache native build | `apps/taskmind/.cxx`, exact key over `hashFiles(cpp/**, build.gradle.kts)` — no restore-keys, so any native-input change rebuilds cleanly (whisper.cpp compile + FetchContent clone is the slowest step, #240) |
 | 7 | `chmod +x ./gradlew` | — |
-| 8 | Unit tests | `:apps:taskmind:testDebugUnitTest --stacktrace` (~707 JVM tests) |
+| 8 | Unit tests | `:apps:taskmind:testDebugUnitTest --stacktrace` (~773 JVM tests) |
 | 9 | Assemble | `:apps:taskmind:assembleDebug --stacktrace` (packaging check) |
 | 10 | Test report on failure | `upload-artifact@v4`, `if: failure()`, `continue-on-error`, 7-day retention |
 
@@ -2226,7 +2245,7 @@ Files read to ground the above (all absolute): `D:\SMK\Android_apps\.github\work
 | **Note** | A persisted, user-approved item (task / reminder / note / waiting-on / event). Distinct from a Suggestion. |
 | **NotificationListenerService** | Android service (with `BIND_NOTIFICATION_LISTENER_SERVICE`) that reads posted notification text as a source. |
 | **Processed-id ledger** | A per-source set of already-handled item IDs (in DataStore) used to deduplicate ingestion across scans. |
-| **RAG** | Retrieval-Augmented Generation — the Ask feature retrieves relevant Notes via the semantic index, then asks the LLM to answer over them. |
+| **RAG** | Retrieval-Augmented Generation. In TaskMind this applies **only** to the opt-in cloud answer layer (§4.4.4 rule 6): retrieved cards are handed to the model to answer in words. The default Ask path is *not* RAG — the LLM only classifies the utterance into an `AskIntent` and the answer is composed deterministically over Room rows. |
 | **Room** | Jetpack persistence library over SQLite; here backed by SQLCipher. |
 | **RoutingLlmProvider** | The component that selects, per request, between the on-device and cloud LLM engines. |
 | **RPO / RTO** | Recovery Point / Time Objective — how much data loss / downtime is tolerable after a failure (see §11). |
@@ -2310,7 +2329,7 @@ graph LR
     SU -->|user rejects| RL[RejectedPattern learner]
     N --> IDX[Semantic index]
     N --> AL[Alarm / Geofence / Calendar mirror]
-    IDX --> ASK[Ask - RAG]
+    IDX --> ASK[Ask - recall]
 ```
 
 ### A.3 Suggestion → Note Lifecycle (state machine)
@@ -2361,7 +2380,7 @@ flowchart LR
     PR --> CI{{GitHub Actions: android.yml}}
     CI --> J[Set up JDK 21 + Android SDK]
     J --> K[Restore NDK + native .cxx cache]
-    K --> T[gradlew testDebugUnitTest ~707 tests]
+    K --> T[gradlew testDebugUnitTest ~773 tests]
     T --> AS[gradlew assembleDebug]
     AS --> Merge{Merged to main?}
     Merge -->|yes| REL[release-apk.yml]
@@ -2613,7 +2632,7 @@ Consolidated view of the targets defined across §3.3 and §10–§11. Where a m
 | Durability (RPO) | Last successful auto-snapshot / manual encrypted backup | §11 |
 | Recovery (RTO) | Reinstall + restore from encrypted backup (`TMBK1`) | §11 |
 | Data protection | AES-256 at rest (SQLCipher) + TLS in transit + biometric read-gate | §7 |
-| Test coverage gate | ~707 JVM unit tests must pass in CI before merge | §8.3 |
+| Test coverage gate | ~773 JVM unit tests must pass in CI before merge | §8.3 |
 
 ---
 

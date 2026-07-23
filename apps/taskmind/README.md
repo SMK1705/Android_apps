@@ -300,9 +300,17 @@ Screenshot OCR runs **fully on-device** via [Tesseract](https://github.com/tesse
   "every Monday" or set by hand, rescheduled when they fire), or **location** (a geofence triggers
   when you arrive at a saved place). **Nag mode** escalates an unmissed reminder; the **Reliability
   Doctor** (Privacy tab) checks that reminders can actually reach you.
-- **Ask & recall** — the **Ask** tab is a private, on-device chat over your saved items ("what am I
-  waiting on from Sam?", "what's due this week?"), backed by **semantic search**. **Waiting-On** notes
-  track what others owe you and ask "did they deliver?" when that person is next in touch.
+- **Ask & recall** — the **Ask** tab is a chat over your saved items ("what am I waiting on from Sam?",
+  "what's due this week?"), backed by **semantic search**. It holds a **multi-turn** thread, so a short
+  follow-up refines the last question ("anything overdue?" → "just the Work ones?" → "which are done?")
+  instead of being read blind, and the whole conversation **persists across a restart** (encrypted at
+  rest; clear it any time from the header). Each result card is **actionable in place** — mark **Done**,
+  push to **Tomorrow / Next week**, add to **Calendar**, or **Reopen** something you closed by mistake —
+  reusing the exact same alarm/calendar paths as Notes. Recall spans **completed** items too, clearly
+  labelled, so a closed task is still findable. Turn on **"Let Ask answer from your notes"** (Settings,
+  off by default, cloud-only) and the model replies in words, **grounded strictly in the items it's
+  shown** — it refuses rather than guess, and the cards stay on as tappable citations. **Waiting-On**
+  notes track what others owe you and ask "did they deliver?" when that person is next in touch.
 - **Shows up on a schedule** — a morning **Daily Brief** and a Sunday **Weekly Wins** recap. **Task
   Fade** fades a stale, undated pile so it can be archived in one tap; **Magic Breakdown** splits a
   task into a checklist; **auto-tags + saved smart filters** keep Notes organised.
